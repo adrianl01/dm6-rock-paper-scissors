@@ -15,6 +15,8 @@ customElements.define(
                 const form = e.target as any
                 const roomId = form.room.value;
                 console.log(roomId)
+                const playerName = form.name.value;
+                console.log(playerName)
             })
         }
         render() {
@@ -27,10 +29,14 @@ customElements.define(
             div.innerHTML = `
       <h1 class="title">Piedra Papel ó Tijera</h1>
       <form class="form" method="post">
+      <label for="name" class="form-name__label">
+      Tu Nombre
+      <input type="text" class="game-room-input" name="name" id="name">
+      </label>
       <fieldset class="fieldset">
-      <input type="text" class="new-room-input" name="room" id="room">
+      <input type="text" class="game-room-input" name="room" id="room">
       </fieldset>
-      <button type="submit" class="new-room-button">Ingresar a la Sala</button>
+      <button type="submit" class="game-room-button">Ingresar a la Sala</button>
       </form>
       <div class="hands">
           <img src=${stonePicURL} class="img">
@@ -49,17 +55,15 @@ customElements.define(
               }
         .inner-root {
             background-image: url(${backgroundURL});
-            min-width: 375px;
-            height: 667px;
+            width: 100vw;
+            height: 100vh;
             display: flex;
             align-items: center;
             flex-direction: column;
           justify-content: space-between;
       }      
       .title {
-          text-align: center;
-          margin-top: 70px;
-          color: #009048;
+        margin: 0;text-align: center;color: #009048;
           font-family: 'Courier Prime', monospace;
           font-size: 70px;
           font-style: normal;
@@ -76,7 +80,12 @@ customElements.define(
             margin: 0;
             padding: 0;
         }
-      .new-room-button{
+        .form-name__label {
+            font-family: 'Odibee Sans'; text-align: center;
+            display: flex; flex-direction: column;
+            gap: 5px; font-size: 45px;
+        }
+      .game-room-button{
           width: 332px;
           height: 67px;
           border-radius: 10px;
@@ -93,7 +102,7 @@ customElements.define(
           line-height: normal;
           letter-spacing: 2.25px;
         }        
-      .new-room-input{
+      .game-room-input{
           width: 292px;
           height: 57px;
           border-radius: 10px;

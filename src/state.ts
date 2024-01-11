@@ -7,7 +7,9 @@ import { Router } from "@vaadin/router";
 const state = {
     data: {
         playerNumber: 0,
+        rivalNumber: 0,
         playerName: "",
+        rivalName: "",
         roomId: "",
         rtdbRoomId: "",
         gameStatus: [],

@@ -600,7 +600,9 @@ const API_BASE_URL = "http://localhost:3000";
 const state = {
     data: {
         playerNumber: 0,
+        rivalNumber: 0,
         playerName: "",
+        rivalName: "",
         roomId: "",
         rtdbRoomId: "",
         gameStatus: []
@@ -42886,6 +42888,8 @@ customElements.define("game-room-el", class Welcome extends HTMLElement {
             const form = e.target;
             const roomId = form.room.value;
             console.log(roomId);
+            const playerName = form.name.value;
+            console.log(playerName);
         });
     }
     render() {
@@ -42898,10 +42902,14 @@ customElements.define("game-room-el", class Welcome extends HTMLElement {
         div.innerHTML = `
       <h1 class="title">Piedra Papel \xf3 Tijera</h1>
       <form class="form" method="post">
+      <label for="name" class="form-name__label">
+      Tu Nombre
+      <input type="text" class="game-room-input" name="name" id="name">
+      </label>
       <fieldset class="fieldset">
-      <input type="text" class="new-room-input" name="room" id="room">
+      <input type="text" class="game-room-input" name="room" id="room">
       </fieldset>
-      <button type="submit" class="new-room-button">Ingresar a la Sala</button>
+      <button type="submit" class="game-room-button">Ingresar a la Sala</button>
       </form>
       <div class="hands">
           <img src=${stonePicURL} class="img">
@@ -42920,17 +42928,15 @@ customElements.define("game-room-el", class Welcome extends HTMLElement {
               }
         .inner-root {
             background-image: url(${backgroundURL});
-            min-width: 375px;
-            height: 667px;
+            width: 100vw;
+            height: 100vh;
             display: flex;
             align-items: center;
             flex-direction: column;
           justify-content: space-between;
       }      
       .title {
-          text-align: center;
-          margin-top: 70px;
-          color: #009048;
+        margin: 0;text-align: center;color: #009048;
           font-family: 'Courier Prime', monospace;
           font-size: 70px;
           font-style: normal;
@@ -42947,7 +42953,12 @@ customElements.define("game-room-el", class Welcome extends HTMLElement {
             margin: 0;
             padding: 0;
         }
-      .new-room-button{
+        .form-name__label {
+            font-family: 'Odibee Sans'; text-align: center;
+            display: flex; flex-direction: column;
+            gap: 5px; font-size: 45px;
+        }
+      .game-room-button{
           width: 332px;
           height: 67px;
           border-radius: 10px;
@@ -42964,7 +42975,7 @@ customElements.define("game-room-el", class Welcome extends HTMLElement {
           line-height: normal;
           letter-spacing: 2.25px;
         }        
-      .new-room-input{
+      .game-room-input{
           width: 292px;
           height: 57px;
           border-radius: 10px;
@@ -43105,6 +43116,7 @@ customElements.define("new-game-el", class Welcome extends HTMLElement {
 
 },{"@vaadin/router":"kVZrF","1fe14e9d8aca344a":"2zoGe","63a90454b0affa7f":"dZ6rN","1b4de7d0e342291d":"2NxtY","8b80a34bcde58f34":"7RiZ9"}],"dyuce":[function(require,module,exports) {
 var _router = require("@vaadin/router");
+var _state = require("../../src/state");
 customElements.define("inst-el", class Welcome extends HTMLElement {
     connectedCallback() {
         this.render();
@@ -43116,8 +43128,24 @@ customElements.define("inst-el", class Welcome extends HTMLElement {
         const paperPicURL = require("3df831f5e754144f");
         const scissorsPicURL = require("99486f88cb0ea89e");
         const backgroundURL = require("bd2726b461f130e4");
-        const div = document.createElement("div");
-        div.innerHTML = `
+        const div1 = document.createElement("div");
+        div1.innerHTML = `
+      <header>
+        <div class="players">
+        <div class="player-points">${(0, _state.state).data.playerName}:${(0, _state.state).data.playerNumber}</div>
+        <div class="rival-points">${(0, _state.state).data.rivalName}:${(0, _state.state).data.rivalNumber}</div>
+        </div>
+        <div class="room-id"><div>Sala</div>${(0, _state.state).data.roomId}</div>
+      </header>
+          <h3 class="title">Compart\xed el c\xf3digo ${(0, _state.state).data.roomId} con tu contrincante</h3>
+          <div class="hands">
+              <img src=${stonePicURL} class="img">
+              <img src=${paperPicURL} class="img">
+              <img src=${scissorsPicURL} class="img">
+          </div>
+          `;
+        const div2 = document.createElement("div");
+        div2.innerHTML = `
           <h3 class="title">Presion\xe1 Jugar y eleg\xed piedra, papel o tijera antes de que pasen los 3 segundos</h3>
           <button class="button">\xa1Jugar!</button>
           <div class="hands">
@@ -43169,30 +43197,27 @@ customElements.define("inst-el", class Welcome extends HTMLElement {
             line-height: normal;
             letter-spacing: 2.25px;
         }        
-        .hands {
-          min-width: 70vw;
-            display: flex;
-            justify-content: space-between;
-        }        
-        .button:hover {
-            background: #00449d;
-        }        
-        .button:active {
-            background: #009048;
-        }
+        .hands { min-width: 70vw; display: flex;justify-content: space-between; }        
+        .button:hover { background: #00449d; }        
+        .button:active { background: #009048; }
         `;
-        div.classList.add("inner-root");
-        this.appendChild(div);
+        div1.classList.add("inner-root");
+        this.appendChild(div1);
         this.appendChild(style);
-        const boton = this.querySelector(".button");
-        boton.addEventListener("click", function(e) {
-            e.preventDefault();
-            (0, _router.Router).go("/game");
-        });
+        setTimeout(()=>{
+            this.firstChild.remove();
+            div2.classList.add("inner-root");
+            this.appendChild(div2);
+            const boton = this.querySelector(".button");
+            boton.addEventListener("click", function(e) {
+                e.preventDefault();
+                (0, _router.Router).go("/game");
+            });
+        }, 3000);
     }
 });
 
-},{"bc3027b16a50e5fd":"2zoGe","3df831f5e754144f":"dZ6rN","99486f88cb0ea89e":"2NxtY","bd2726b461f130e4":"7RiZ9","@vaadin/router":"kVZrF"}],"gW4Uh":[function(require,module,exports) {
+},{"bc3027b16a50e5fd":"2zoGe","3df831f5e754144f":"dZ6rN","99486f88cb0ea89e":"2NxtY","bd2726b461f130e4":"7RiZ9","@vaadin/router":"kVZrF","../../src/state":"1Yeju"}],"gW4Uh":[function(require,module,exports) {
 var _router = require("@vaadin/router");
 var _results = require("../../results");
 customElements.define("game-el", class Game extends HTMLElement {

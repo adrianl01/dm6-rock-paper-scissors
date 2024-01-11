@@ -1,4 +1,5 @@
 import { Router } from "@vaadin/router";
+import { state } from "../../src/state";
 
 customElements.define(
   "inst-el",
@@ -16,8 +17,25 @@ customElements.define(
       const paperPicURL = require("url:../../papel.svg");
       const scissorsPicURL = require("url:../../tijera.svg");
       const backgroundURL = require("url:../../fondo.png");
-      const div = document.createElement("div");
-      div.innerHTML = `
+
+      const div1 = document.createElement("div");
+      div1.innerHTML = `
+      <header>
+        <div class="players">
+        <div class="player-points">${state.data.playerName}:${state.data.playerNumber}</div>
+        <div class="rival-points">${state.data.rivalName}:${state.data.rivalNumber}</div>
+        </div>
+        <div class="room-id"><div>Sala</div>${state.data.roomId}</div>
+      </header>
+          <h3 class="title">Compartí el código ${state.data.roomId} con tu contrincante</h3>
+          <div class="hands">
+              <img src=${stonePicURL} class="img">
+              <img src=${paperPicURL} class="img">
+              <img src=${scissorsPicURL} class="img">
+          </div>
+          `;
+      const div2 = document.createElement("div");
+      div2.innerHTML = `
           <h3 class="title">Presioná Jugar y elegí piedra, papel o tijera antes de que pasen los 3 segundos</h3>
           <button class="button">¡Jugar!</button>
           <div class="hands">
@@ -69,26 +87,20 @@ customElements.define(
             line-height: normal;
             letter-spacing: 2.25px;
         }        
-        .hands {
-          min-width: 70vw;
-            display: flex;
-            justify-content: space-between;
-        }        
-        .button:hover {
-            background: #00449d;
-        }        
-        .button:active {
-            background: #009048;
-        }
+        .hands { min-width: 70vw; display: flex;justify-content: space-between; }        
+        .button:hover { background: #00449d; }        
+        .button:active { background: #009048; }
         `;
-      div.classList.add("inner-root");
-      this.appendChild(div);
-      this.appendChild(style);
-      const boton = this.querySelector(".button") as HTMLButtonElement;
-      boton.addEventListener("click", function (e) {
-        e.preventDefault();
-        Router.go("/game");
-      });
+      div1.classList.add("inner-root"); this.appendChild(div1); this.appendChild(style);
+      setTimeout(() => {
+        this.firstChild.remove(); div2.classList.add("inner-root"); this.appendChild(div2);
+        const boton = this.querySelector(".button") as HTMLButtonElement;
+        boton.addEventListener("click", function (e) {
+          e.preventDefault();
+          Router.go("/game");
+        });
+
+      }, 3000)
     }
   }
 );
