@@ -1,4 +1,5 @@
 import { Router } from "@vaadin/router";
+import { state } from "../../src/state";
 
 customElements.define(
     "new-game-el",
@@ -12,7 +13,10 @@ customElements.define(
                 e.preventDefault();
                 const form = e.target as any
                 const playerName = form.name.value;
-                console.log(playerName)
+                state.setPlayerName(playerName);
+                state.data.ownerName = true;
+                if (state.data.userId !== " ") { state.signUp(); }
+                Router.go("/instructions")
             })
         }
         render() {

@@ -595,14 +595,15 @@ parcelHelpers.export(exports, "state", ()=>state);
 var _database = require("firebase/database");
 var _db = require("./db");
 var _map = require("lodash/map");
-var _router = require("@vaadin/router");
 const API_BASE_URL = "http://localhost:3000";
 const state = {
     data: {
+        ownerName: false,
         playerNumber: 0,
         rivalNumber: 0,
         playerName: "",
         rivalName: "",
+        userId: "",
         roomId: "",
         rtdbRoomId: "",
         gameStatus: []
@@ -613,79 +614,110 @@ const state = {
     },
     listenRoom () {
         console.log("listenRoom");
-        const cs = this.getState();
+        const cs = state.data;
         const db = (0, _db.rtdb);
         const chatroomsRef = (0, _database.ref)(db, "/rooms/" + cs.rtdbRoomId);
+        if (state.data.ownerName == false) (0, _database.onValue)(chatroomsRef, (snap)=>{
+            const val = snap.val();
+            const rtdbStatus = _map(val);
+            console.log(rtdbStatus[0]);
+            if (rtdbStatus[0] == state.data.playerName) {
+                cs.ownerName = true;
+                this.setState(cs);
+            } else state.data.rivalName = state.data.playerName;
+        });
         (0, _database.onValue)(chatroomsRef, (snapshot)=>{
             const val = snapshot.val();
             const rtdbStatus = _map(val);
-            cs.gameStatus = rtdbStatus;
+            cs.gameStatus = rtdbStatus[0].gameStatusList;
             this.setState(cs);
-            (0, _router.Router).go("/chat");
         });
     },
     getState () {
         return this.data;
     },
-    setName (name) {
-        const currentState = this.getState();
-        currentState.name = name;
-        this.setState(currentState);
-    },
-    pushMessage (message) {
-        console.log("mensaje del pushMessage" + message);
+    pushGame (gameStatus) {
         const rtdbRoom = this.data.rtdbRoomId;
-        const nombreDelState = this.data.fullName;
-        fetch(API_BASE_URL + "/messages", {
+        const player1 = this.data.playerName;
+        const player2 = this.data.rivalName;
+        const nameId = 1000 + Math.floor(Math.random() * 999);
+        const stringedGameStatus = JSON.stringify(gameStatus);
+        const strngNameId = JSON.stringify(nameId);
+        const strngGameStatus = '{"' + strngNameId + "matchStatus" + '"' + ":" + stringedGameStatus + "}";
+        const gameStatusReady = JSON.parse(strngGameStatus);
+        const gameStatusList = state.data.gameStatus;
+        gameStatusList.push(gameStatusReady);
+        const gameState = {
+            gameStatusList,
+            player: player1,
+            rival: player2,
+            rtdbRoom: rtdbRoom
+        };
+        console.log(gameState);
+        fetch(API_BASE_URL + "/games", {
             method: "post",
             headers: {
                 "content-type": "application/json"
             },
-            body: JSON.stringify({
-                rtdbRoom: rtdbRoom,
-                from: nombreDelState,
-                message: message
-            })
+            body: JSON.stringify(gameState)
         });
     },
     setPlayerName (playerName) {
-        console.log("setPlayerName");
         const cs = this.getState();
         cs.playerName = playerName;
         this.setState(cs);
     },
+    setRivalName (playerName) {
+        const cs = this.getState();
+        cs.playerName = playerName;
+        this.setState(cs);
+    },
+    playerOne () {
+        const ownerName = state.data.ownerName;
+        fetch(API_BASE_URL + "/games", {
+            method: "post",
+            headers: {
+                "content-type": "application/json"
+            },
+            body: JSON.stringify(ownerName)
+        });
+    },
     signUp () {
         console.log("esto es el signUp");
-        const cs = this.getState();
+        const cs = state.data;
+        console.log(cs.playerName);
         fetch(API_BASE_URL + "/signup", {
             method: "post",
             headers: {
                 "content-type": "application/json"
             },
             body: JSON.stringify({
-                email: cs.email,
-                name: cs.fullName
+                player1: cs.playerName
             })
         }).then((res)=>{
-            return res.json();
+            console.log(res.status);
+            if (res.status == 400) return console.log("ese perfil ya existe");
+            else return res.json();
         }).then((data)=>{
-            console.log("data del sign up" + data.id);
-            cs.userId = data.id;
-            // console.log("User Id:", data.id);
-            this.setState(cs);
-            state.askNewRoom();
+            if (data == undefined) state.singIn();
+            else {
+                cs.userId = data.id;
+                console.log("User Id:", data.id);
+                this.setState(cs);
+                state.singIn();
+            }
         });
     },
     singIn () {
         console.log("Inside singIn function");
         const cs = this.getState();
-        if (cs.email) fetch(API_BASE_URL + "/signin", {
+        if (cs.playerName) fetch(API_BASE_URL + "/signin", {
             method: "post",
             headers: {
                 "content-type": "application/json"
             },
             body: JSON.stringify({
-                email: cs.email
+                player1: cs.playerName
             })
         }).then((res)=>{
             return res.json();
@@ -693,7 +725,8 @@ const state = {
             cs.userId = data.id;
             console.log("User Id:", data.id);
             this.setState(cs);
-            state.accessToRoom();
+            if (state.data.roomId == "") state.askNewRoom();
+            else state.accessToRoom();
         });
         else console.error("No hay un email en el state");
     // lunes 9/10/2023 19:16, agregar el endpoint signUp. Update: lunes 30/10/2023, ya estan todos los enpoints listos hace una semana.
@@ -701,17 +734,20 @@ const state = {
     askNewRoom () {
         console.log("askNewRoom");
         const cs = this.getState();
+        console.log(cs.userId);
         if (cs.playerName) fetch(API_BASE_URL + "/rooms", {
             method: "post",
             headers: {
                 "content-type": "application/json"
             },
             body: JSON.stringify({
+                userId: cs.userId,
                 playerName: cs.playerName
             })
         }).then((res)=>{
             return res.json();
         }).then((data)=>{
+            console.log(data);
             cs.roomId = data.id;
             this.setState(cs);
             state.accessToRoom();
@@ -744,7 +780,37 @@ const state = {
     }
 };
 
-},{"firebase/database":"SJ4UY","./db":"98qAp","lodash/map":"94CDd","@vaadin/router":"kVZrF","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"SJ4UY":[function(require,module,exports) {
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","firebase/database":"SJ4UY","./db":"98qAp","lodash/map":"94CDd"}],"gkKU3":[function(require,module,exports) {
+exports.interopDefault = function(a) {
+    return a && a.__esModule ? a : {
+        default: a
+    };
+};
+exports.defineInteropFlag = function(a) {
+    Object.defineProperty(a, "__esModule", {
+        value: true
+    });
+};
+exports.exportAll = function(source, dest) {
+    Object.keys(source).forEach(function(key) {
+        if (key === "default" || key === "__esModule" || Object.prototype.hasOwnProperty.call(dest, key)) return;
+        Object.defineProperty(dest, key, {
+            enumerable: true,
+            get: function() {
+                return source[key];
+            }
+        });
+    });
+    return dest;
+};
+exports.export = function(dest, destName, get) {
+    Object.defineProperty(dest, destName, {
+        enumerable: true,
+        get: get
+    });
+};
+
+},{}],"SJ4UY":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 var _database = require("@firebase/database");
@@ -15102,37 +15168,7 @@ function indicator(i) {
     else return service;
 }
 
-},{"d07263985281b344":"d5jf4","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"gkKU3":[function(require,module,exports) {
-exports.interopDefault = function(a) {
-    return a && a.__esModule ? a : {
-        default: a
-    };
-};
-exports.defineInteropFlag = function(a) {
-    Object.defineProperty(a, "__esModule", {
-        value: true
-    });
-};
-exports.exportAll = function(source, dest) {
-    Object.keys(source).forEach(function(key) {
-        if (key === "default" || key === "__esModule" || Object.prototype.hasOwnProperty.call(dest, key)) return;
-        Object.defineProperty(dest, key, {
-            enumerable: true,
-            get: function() {
-                return source[key];
-            }
-        });
-    });
-    return dest;
-};
-exports.export = function(dest, destName, get) {
-    Object.defineProperty(dest, destName, {
-        enumerable: true,
-        get: get
-    });
-};
-
-},{}],"fZmft":[function(require,module,exports) {
+},{"d07263985281b344":"d5jf4","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"fZmft":[function(require,module,exports) {
 /**
  * @license
  * Copyright 2017 Google LLC
@@ -40385,7 +40421,142 @@ var isArrayLike = require("49bbd11cbf093bb1");
 }
 module.exports = createBaseEach;
 
-},{"49bbd11cbf093bb1":"gMCbp"}],"kVZrF":[function(require,module,exports) {
+},{"49bbd11cbf093bb1":"gMCbp"}],"eBUGN":[function(require,module,exports) {
+var _index = require("./comps/welcome/index");
+var _index1 = require("./comps/game-room/index");
+var _index2 = require("./comps/new-game/index");
+var _index3 = require("./comps/instructions/index");
+var _index4 = require("./comps/game/index");
+var _router = require("@vaadin/router");
+const root = document.querySelector(".root");
+const router = new (0, _router.Router)(root);
+router.setRoutes([
+    {
+        path: "/",
+        component: "welc-el"
+    },
+    {
+        path: "/gameroom",
+        component: "game-room-el"
+    },
+    {
+        path: "/newgame",
+        component: "new-game-el"
+    },
+    {
+        path: "/instructions",
+        component: "inst-el"
+    },
+    {
+        path: "/game",
+        component: "game-el"
+    }
+]);
+
+},{"./comps/welcome/index":"8gRl4","./comps/game-room/index":"hbph1","./comps/new-game/index":"jbAs6","./comps/instructions/index":"dyuce","./comps/game/index":"gW4Uh","@vaadin/router":"kVZrF"}],"8gRl4":[function(require,module,exports) {
+var _router = require("@vaadin/router");
+customElements.define("welc-el", class Welcome extends HTMLElement {
+    connectedCallback() {
+        this.render();
+        this.listeners();
+    }
+    listeners() {
+        const buttonNewGame = this.querySelector(".new-game-button");
+        buttonNewGame.addEventListener("click", (e)=>{
+            e.preventDefault();
+            (0, _router.Router).go("/newgame");
+        });
+        const buttonNewRoom = this.querySelector(".new-room-button");
+        buttonNewRoom.addEventListener("click", (e)=>{
+            e.preventDefault();
+            (0, _router.Router).go("/gameroom");
+        });
+    }
+    render() {
+        const stonePicURL = require("76ce363eb5737da7");
+        const paperPicURL = require("21804f82075535f8");
+        const scissorsPicURL = require("c756706ec2b355e1");
+        const backgroundURL = require("da7d49f620c18671");
+        // -----------------------------------------------------
+        const div = document.createElement("div");
+        div.innerHTML = `
+      <h1 class="title">Piedra Papel \xf3 Tijera</h1>
+      <button type="button" class="new-game-button">Nuevo Juego</button>
+      <button type="button" class="new-room-button">Igresar a una Sala</button>
+      <div class="hands">
+          <img src=${stonePicURL} class="img">
+          <img src=${paperPicURL} class="img">
+          <img src=${scissorsPicURL} class="img">
+      </div>
+      `;
+        // -------------------------------------------------------
+        const style = document.createElement("style");
+        style.textContent = `
+      *{
+        box-sizing: border box;
+      }
+      body{
+        margin: 0;
+      }
+        .inner-root {
+            background-image: url(${backgroundURL});
+            min-width: 375px;
+            height: 667px;
+            display: flex;
+            align-items: center;
+            flex-direction: column;
+          justify-content: space-between;
+      }      
+      .title {
+          text-align: center;
+          margin-top: 70px;
+          color: #009048;
+          font-family: 'Courier Prime', monospace;
+          font-size: 70px;
+          font-style: normal;
+          font-weight: 1000;
+        }      
+      .new-game-button, .new-room-button{
+          width: 322px;
+          height: 87px;
+          border-radius: 10px;
+          border: 10px solid #001997;
+          background: #006CFC;
+          color: aliceblue;
+          
+          color: #D8FCFC;
+          text-align: center;
+          font-family: 'Odibee Sans';
+          font-size: 45px;
+          font-style: normal;
+          font-weight: 400;
+          line-height: normal;
+          letter-spacing: 2.25px;
+        }        
+      .hands {
+        min-width: 70vw;
+        display: flex;
+        justify-content: space-between;
+      }      
+      .button:hover {
+          background: #00449d;
+        }      
+      .button:active {
+          background: #009048;
+      }
+      `;
+        // ----------------------------------------------------------       
+        div.classList.add("inner-root");
+        this.appendChild(div);
+        this.appendChild(style);
+        const boton = this.querySelector(".welcome-button");
+        boton?.addEventListener("click", function() {
+            (0, _router.Router).go("/instructions");
+        });
+    }
+});
+
+},{"@vaadin/router":"kVZrF","76ce363eb5737da7":"2zoGe","21804f82075535f8":"dZ6rN","c756706ec2b355e1":"2NxtY","da7d49f620c18671":"7RiZ9"}],"kVZrF":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "Resolver", ()=>Resolver);
@@ -42692,142 +42863,7 @@ Router.NavigationTrigger = {
     CLICK
 };
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"eBUGN":[function(require,module,exports) {
-var _index = require("./comps/welcome/index");
-var _index1 = require("./comps/game-room/index");
-var _index2 = require("./comps/new-game/index");
-var _index3 = require("./comps/instructions/index");
-var _index4 = require("./comps/game/index");
-var _router = require("@vaadin/router");
-const root = document.querySelector(".root");
-const router = new (0, _router.Router)(root);
-router.setRoutes([
-    {
-        path: "/",
-        component: "welc-el"
-    },
-    {
-        path: "/gameroom",
-        component: "game-room-el"
-    },
-    {
-        path: "/newgame",
-        component: "new-game-el"
-    },
-    {
-        path: "/instructions",
-        component: "inst-el"
-    },
-    {
-        path: "/game",
-        component: "game-el"
-    }
-]);
-
-},{"@vaadin/router":"kVZrF","./comps/welcome/index":"8gRl4","./comps/game-room/index":"hbph1","./comps/new-game/index":"jbAs6","./comps/instructions/index":"dyuce","./comps/game/index":"gW4Uh"}],"8gRl4":[function(require,module,exports) {
-var _router = require("@vaadin/router");
-customElements.define("welc-el", class Welcome extends HTMLElement {
-    connectedCallback() {
-        this.render();
-        this.listeners();
-    }
-    listeners() {
-        const buttonNewGame = this.querySelector(".new-game-button");
-        buttonNewGame.addEventListener("click", (e)=>{
-            e.preventDefault();
-            (0, _router.Router).go("/newgame");
-        });
-        const buttonNewRoom = this.querySelector(".new-room-button");
-        buttonNewRoom.addEventListener("click", (e)=>{
-            e.preventDefault();
-            (0, _router.Router).go("/gameroom");
-        });
-    }
-    render() {
-        const stonePicURL = require("76ce363eb5737da7");
-        const paperPicURL = require("21804f82075535f8");
-        const scissorsPicURL = require("c756706ec2b355e1");
-        const backgroundURL = require("da7d49f620c18671");
-        // -----------------------------------------------------
-        const div = document.createElement("div");
-        div.innerHTML = `
-      <h1 class="title">Piedra Papel \xf3 Tijera</h1>
-      <button type="button" class="new-game-button">Nuevo Juego</button>
-      <button type="button" class="new-room-button">Igresar a una Sala</button>
-      <div class="hands">
-          <img src=${stonePicURL} class="img">
-          <img src=${paperPicURL} class="img">
-          <img src=${scissorsPicURL} class="img">
-      </div>
-      `;
-        // -------------------------------------------------------
-        const style = document.createElement("style");
-        style.textContent = `
-      *{
-        box-sizing: border box;
-      }
-      body{
-        margin: 0;
-      }
-        .inner-root {
-            background-image: url(${backgroundURL});
-            min-width: 375px;
-            height: 667px;
-            display: flex;
-            align-items: center;
-            flex-direction: column;
-          justify-content: space-between;
-      }      
-      .title {
-          text-align: center;
-          margin-top: 70px;
-          color: #009048;
-          font-family: 'Courier Prime', monospace;
-          font-size: 70px;
-          font-style: normal;
-          font-weight: 1000;
-        }      
-      .new-game-button, .new-room-button{
-          width: 322px;
-          height: 87px;
-          border-radius: 10px;
-          border: 10px solid #001997;
-          background: #006CFC;
-          color: aliceblue;
-          
-          color: #D8FCFC;
-          text-align: center;
-          font-family: 'Odibee Sans';
-          font-size: 45px;
-          font-style: normal;
-          font-weight: 400;
-          line-height: normal;
-          letter-spacing: 2.25px;
-        }        
-      .hands {
-        min-width: 70vw;
-        display: flex;
-        justify-content: space-between;
-      }      
-      .button:hover {
-          background: #00449d;
-        }      
-      .button:active {
-          background: #009048;
-      }
-      `;
-        // ----------------------------------------------------------       
-        div.classList.add("inner-root");
-        this.appendChild(div);
-        this.appendChild(style);
-        const boton = this.querySelector(".welcome-button");
-        boton?.addEventListener("click", function() {
-            (0, _router.Router).go("/instructions");
-        });
-    }
-});
-
-},{"@vaadin/router":"kVZrF","76ce363eb5737da7":"2zoGe","21804f82075535f8":"dZ6rN","c756706ec2b355e1":"2NxtY","da7d49f620c18671":"7RiZ9"}],"2zoGe":[function(require,module,exports) {
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"2zoGe":[function(require,module,exports) {
 module.exports = require("9aa23e0076012ebe").getBundleURL("7UhFu") + "piedra.c1b66401.svg" + "?" + Date.now();
 
 },{"9aa23e0076012ebe":"lgJ39"}],"lgJ39":[function(require,module,exports) {
@@ -42876,6 +42912,7 @@ module.exports = require("1f59645b198b8966").getBundleURL("7UhFu") + "fondo.6699
 
 },{"1f59645b198b8966":"lgJ39"}],"hbph1":[function(require,module,exports) {
 var _router = require("@vaadin/router");
+var _state = require("../../src/state");
 customElements.define("game-room-el", class Welcome extends HTMLElement {
     connectedCallback() {
         this.render();
@@ -42888,8 +42925,12 @@ customElements.define("game-room-el", class Welcome extends HTMLElement {
             const form = e.target;
             const roomId = form.room.value;
             console.log(roomId);
-            const playerName = form.name.value;
-            console.log(playerName);
+            const rivalName = form.name.value;
+            console.log(rivalName);
+            (0, _state.state).setRivalName(rivalName);
+            (0, _state.state).data.roomId = roomId;
+            (0, _state.state).data.ownerName = false;
+            (0, _state.state).accessToRoom();
         });
     }
     render() {
@@ -42920,89 +42961,57 @@ customElements.define("game-room-el", class Welcome extends HTMLElement {
         // -------------------------------------------------------
         const style = document.createElement("style");
         style.textContent = `
-            *{
-                box-sizing: border box;
-              }
-              body{
-                margin: 0;
-              }
+            *{box-sizing: border-box;}
+              body{margin: 0;}
         .inner-root {
             background-image: url(${backgroundURL});
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            flex-direction: column;
-          justify-content: space-between;
+            width: 100vw;height: 100vh;
+            display: flex;align-items: center;
+            flex-direction: column;justify-content: space-between;
       }      
       .title {
         margin: 0;text-align: center;color: #009048;
           font-family: 'Courier Prime', monospace;
-          font-size: 70px;
-          font-style: normal;
-          font-weight: 1000;
+          font-size: 70px;font-style: normal;font-weight: 1000;
         }      
         .form {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
+            display: flex;flex-direction: column;
+            align-items: center;gap: 10px;
         }
-        .fieldset {
-            border: none;
-            margin: 0;
-            padding: 0;
-        }
+        .fieldset {border: none;margin: 0;padding: 0;}
         .form-name__label {
             font-family: 'Odibee Sans'; text-align: center;
             display: flex; flex-direction: column;
             gap: 5px; font-size: 45px;
         }
       .game-room-button{
-          width: 332px;
-          height: 67px;
+          width: 332px;height: 67px;
           border-radius: 10px;
           border: 10px solid #001997;
-          background: #006CFC;
-          color: aliceblue;
+          background: #006CFC;color: aliceblue;
           
           color: #D8FCFC;
           text-align: center;
           font-family: 'Odibee Sans';
-          font-size: 45px;
-          font-style: normal;
-          font-weight: 400;
-          line-height: normal;
+          font-size: 45px;font-style: normal;
+          font-weight: 400;line-height: normal;
           letter-spacing: 2.25px;
         }        
       .game-room-input{
-          width: 292px;
-          height: 57px;
-          border-radius: 10px;
-          border: 10px solid #001997;
-          background: #006CFC;
+          width: 292px;height: 57px;border-radius: 10px;
+          border: 10px solid #001997;background: #006CFC;
           color: aliceblue;
           
-          color: #D8FCFC;
-          text-align: center;
-          font-family: 'Odibee Sans';
-          font-size: 35px;
-          font-style: normal;
-          font-weight: 400;
-          line-height: normal;
-          letter-spacing: 2.25px;
+          color: #D8FCFC;text-align: center;font-family: 'Odibee Sans';
+          font-size: 35px;font-style: normal;font-weight: 400;
+          line-height: normal;letter-spacing: 2.25px;
         }        
       .hands {
-        min-width: 70vw;
-        display: flex;
+        min-width: 70vw;display: flex;
         justify-content: space-between;
       }      
-      .button:hover {
-          background: #00449d;
-        }      
-      .button:active {
-          background: #009048;
-      }
+      .button:hover {background: #00449d;}      
+      .button:active {background: #009048;}
       `;
         // ----------------------------------------------------------       
         div.classList.add("inner-root");
@@ -43015,8 +43024,9 @@ customElements.define("game-room-el", class Welcome extends HTMLElement {
     }
 });
 
-},{"@vaadin/router":"kVZrF","145036d79d863638":"2zoGe","c3cda4497dcbb731":"dZ6rN","be62aa816d071a38":"2NxtY","cce889747a91c3ec":"7RiZ9"}],"jbAs6":[function(require,module,exports) {
+},{"@vaadin/router":"kVZrF","145036d79d863638":"2zoGe","c3cda4497dcbb731":"dZ6rN","be62aa816d071a38":"2NxtY","cce889747a91c3ec":"7RiZ9","../../src/state":"1Yeju"}],"jbAs6":[function(require,module,exports) {
 var _router = require("@vaadin/router");
+var _state = require("../../src/state");
 customElements.define("new-game-el", class Welcome extends HTMLElement {
     connectedCallback() {
         this.render();
@@ -43028,7 +43038,10 @@ customElements.define("new-game-el", class Welcome extends HTMLElement {
             e.preventDefault();
             const form = e.target;
             const playerName = form.name.value;
-            console.log(playerName);
+            (0, _state.state).setPlayerName(playerName);
+            (0, _state.state).data.ownerName = true;
+            if ((0, _state.state).data.userId !== " ") (0, _state.state).signUp();
+            (0, _router.Router).go("/instructions");
         });
     }
     render() {
@@ -43114,88 +43127,100 @@ customElements.define("new-game-el", class Welcome extends HTMLElement {
     }
 });
 
-},{"@vaadin/router":"kVZrF","1fe14e9d8aca344a":"2zoGe","63a90454b0affa7f":"dZ6rN","1b4de7d0e342291d":"2NxtY","8b80a34bcde58f34":"7RiZ9"}],"dyuce":[function(require,module,exports) {
+},{"@vaadin/router":"kVZrF","../../src/state":"1Yeju","1fe14e9d8aca344a":"2zoGe","63a90454b0affa7f":"dZ6rN","1b4de7d0e342291d":"2NxtY","8b80a34bcde58f34":"7RiZ9"}],"dyuce":[function(require,module,exports) {
 var _router = require("@vaadin/router");
 var _state = require("../../src/state");
-customElements.define("inst-el", class Welcome extends HTMLElement {
+customElements.define("inst-el", class Instructions extends HTMLElement {
     connectedCallback() {
         this.render();
-        this.listeners();
+        (0, _state.state).subscribe(()=>{
+            (0, _state.state).data.playerName;
+            (0, _state.state).pushGame(this.gameStatus);
+        });
     }
-    listeners() {}
     render() {
+        var playerPageName;
+        var rivalPageName;
+        var playerPoints;
+        var rivalPoints;
+        const st = (0, _state.state).data;
+        if (st.ownerName) {
+            playerPageName = st.playerName;
+            rivalPageName = st.rivalName;
+            playerPoints = st.playerNumber;
+            rivalPoints = st.rivalNumber;
+        } else if (st.ownerName == false) {
+            playerPageName = st.rivalName;
+            rivalPageName = st.playerName;
+            playerPoints = st.rivalNumber;
+            rivalPoints = st.playerNumber;
+        }
         const stonePicURL = require("bc3027b16a50e5fd");
         const paperPicURL = require("3df831f5e754144f");
         const scissorsPicURL = require("99486f88cb0ea89e");
         const backgroundURL = require("bd2726b461f130e4");
         const div1 = document.createElement("div");
         div1.innerHTML = `
-      <header>
+      <header class="header">
         <div class="players">
-        <div class="player-points">${(0, _state.state).data.playerName}:${(0, _state.state).data.playerNumber}</div>
-        <div class="rival-points">${(0, _state.state).data.rivalName}:${(0, _state.state).data.rivalNumber}</div>
+        <div class="player-points">${playerPageName}:${playerPoints}</div>
+        <div class="rival-points">${rivalPageName}:${rivalPoints}</div>
         </div>
         <div class="room-id"><div>Sala</div>${(0, _state.state).data.roomId}</div>
       </header>
           <h3 class="title">Compart\xed el c\xf3digo ${(0, _state.state).data.roomId} con tu contrincante</h3>
           <div class="hands">
-              <img src=${stonePicURL} class="img">
-              <img src=${paperPicURL} class="img">
-              <img src=${scissorsPicURL} class="img">
+          <img src=${stonePicURL} class="img">
+          <img src=${paperPicURL} class="img">
+          <img src=${scissorsPicURL} class="img">
           </div>
           `;
         const div2 = document.createElement("div");
         div2.innerHTML = `
-          <h3 class="title">Presion\xe1 Jugar y eleg\xed piedra, papel o tijera antes de que pasen los 3 segundos</h3>
-          <button class="button">\xa1Jugar!</button>
-          <div class="hands">
-              <img src=${stonePicURL} class="img">
-              <img src=${paperPicURL} class="img">
-              <img src=${scissorsPicURL} class="img">
-          </div>
-          `;
+    <header class="header">
+    <div class="players">
+    <div class="player-points">${playerPageName}:${playerPoints}</div>
+    <div class="rival-points">${rivalPageName}:${rivalPoints}</div>
+    </div>
+    <div class="room-id"><div>Sala</div>${st.roomId}</div>
+    </header>
+    <h3 class="title">Presion\xe1 Jugar y eleg\xed piedra, papel o tijera antes de que pasen los 3 segundos</h3>
+    <button class="button">\xa1Jugar!</button>
+    <div class="hands">
+    <img src=${stonePicURL} class="img">
+    <img src=${paperPicURL} class="img">
+    <img src=${scissorsPicURL} class="img">
+    </div>
+    `;
         const style = document.createElement("style");
         style.textContent = `
-      *{
-        box-sizing: border box;
-      }
-      body{
-        margin: 0;
-      }
+      *{box-sizing: border-box;}
+      body{margin: 0;}
           .inner-root {
             background-image: url(${backgroundURL});
-            min-width: 100vw;
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            text-align: center;
-            flex-direction: column;
-            justify-content: space-between;
+            min-width: 100vw;height: 100vh;
+            display: flex;align-items: center;text-align: center;
+            flex-direction: column;justify-content: space-between;
         }        
+        .header {
+          display: flex; justify-content: space-between;
+          font-family: 'Courier Prime', monospace;width:100vw;
+          font-size: 20px; padding: 15px 25px;
+        }
+        .players {text-align: start}
+        .rival-points {color: darkblue}
+        .room-id {text-align: end}
         .title {
-            color: #000;
-            text-align: center;
-            font-family: 'Courier Prime', monospace;
-            font-size: 40px;
-            font-style: normal;
-            font-weight: 600;
+            color: #000;text-align: center;font-family: 'Courier Prime', monospace;
+            font-size: 40px;font-style: normal;font-weight: 600;
             line-height: 100%; /* 40px */
         }        
         .button {
-            width: 322px;
-            height: 87px;
-            border-radius: 10px;
-            border: 10px solid #001997;
-            background: #006CFC;
-            color: aliceblue;        
-            color: #D8FCFC;
-            text-align: center;
-            font-family: 'Odibee Sans';
-            font-size: 45px;
-            font-style: normal;
-            font-weight: 400;
-            line-height: normal;
-            letter-spacing: 2.25px;
+            width: 322px;height: 87px;border-radius: 10px;border: 10px solid #001997;
+            background: #006CFC;color: aliceblue;color: #D8FCFC;
+            text-align: center;font-family: 'Odibee Sans';
+            font-size: 45px;font-style: normal;font-weight: 400;
+            line-height: normal;letter-spacing: 2.25px;
         }        
         .hands { min-width: 70vw; display: flex;justify-content: space-between; }        
         .button:hover { background: #00449d; }        
@@ -43204,7 +43229,25 @@ customElements.define("inst-el", class Welcome extends HTMLElement {
         div1.classList.add("inner-root");
         this.appendChild(div1);
         this.appendChild(style);
-        setTimeout(()=>{
+        const div3 = document.createElement("div");
+        div3.innerHTML = `
+    <header class="header">
+    <div class="players">
+    <div class="player-points">${playerPageName}:${playerPoints}</div>
+    <div class="rival-points">${rivalPageName}:${rivalPoints}</div>
+    </div>
+    <div class="room-id"><div>Sala</div>${st.roomId}</div>
+    </header>
+    <h3 class="title">Esperando a que ${rivalPageName} presione jugar...</h3>
+    <div class="hands">
+    <img src=${stonePicURL} class="img">
+    <img src=${paperPicURL} class="img">
+    <img src=${scissorsPicURL} class="img">
+    </div>        
+    `;
+        if ((0, _state.state).data.rivalName !== "") {
+            console.log(st.rivalName);
+            console.log(this.firstChild);
             this.firstChild.remove();
             div2.classList.add("inner-root");
             this.appendChild(div2);
@@ -43213,11 +43256,15 @@ customElements.define("inst-el", class Welcome extends HTMLElement {
                 e.preventDefault();
                 (0, _router.Router).go("/game");
             });
-        }, 3000);
+        }
+    }
+    constructor(...args){
+        super(...args);
+        this.gameStatus = [];
     }
 });
 
-},{"bc3027b16a50e5fd":"2zoGe","3df831f5e754144f":"dZ6rN","99486f88cb0ea89e":"2NxtY","bd2726b461f130e4":"7RiZ9","@vaadin/router":"kVZrF","../../src/state":"1Yeju"}],"gW4Uh":[function(require,module,exports) {
+},{"../../src/state":"1Yeju","bc3027b16a50e5fd":"2zoGe","3df831f5e754144f":"dZ6rN","99486f88cb0ea89e":"2NxtY","bd2726b461f130e4":"7RiZ9","@vaadin/router":"kVZrF"}],"gW4Uh":[function(require,module,exports) {
 var _router = require("@vaadin/router");
 var _results = require("../../results");
 customElements.define("game-el", class Game extends HTMLElement {
@@ -43264,9 +43311,8 @@ customElements.define("game-el", class Game extends HTMLElement {
           font-size:30px; font-weight:600; gap: 30px; border: solid black
       }        
             .inner-root {                
-              background-image: url(${backgroundURL});
-              min-width: 375px; min-height: 667px; display: flex; align-items: center;
-              flex-direction: column; justify-content: space-between;
+              background-image: url(${backgroundURL});min-width: 375px; min-height: 667px; display: flex; 
+              align-items: center;flex-direction: column; justify-content: space-between;
           }
           .main-counter{ padding-top:125px; }
           .circular-counter {                 
@@ -43281,39 +43327,20 @@ customElements.define("game-el", class Game extends HTMLElement {
             background-image: url(${backgroundURL});
           }
           .number{
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100px; height: 100px;
-            font-family: 'Odibee Sans';
-            font-size:70px; font-weight:600;
+            display: flex;align-items: center;justify-content: center;width: 100px; height: 100px;
+            font-family: 'Odibee Sans';font-size:70px; font-weight:600;
           }
           .button,.window__button {
-              width: 322px; height: 87px; border-radius: 10px;
-              border: 10px solid #001997;
-              background: #006CFC; color: aliceblue;
-          
-              color: #D8FCFC;
-              text-align: center;
-              font-family: 'Odibee Sans';
-              font-size: 45px;
-              font-style: normal;
-              font-weight: 400;
-              line-height: normal;
-              letter-spacing: 2.25px;
+              width: 322px; height: 87px;border-radius: 10px;
+              border: 10px solid #001997;background: #006CFC; color: aliceblue; 
+              color: #D8FCFC;text-align: center;font-family: 'Odibee Sans';font-size: 45px;
+              font-style: normal;font-weight: 400;line-height: normal;letter-spacing: 2.25px;
           }          
-          .hands {
-            min-width: 70vw;display: flex;justify-content: space-between;           
-          }
-          .hands__button-stone, .hands__button-paper, .hands__button-scissors {
-            border:none;
-          }
-          .stone:active {width: 100px;height: 150px;            
-          }          
-          .paper:active {width: 100px;height: 150px;          
-          }          
-          .scissors:active {width: 100px;height: 150px;           
-          }          
+          .hands {min-width: 70vw;display: flex;justify-content: space-between;}
+          .hands__button-stone, .hands__button-paper, .hands__button-scissors {border:none;}
+          .stone:active {width: 100px;height: 150px;}          
+          .paper:active {width: 100px;height: 150px;}          
+          .scissors:active {width: 100px;height: 150px;}          
           `;
         div.classList.add("inner-root");
         this.appendChild(div);
@@ -43409,10 +43436,7 @@ customElements.define("game-el", class Game extends HTMLElement {
     min-width: 375px; min-height: 667px; display: flex; align-items: center; flex-direction: column;
     justify-content: space-between;
   }
-.hands{
-  min-width: 375px; min-height: 667px; display: flex; flex-direction: column; justify-content:space-between;
-  align-items: center;
-  }
+.hands{min-width: 375px; min-height: 667px; display: flex; flex-direction: column; justify-content:space-between; align-items: center;}
 .rival-hand { display: flex; align-items: center; justify-content: center; min-width: 375px; }
 .${rivalClassEl} { width: 180px; height: 280px; text-align: center; transform: rotate(180deg); }
 .player-hand { display: flex; align-items: center; justify-content: center; min-width: 375px; }
@@ -43435,17 +43459,18 @@ customElements.define("game-el", class Game extends HTMLElement {
     }
 });
 
-},{"70d1433477695b87":"2zoGe","57b99d1a0d7772bf":"dZ6rN","6e35cbe0285a9b06":"2NxtY","6b1a1dab8c611463":"7RiZ9","@vaadin/router":"kVZrF","../../results":"dN0bM"}],"dN0bM":[function(require,module,exports) {
+},{"@vaadin/router":"kVZrF","../../results":"dN0bM","70d1433477695b87":"2zoGe","57b99d1a0d7772bf":"dZ6rN","6e35cbe0285a9b06":"2NxtY","6b1a1dab8c611463":"7RiZ9"}],"dN0bM":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "result", ()=>result);
-var _state = require("./state");
+var _state = require("../src/state");
 function result() {
     customElements.define("results-el", class Results extends HTMLElement {
         connectedCallback() {
+            this.points();
             this.render();
         }
-        render() {
+        points() {
             const pointsStone = [
                 {
                     hand: "stone",
@@ -43489,8 +43514,8 @@ function result() {
                 }
             ];
             function resultsText() {
-                const rivalResult = (0, _state.state).data.rival[0];
-                const playerResult = (0, _state.state).data.player[1];
+                const rivalResult = (0, _state.state).data.rivalNumber;
+                const playerResult = (0, _state.state).data.playerNumber;
                 if (playerResult == "stone") {
                     for (const r of pointsStone)if (r.hand == rivalResult) {
                         const finalText = r.result;
@@ -43510,21 +43535,21 @@ function result() {
                     }
                 }
             }
-            const resultsTexts = resultsText();
+            const resultsTexts1 = resultsText();
             // ----------------------------------------------------------------            
             var data = (0, _state.state).getState();
             console.log(data);
             // ----------------------------------------------------------------
             function pointsFunc() {
-                if (resultsTexts == "Ganaste!\uD83D\uDE03") {
+                if (resultsTexts1 == "Ganaste!\uD83D\uDE03") {
                     var player = data.player++;
                     console.log("player", player);
                     return player;
-                } else if (resultsTexts == "Perdiste\uD83D\uDE43") {
+                } else if (resultsTexts1 == "Perdiste\uD83D\uDE43") {
                     var rival = data.rival++;
                     console.log("rival", rival);
                     return rival;
-                } else if (resultsTexts == "Empate\uD83D\uDE01") {
+                } else if (resultsTexts1 == "Empate\uD83D\uDE01") {
                     var draw = data.player;
                     console.log("draw", draw);
                     return draw;
@@ -43534,16 +43559,18 @@ function result() {
             console.log("funci\xf3n", result);
             // ----------------------------------------------------------------     
             data = (0, _state.state).getState();
-            const playerPoints = data.player;
-            const rivalPoints = data.rival;
-            console.log("player final", playerPoints);
-            console.log("rival final", rivalPoints);
+            const playerPoints1 = data.player;
+            const rivalPoints1 = data.rival;
+            console.log("player final", playerPoints1);
+            console.log("rival final", rivalPoints1);
             console.log("data", data);
             (0, _state.state).setState({
                 ...data,
-                player: playerPoints,
-                rival: rivalPoints
+                player: playerPoints1,
+                rival: rivalPoints1
             });
+        }
+        render() {
             const div = document.createElement("div");
             div.innerHTML = `                
                 <div class="window__text">
@@ -43605,36 +43632,6 @@ function result() {
     });
 }
 
-},{"./state":"klPAl","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"klPAl":[function(require,module,exports) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "state", ()=>state);
-const state = {
-    data: {
-        player: 0,
-        rival: 0
-    },
-    listeners: [],
-    init () {
-        const localData = sessionStorage.getItem("points");
-        if (localData == undefined || null) sessionStorage.setItem("points", JSON.stringify(this.data));
-        else this.setState(JSON.parse(localData));
-    },
-    getState () {
-        return this.data;
-    },
-    setState (newState) {
-        this.data = newState;
-        for (const cb of this.listeners)cb();
-        // --------------------------
-        const stringed = JSON.stringify(newState);
-        sessionStorage.setItem("points", stringed);
-    },
-    subscribe (callback) {
-        this.listeners.push(callback);
-    }
-};
-
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}]},["gmPuC","h7u1C"], "h7u1C", "parcelRequire94c2")
+},{"../src/state":"1Yeju","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}]},["gmPuC","h7u1C"], "h7u1C", "parcelRequire94c2")
 
 //# sourceMappingURL=index.b71e74eb.js.map

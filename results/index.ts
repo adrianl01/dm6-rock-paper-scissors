@@ -1,17 +1,15 @@
-import { state } from "./state";
+import { state } from "../src/state";
 
 function result() {
     customElements.define("results-el", class Results extends HTMLElement {
-        connectedCallback() {
-            this.render();
-        }
-        render() {
+        connectedCallback() { this.points(); this.render(); }
+        points() {
             const pointsStone = [{ hand: "stone", result: "Empate😁" }, { hand: "paper", result: "Perdiste🙃" }, { hand: "scissors", result: "Ganaste!😃" }]
             const pointsPaper = [{ hand: "stone", result: "Ganaste!😃" }, { hand: "paper", result: "Empate😁" }, { hand: "scissors", result: "Perdiste🙃" }]
             const pointsScissors = [{ hand: "stone", result: "Perdiste🙃" }, { hand: "paper", result: "Ganaste!😃" }, { hand: "scissors", result: "Empate😁" }]
             function resultsText() {
-                const rivalResult = state.data.rival[0]
-                const playerResult = state.data.player[1]
+                const rivalResult = state.data.rivalNumber
+                const playerResult = state.data.playerNumber
                 if (playerResult == "stone") {
                     for (const r of pointsStone) {
                         if (r.hand == rivalResult) {
@@ -73,6 +71,7 @@ function result() {
                 player: playerPoints,
                 rival: rivalPoints
             })
+        } render() {
 
             const div = document.createElement("div");
             div.innerHTML = `                

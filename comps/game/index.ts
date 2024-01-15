@@ -52,9 +52,8 @@ customElements.define(
           font-size:30px; font-weight:600; gap: 30px; border: solid black
       }        
             .inner-root {                
-              background-image: url(${backgroundURL});
-              min-width: 375px; min-height: 667px; display: flex; align-items: center;
-              flex-direction: column; justify-content: space-between;
+              background-image: url(${backgroundURL});min-width: 375px; min-height: 667px; display: flex; 
+              align-items: center;flex-direction: column; justify-content: space-between;
           }
           .main-counter{ padding-top:125px; }
           .circular-counter {                 
@@ -69,39 +68,20 @@ customElements.define(
             background-image: url(${backgroundURL});
           }
           .number{
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100px; height: 100px;
-            font-family: 'Odibee Sans';
-            font-size:70px; font-weight:600;
+            display: flex;align-items: center;justify-content: center;width: 100px; height: 100px;
+            font-family: 'Odibee Sans';font-size:70px; font-weight:600;
           }
           .button,.window__button {
-              width: 322px; height: 87px; border-radius: 10px;
-              border: 10px solid #001997;
-              background: #006CFC; color: aliceblue;
-          
-              color: #D8FCFC;
-              text-align: center;
-              font-family: 'Odibee Sans';
-              font-size: 45px;
-              font-style: normal;
-              font-weight: 400;
-              line-height: normal;
-              letter-spacing: 2.25px;
+              width: 322px; height: 87px;border-radius: 10px;
+              border: 10px solid #001997;background: #006CFC; color: aliceblue; 
+              color: #D8FCFC;text-align: center;font-family: 'Odibee Sans';font-size: 45px;
+              font-style: normal;font-weight: 400;line-height: normal;letter-spacing: 2.25px;
           }          
-          .hands {
-            min-width: 70vw;display: flex;justify-content: space-between;           
-          }
-          .hands__button-stone, .hands__button-paper, .hands__button-scissors {
-            border:none;
-          }
-          .stone:active {width: 100px;height: 150px;            
-          }          
-          .paper:active {width: 100px;height: 150px;          
-          }          
-          .scissors:active {width: 100px;height: 150px;           
-          }          
+          .hands {min-width: 70vw;display: flex;justify-content: space-between;}
+          .hands__button-stone, .hands__button-paper, .hands__button-scissors {border:none;}
+          .stone:active {width: 100px;height: 150px;}          
+          .paper:active {width: 100px;height: 150px;}          
+          .scissors:active {width: 100px;height: 150px;}          
           `;
       div.classList.add("inner-root"); this.appendChild(div); this.appendChild(style);
     }
@@ -109,15 +89,13 @@ customElements.define(
       const circularProgress = this?.querySelector(".circular-counter") as any;
       const progressValue = this?.querySelector(".number") as any;
 
-      let progressStartValue = 4,
-        progressEndValue = 0;
+      let progressStartValue = 4, progressEndValue = 0;
       let progress = setInterval(() => {
         progressStartValue--;
         if (progressStartValue == progressEndValue && this.hands.player == "") {
           const windowEl = this.querySelector(".window") as HTMLElement;
           windowEl.style.display = "flex"
           clearInterval(progress)
-
         } else if (progressStartValue == progressEndValue && this.hands.player !== "") {
           clearInterval(progress);
           this.hands.status = "ready"
@@ -140,8 +118,7 @@ customElements.define(
     }
     addHand() {
       console.log("addHand")
-      this.firstChild.remove()
-      this.firstChild.remove()
+      this.firstChild.remove(); this.firstChild.remove()
       const stonePicURL = require("url:../../piedra.svg");
       const paperPicURL = require("url:../../papel.svg");
       const scissorsPicURL = require("url:../../tijera.svg");
@@ -172,10 +149,7 @@ customElements.define(
     min-width: 375px; min-height: 667px; display: flex; align-items: center; flex-direction: column;
     justify-content: space-between;
   }
-.hands{
-  min-width: 375px; min-height: 667px; display: flex; flex-direction: column; justify-content:space-between;
-  align-items: center;
-  }
+.hands{min-width: 375px; min-height: 667px; display: flex; flex-direction: column; justify-content:space-between; align-items: center;}
 .rival-hand { display: flex; align-items: center; justify-content: center; min-width: 375px; }
 .${rivalClassEl} { width: 180px; height: 280px; text-align: center; transform: rotate(180deg); }
 .player-hand { display: flex; align-items: center; justify-content: center; min-width: 375px; }
