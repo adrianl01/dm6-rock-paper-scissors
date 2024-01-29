@@ -16,13 +16,11 @@ customElements.define(
         e.preventDefault();
         const form = e.target as any
         const roomId = form.room.value;
-        console.log(roomId)
         const rivalName = form.name.value;
-        console.log(rivalName)
         state.setRivalName(rivalName)
         state.data.roomId = roomId
         state.data.ownerName = false
-        state.accessToRoom();
+        state.signUp();
       })
     }
     render() {
@@ -107,10 +105,6 @@ customElements.define(
       `;
       // ----------------------------------------------------------       
       div.classList.add("inner-root"); this.appendChild(div); this.appendChild(style);
-      const boton = this.querySelector(".welcome-button");
-      boton?.addEventListener("click", function () {
-        Router.go("/instructions");
-      });
     }
   }
 );

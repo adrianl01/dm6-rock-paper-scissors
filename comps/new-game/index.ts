@@ -1,5 +1,6 @@
 import { Router } from "@vaadin/router";
 import { state } from "../../src/state";
+import { funcRoomId } from "../room-id";
 
 customElements.define(
     "new-game-el",
@@ -15,8 +16,7 @@ customElements.define(
                 const playerName = form.name.value;
                 state.setPlayerName(playerName);
                 state.data.ownerName = true;
-                if (state.data.userId !== " ") { state.signUp(); }
-                Router.go("/instructions")
+                state.roomId();
             })
         }
         render() {
@@ -42,6 +42,7 @@ customElements.define(
           <img src=${paperPicURL} class="img">
           <img src=${scissorsPicURL} class="img">
       </div>
+      <rooms-el></rooms-el>
       `;
             // -------------------------------------------------------
             const style = document.createElement("style");

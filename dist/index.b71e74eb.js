@@ -592,9 +592,14 @@ var _routerTs = require("../router.ts");
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "state", ()=>state);
-var _database = require("firebase/database");
 var _db = require("./db");
+var _database = require("firebase/database");
+var _firestore = require("firebase/firestore");
 var _map = require("lodash/map");
+var _roomId = require("../comps/room-id");
+var _console = require("console");
+var _router = require("@vaadin/router");
+const roomsRef = (0, _firestore.collection)((0, _db.fsdb), "rooms");
 const API_BASE_URL = "http://localhost:3000";
 const state = {
     data: {
@@ -606,32 +611,50 @@ const state = {
         userId: "",
         roomId: "",
         rtdbRoomId: "",
-        gameStatus: []
+        gameStatus: [
+            {
+                player: "",
+                playerOnline: false,
+                playerStatus: false,
+                rival: "",
+                rivalOnline: false,
+                rivalStatus: false
+            }
+        ],
+        rooms: [],
+        playerOnValue: "disabled"
     },
     listeners: [],
     init () {
         if (this.data.rtdbRoomId !== " ") this.listenRoom();
     },
     listenRoom () {
-        console.log("listenRoom");
         const cs = state.data;
         const db = (0, _db.rtdb);
         const chatroomsRef = (0, _database.ref)(db, "/rooms/" + cs.rtdbRoomId);
-        if (state.data.ownerName == false) (0, _database.onValue)(chatroomsRef, (snap)=>{
-            const val = snap.val();
-            const rtdbStatus = _map(val);
-            console.log(rtdbStatus[0]);
-            if (rtdbStatus[0] == state.data.playerName) {
-                cs.ownerName = true;
-                this.setState(cs);
-            } else state.data.rivalName = state.data.playerName;
-        });
+        // function roomOnValue() {
         (0, _database.onValue)(chatroomsRef, (snapshot)=>{
             const val = snapshot.val();
             const rtdbStatus = _map(val);
-            cs.gameStatus = rtdbStatus[0].gameStatusList;
-            this.setState(cs);
+            console.log("se ejecuta el onValue del GameStatus");
+            const res = rtdbStatus[0].gameStatusList;
+            console.log(rtdbStatus[0].player, rtdbStatus[0].rival);
+            if (rtdbStatus[0].rival !== "" && state.data.ownerName == true) {
+                console.log("SE EJECUTA CUANDO SOY EL JUGADOR UNO y No pasa nada");
+                console.log(rtdbStatus[0].gameStatusList);
+                cs.gameStatus = rtdbStatus[0].gameStatusList;
+                cs.rivalName = rtdbStatus[0].rival;
+                this.setState(cs);
+            } else if (state.data.ownerName == false) {
+                console.log("SE EJECUTA CUANDO NO SOY EL JUGADOR UNO");
+                cs.gameStatus = rtdbStatus[0].gameStatusList;
+                cs.playerName = rtdbStatus[0].player;
+                this.setState(cs);
+            }
         });
+    // }
+    // if (cs.rivalName !== "") { roomOnValue(); }
+    // if (state.data.playerOnValue == "enabled") { roomOnValue(); }
     },
     getState () {
         return this.data;
@@ -640,13 +663,13 @@ const state = {
         const rtdbRoom = this.data.rtdbRoomId;
         const player1 = this.data.playerName;
         const player2 = this.data.rivalName;
-        const nameId = 1000 + Math.floor(Math.random() * 999);
-        const stringedGameStatus = JSON.stringify(gameStatus);
-        const strngNameId = JSON.stringify(nameId);
-        const strngGameStatus = '{"' + strngNameId + "matchStatus" + '"' + ":" + stringedGameStatus + "}";
-        const gameStatusReady = JSON.parse(strngGameStatus);
-        const gameStatusList = state.data.gameStatus;
-        gameStatusList.push(gameStatusReady);
+        // const nameId = 1000 + Math.floor(Math.random() * 999)
+        // const stringedGameStatus = JSON.stringify(gameStatus)
+        // const strngNameId = JSON.stringify(nameId)
+        // const strngGameStatus = '{' + '"' + strngNameId + "matchStatus" + '"' + ':' + stringedGameStatus + '}';
+        // const gameStatusReady = JSON.parse(strngGameStatus)
+        const gameStatusList = gameStatus;
+        // gameStatusList.push(gameStatusReady)
         const gameState = {
             gameStatusList,
             player: player1,
@@ -661,6 +684,7 @@ const state = {
             },
             body: JSON.stringify(gameState)
         });
+        state.data.playerOnValue = "enabled";
     },
     setPlayerName (playerName) {
         const cs = this.getState();
@@ -669,7 +693,7 @@ const state = {
     },
     setRivalName (playerName) {
         const cs = this.getState();
-        cs.playerName = playerName;
+        cs.rivalName = playerName;
         this.setState(cs);
     },
     playerOne () {
@@ -682,51 +706,74 @@ const state = {
             body: JSON.stringify(ownerName)
         });
     },
+    roomId () {
+        const userId = state.data.userId;
+        const q = (0, _firestore.query)(roomsRef, (0, _firestore.where)("userId", "==", userId));
+        (0, _firestore.getDocs)(q).then((res)=>{
+            res.forEach((n)=>{
+                state.data.rooms.push(n.id);
+            });
+            if (state.data.rooms.length > 0) {
+                console.log("se ejecuta funcRoomId en el State");
+                (0, _roomId.funcRoomId)();
+            } else {
+                console.log("se ejecuta el signUp en el State");
+                state.signUp();
+            }
+        });
+    // setTimeout(() => {
+    //     console.log(state.data.rooms);
+    // }, 5000)
+    },
     signUp () {
         console.log("esto es el signUp");
         const cs = state.data;
-        console.log(cs.playerName);
+        var currentPlayer;
+        if (state.data.playerName == "") currentPlayer = cs.rivalName;
+        else currentPlayer = cs.playerName;
         fetch(API_BASE_URL + "/signup", {
             method: "post",
             headers: {
                 "content-type": "application/json"
             },
             body: JSON.stringify({
-                player1: cs.playerName
+                player: currentPlayer
             })
         }).then((res)=>{
             console.log(res.status);
-            if (res.status == 400) return console.log("ese perfil ya existe");
+            if (res.status == 400) return (0, _console.error)("ese perfil ya existe");
             else return res.json();
         }).then((data)=>{
             if (data == undefined) state.singIn();
             else {
                 cs.userId = data.id;
-                console.log("User Id:", data.id);
                 this.setState(cs);
-                state.singIn();
+                state.askNewRoom();
             }
         });
     },
     singIn () {
         console.log("Inside singIn function");
         const cs = this.getState();
-        if (cs.playerName) fetch(API_BASE_URL + "/signin", {
+        var currentPlayer;
+        if (state.data.playerName == "") currentPlayer = cs.rivalName;
+        else currentPlayer = cs.playerName;
+        if (currentPlayer) fetch(API_BASE_URL + "/signin", {
             method: "post",
             headers: {
                 "content-type": "application/json"
             },
             body: JSON.stringify({
-                player1: cs.playerName
+                player1: currentPlayer
             })
         }).then((res)=>{
             return res.json();
         }).then((data)=>{
             cs.userId = data.id;
-            console.log("User Id:", data.id);
             this.setState(cs);
-            if (state.data.roomId == "") state.askNewRoom();
+            if (state.data.roomId == "") state.roomId();
             else state.accessToRoom();
+        // if (state.data.roomId == "") { state.askNewRoom() } 
         });
         else console.error("No hay un email en el state");
     // lunes 9/10/2023 19:16, agregar el endpoint signUp. Update: lunes 30/10/2023, ya estan todos los enpoints listos hace una semana.
@@ -765,8 +812,8 @@ const state = {
             cs.rtdbRoomId = data.rtdbRoomId;
             this.setState(cs);
             this.listenRoom();
-            console.log("rtdbId:", data.rtdbRoomId);
-            console.log("el router se ejecuta");
+            console.log("CAMBIO A /INSTRUCTIONS");
+            (0, _router.Router).go("/instructions");
         });
     },
     setState (newState) {
@@ -774,13 +821,3159 @@ const state = {
         for (const cb of this.listeners)cb();
         // --------------------------
         console.log("State Changed", this.data);
+        if (state.data.ownerName == false && state.data.playerName !== "" && state.data.rivalName !== "") state.pushGame(state.data.gameStatus);
     },
     subscribe (callback) {
         this.listeners.push(callback);
     }
 };
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","firebase/database":"SJ4UY","./db":"98qAp","lodash/map":"94CDd"}],"gkKU3":[function(require,module,exports) {
+},{"./db":"98qAp","firebase/database":"SJ4UY","firebase/firestore":"8A4BC","lodash/map":"94CDd","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","../comps/room-id":"3Gh8t","console":"8kdFB","@vaadin/router":"kVZrF"}],"98qAp":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "rtdb", ()=>rtdb);
+parcelHelpers.export(exports, "fsdb", ()=>fsdb);
+var _app = require("firebase/app");
+var _database = require("firebase/database");
+var _firestore = require("firebase/firestore");
+const firebaseConfig = {
+    apikey: "Gb114NwQJcuPTT4GsvCJCbRtJwsrmmMxQMJNgB65",
+    databaseURL: "https://imessages-d5664-default-rtdb.firebaseio.com",
+    authDomain: "imessages-d5664.firebaseapp.com",
+    projectId: "imessages-d5664"
+};
+const app = (0, _app.initializeApp)(firebaseConfig);
+const rtdb = (0, _database.getDatabase)(app);
+const fsdb = (0, _firestore.getFirestore)(app);
+
+},{"firebase/app":"aM3Fo","firebase/database":"SJ4UY","firebase/firestore":"8A4BC","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"aM3Fo":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+var _app = require("@firebase/app");
+parcelHelpers.exportAll(_app, exports);
+var name = "firebase";
+var version = "10.7.1";
+/**
+ * @license
+ * Copyright 2020 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ (0, _app.registerVersion)(name, version, "app");
+
+},{"@firebase/app":"3AcPV","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"3AcPV":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "FirebaseError", ()=>(0, _util.FirebaseError));
+parcelHelpers.export(exports, "SDK_VERSION", ()=>SDK_VERSION);
+parcelHelpers.export(exports, "_DEFAULT_ENTRY_NAME", ()=>DEFAULT_ENTRY_NAME);
+parcelHelpers.export(exports, "_addComponent", ()=>_addComponent);
+parcelHelpers.export(exports, "_addOrOverwriteComponent", ()=>_addOrOverwriteComponent);
+parcelHelpers.export(exports, "_apps", ()=>_apps);
+parcelHelpers.export(exports, "_clearComponents", ()=>_clearComponents);
+parcelHelpers.export(exports, "_components", ()=>_components);
+parcelHelpers.export(exports, "_getProvider", ()=>_getProvider);
+parcelHelpers.export(exports, "_registerComponent", ()=>_registerComponent);
+parcelHelpers.export(exports, "_removeServiceInstance", ()=>_removeServiceInstance);
+parcelHelpers.export(exports, "deleteApp", ()=>deleteApp);
+parcelHelpers.export(exports, "getApp", ()=>getApp);
+parcelHelpers.export(exports, "getApps", ()=>getApps);
+parcelHelpers.export(exports, "initializeApp", ()=>initializeApp);
+parcelHelpers.export(exports, "onLog", ()=>onLog);
+parcelHelpers.export(exports, "registerVersion", ()=>registerVersion);
+parcelHelpers.export(exports, "setLogLevel", ()=>setLogLevel);
+var _component = require("@firebase/component");
+var _logger = require("@firebase/logger");
+var _util = require("@firebase/util");
+var _idb = require("idb");
+/**
+ * @license
+ * Copyright 2019 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ class PlatformLoggerServiceImpl {
+    constructor(container){
+        this.container = container;
+    }
+    // In initial implementation, this will be called by installations on
+    // auth token refresh, and installations will send this string.
+    getPlatformInfoString() {
+        const providers = this.container.getProviders();
+        // Loop through providers and get library/version pairs from any that are
+        // version components.
+        return providers.map((provider)=>{
+            if (isVersionServiceProvider(provider)) {
+                const service = provider.getImmediate();
+                return `${service.library}/${service.version}`;
+            } else return null;
+        }).filter((logString)=>logString).join(" ");
+    }
+}
+/**
+ *
+ * @param provider check if this provider provides a VersionService
+ *
+ * NOTE: Using Provider<'app-version'> is a hack to indicate that the provider
+ * provides VersionService. The provider is not necessarily a 'app-version'
+ * provider.
+ */ function isVersionServiceProvider(provider) {
+    const component = provider.getComponent();
+    return (component === null || component === void 0 ? void 0 : component.type) === "VERSION" /* ComponentType.VERSION */ ;
+}
+const name$o = "@firebase/app";
+const version$1 = "0.9.25";
+/**
+ * @license
+ * Copyright 2019 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ const logger = new (0, _logger.Logger)("@firebase/app");
+const name$n = "@firebase/app-compat";
+const name$m = "@firebase/analytics-compat";
+const name$l = "@firebase/analytics";
+const name$k = "@firebase/app-check-compat";
+const name$j = "@firebase/app-check";
+const name$i = "@firebase/auth";
+const name$h = "@firebase/auth-compat";
+const name$g = "@firebase/database";
+const name$f = "@firebase/database-compat";
+const name$e = "@firebase/functions";
+const name$d = "@firebase/functions-compat";
+const name$c = "@firebase/installations";
+const name$b = "@firebase/installations-compat";
+const name$a = "@firebase/messaging";
+const name$9 = "@firebase/messaging-compat";
+const name$8 = "@firebase/performance";
+const name$7 = "@firebase/performance-compat";
+const name$6 = "@firebase/remote-config";
+const name$5 = "@firebase/remote-config-compat";
+const name$4 = "@firebase/storage";
+const name$3 = "@firebase/storage-compat";
+const name$2 = "@firebase/firestore";
+const name$1 = "@firebase/firestore-compat";
+const name = "firebase";
+const version = "10.7.1";
+/**
+ * @license
+ * Copyright 2019 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * The default app name
+ *
+ * @internal
+ */ const DEFAULT_ENTRY_NAME = "[DEFAULT]";
+const PLATFORM_LOG_STRING = {
+    [name$o]: "fire-core",
+    [name$n]: "fire-core-compat",
+    [name$l]: "fire-analytics",
+    [name$m]: "fire-analytics-compat",
+    [name$j]: "fire-app-check",
+    [name$k]: "fire-app-check-compat",
+    [name$i]: "fire-auth",
+    [name$h]: "fire-auth-compat",
+    [name$g]: "fire-rtdb",
+    [name$f]: "fire-rtdb-compat",
+    [name$e]: "fire-fn",
+    [name$d]: "fire-fn-compat",
+    [name$c]: "fire-iid",
+    [name$b]: "fire-iid-compat",
+    [name$a]: "fire-fcm",
+    [name$9]: "fire-fcm-compat",
+    [name$8]: "fire-perf",
+    [name$7]: "fire-perf-compat",
+    [name$6]: "fire-rc",
+    [name$5]: "fire-rc-compat",
+    [name$4]: "fire-gcs",
+    [name$3]: "fire-gcs-compat",
+    [name$2]: "fire-fst",
+    [name$1]: "fire-fst-compat",
+    "fire-js": "fire-js",
+    [name]: "fire-js-all"
+};
+/**
+ * @license
+ * Copyright 2019 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * @internal
+ */ const _apps = new Map();
+/**
+ * Registered components.
+ *
+ * @internal
+ */ // eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _components = new Map();
+/**
+ * @param component - the component being added to this app's container
+ *
+ * @internal
+ */ function _addComponent(app, component) {
+    try {
+        app.container.addComponent(component);
+    } catch (e) {
+        logger.debug(`Component ${component.name} failed to register with FirebaseApp ${app.name}`, e);
+    }
+}
+/**
+ *
+ * @internal
+ */ function _addOrOverwriteComponent(app, component) {
+    app.container.addOrOverwriteComponent(component);
+}
+/**
+ *
+ * @param component - the component to register
+ * @returns whether or not the component is registered successfully
+ *
+ * @internal
+ */ function _registerComponent(component) {
+    const componentName = component.name;
+    if (_components.has(componentName)) {
+        logger.debug(`There were multiple attempts to register component ${componentName}.`);
+        return false;
+    }
+    _components.set(componentName, component);
+    // add the component to existing app instances
+    for (const app of _apps.values())_addComponent(app, component);
+    return true;
+}
+/**
+ *
+ * @param app - FirebaseApp instance
+ * @param name - service name
+ *
+ * @returns the provider for the service with the matching name
+ *
+ * @internal
+ */ function _getProvider(app, name) {
+    const heartbeatController = app.container.getProvider("heartbeat").getImmediate({
+        optional: true
+    });
+    if (heartbeatController) heartbeatController.triggerHeartbeat();
+    return app.container.getProvider(name);
+}
+/**
+ *
+ * @param app - FirebaseApp instance
+ * @param name - service name
+ * @param instanceIdentifier - service instance identifier in case the service supports multiple instances
+ *
+ * @internal
+ */ function _removeServiceInstance(app, name, instanceIdentifier = DEFAULT_ENTRY_NAME) {
+    _getProvider(app, name).clearInstance(instanceIdentifier);
+}
+/**
+ * Test only
+ *
+ * @internal
+ */ function _clearComponents() {
+    _components.clear();
+}
+/**
+ * @license
+ * Copyright 2019 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ const ERRORS = {
+    ["no-app" /* AppError.NO_APP */ ]: "No Firebase App '{$appName}' has been created - call initializeApp() first",
+    ["bad-app-name" /* AppError.BAD_APP_NAME */ ]: "Illegal App name: '{$appName}",
+    ["duplicate-app" /* AppError.DUPLICATE_APP */ ]: "Firebase App named '{$appName}' already exists with different options or config",
+    ["app-deleted" /* AppError.APP_DELETED */ ]: "Firebase App named '{$appName}' already deleted",
+    ["no-options" /* AppError.NO_OPTIONS */ ]: "Need to provide options, when not being deployed to hosting via source.",
+    ["invalid-app-argument" /* AppError.INVALID_APP_ARGUMENT */ ]: "firebase.{$appName}() takes either no argument or a Firebase App instance.",
+    ["invalid-log-argument" /* AppError.INVALID_LOG_ARGUMENT */ ]: "First argument to `onLog` must be null or a function.",
+    ["idb-open" /* AppError.IDB_OPEN */ ]: "Error thrown when opening IndexedDB. Original error: {$originalErrorMessage}.",
+    ["idb-get" /* AppError.IDB_GET */ ]: "Error thrown when reading from IndexedDB. Original error: {$originalErrorMessage}.",
+    ["idb-set" /* AppError.IDB_WRITE */ ]: "Error thrown when writing to IndexedDB. Original error: {$originalErrorMessage}.",
+    ["idb-delete" /* AppError.IDB_DELETE */ ]: "Error thrown when deleting from IndexedDB. Original error: {$originalErrorMessage}."
+};
+const ERROR_FACTORY = new (0, _util.ErrorFactory)("app", "Firebase", ERRORS);
+/**
+ * @license
+ * Copyright 2019 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ class FirebaseAppImpl {
+    constructor(options, config, container){
+        this._isDeleted = false;
+        this._options = Object.assign({}, options);
+        this._config = Object.assign({}, config);
+        this._name = config.name;
+        this._automaticDataCollectionEnabled = config.automaticDataCollectionEnabled;
+        this._container = container;
+        this.container.addComponent(new (0, _component.Component)("app", ()=>this, "PUBLIC" /* ComponentType.PUBLIC */ ));
+    }
+    get automaticDataCollectionEnabled() {
+        this.checkDestroyed();
+        return this._automaticDataCollectionEnabled;
+    }
+    set automaticDataCollectionEnabled(val) {
+        this.checkDestroyed();
+        this._automaticDataCollectionEnabled = val;
+    }
+    get name() {
+        this.checkDestroyed();
+        return this._name;
+    }
+    get options() {
+        this.checkDestroyed();
+        return this._options;
+    }
+    get config() {
+        this.checkDestroyed();
+        return this._config;
+    }
+    get container() {
+        return this._container;
+    }
+    get isDeleted() {
+        return this._isDeleted;
+    }
+    set isDeleted(val) {
+        this._isDeleted = val;
+    }
+    /**
+     * This function will throw an Error if the App has already been deleted -
+     * use before performing API actions on the App.
+     */ checkDestroyed() {
+        if (this.isDeleted) throw ERROR_FACTORY.create("app-deleted" /* AppError.APP_DELETED */ , {
+            appName: this._name
+        });
+    }
+}
+/**
+ * @license
+ * Copyright 2019 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * The current SDK version.
+ *
+ * @public
+ */ const SDK_VERSION = version;
+function initializeApp(_options, rawConfig = {}) {
+    let options = _options;
+    if (typeof rawConfig !== "object") {
+        const name = rawConfig;
+        rawConfig = {
+            name
+        };
+    }
+    const config = Object.assign({
+        name: DEFAULT_ENTRY_NAME,
+        automaticDataCollectionEnabled: false
+    }, rawConfig);
+    const name = config.name;
+    if (typeof name !== "string" || !name) throw ERROR_FACTORY.create("bad-app-name" /* AppError.BAD_APP_NAME */ , {
+        appName: String(name)
+    });
+    options || (options = (0, _util.getDefaultAppConfig)());
+    if (!options) throw ERROR_FACTORY.create("no-options" /* AppError.NO_OPTIONS */ );
+    const existingApp = _apps.get(name);
+    if (existingApp) {
+        // return the existing app if options and config deep equal the ones in the existing app.
+        if ((0, _util.deepEqual)(options, existingApp.options) && (0, _util.deepEqual)(config, existingApp.config)) return existingApp;
+        else throw ERROR_FACTORY.create("duplicate-app" /* AppError.DUPLICATE_APP */ , {
+            appName: name
+        });
+    }
+    const container = new (0, _component.ComponentContainer)(name);
+    for (const component of _components.values())container.addComponent(component);
+    const newApp = new FirebaseAppImpl(options, config, container);
+    _apps.set(name, newApp);
+    return newApp;
+}
+/**
+ * Retrieves a {@link @firebase/app#FirebaseApp} instance.
+ *
+ * When called with no arguments, the default app is returned. When an app name
+ * is provided, the app corresponding to that name is returned.
+ *
+ * An exception is thrown if the app being retrieved has not yet been
+ * initialized.
+ *
+ * @example
+ * ```javascript
+ * // Return the default app
+ * const app = getApp();
+ * ```
+ *
+ * @example
+ * ```javascript
+ * // Return a named app
+ * const otherApp = getApp("otherApp");
+ * ```
+ *
+ * @param name - Optional name of the app to return. If no name is
+ *   provided, the default is `"[DEFAULT]"`.
+ *
+ * @returns The app corresponding to the provided app name.
+ *   If no app name is provided, the default app is returned.
+ *
+ * @public
+ */ function getApp(name = DEFAULT_ENTRY_NAME) {
+    const app = _apps.get(name);
+    if (!app && name === DEFAULT_ENTRY_NAME && (0, _util.getDefaultAppConfig)()) return initializeApp();
+    if (!app) throw ERROR_FACTORY.create("no-app" /* AppError.NO_APP */ , {
+        appName: name
+    });
+    return app;
+}
+/**
+ * A (read-only) array of all initialized apps.
+ * @public
+ */ function getApps() {
+    return Array.from(_apps.values());
+}
+/**
+ * Renders this app unusable and frees the resources of all associated
+ * services.
+ *
+ * @example
+ * ```javascript
+ * deleteApp(app)
+ *   .then(function() {
+ *     console.log("App deleted successfully");
+ *   })
+ *   .catch(function(error) {
+ *     console.log("Error deleting app:", error);
+ *   });
+ * ```
+ *
+ * @public
+ */ async function deleteApp(app) {
+    const name = app.name;
+    if (_apps.has(name)) {
+        _apps.delete(name);
+        await Promise.all(app.container.getProviders().map((provider)=>provider.delete()));
+        app.isDeleted = true;
+    }
+}
+/**
+ * Registers a library's name and version for platform logging purposes.
+ * @param library - Name of 1p or 3p library (e.g. firestore, angularfire)
+ * @param version - Current version of that library.
+ * @param variant - Bundle variant, e.g., node, rn, etc.
+ *
+ * @public
+ */ function registerVersion(libraryKeyOrName, version, variant) {
+    var _a;
+    // TODO: We can use this check to whitelist strings when/if we set up
+    // a good whitelist system.
+    let library = (_a = PLATFORM_LOG_STRING[libraryKeyOrName]) !== null && _a !== void 0 ? _a : libraryKeyOrName;
+    if (variant) library += `-${variant}`;
+    const libraryMismatch = library.match(/\s|\//);
+    const versionMismatch = version.match(/\s|\//);
+    if (libraryMismatch || versionMismatch) {
+        const warning = [
+            `Unable to register library "${library}" with version "${version}":`
+        ];
+        if (libraryMismatch) warning.push(`library name "${library}" contains illegal characters (whitespace or "/")`);
+        if (libraryMismatch && versionMismatch) warning.push("and");
+        if (versionMismatch) warning.push(`version name "${version}" contains illegal characters (whitespace or "/")`);
+        logger.warn(warning.join(" "));
+        return;
+    }
+    _registerComponent(new (0, _component.Component)(`${library}-version`, ()=>({
+            library,
+            version
+        }), "VERSION" /* ComponentType.VERSION */ ));
+}
+/**
+ * Sets log handler for all Firebase SDKs.
+ * @param logCallback - An optional custom log handler that executes user code whenever
+ * the Firebase SDK makes a logging call.
+ *
+ * @public
+ */ function onLog(logCallback, options) {
+    if (logCallback !== null && typeof logCallback !== "function") throw ERROR_FACTORY.create("invalid-log-argument" /* AppError.INVALID_LOG_ARGUMENT */ );
+    (0, _logger.setUserLogHandler)(logCallback, options);
+}
+/**
+ * Sets log level for all Firebase SDKs.
+ *
+ * All of the log types above the current log level are captured (i.e. if
+ * you set the log level to `info`, errors are logged, but `debug` and
+ * `verbose` logs are not).
+ *
+ * @public
+ */ function setLogLevel(logLevel) {
+    (0, _logger.setLogLevel)(logLevel);
+}
+/**
+ * @license
+ * Copyright 2021 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ const DB_NAME = "firebase-heartbeat-database";
+const DB_VERSION = 1;
+const STORE_NAME = "firebase-heartbeat-store";
+let dbPromise = null;
+function getDbPromise() {
+    if (!dbPromise) dbPromise = (0, _idb.openDB)(DB_NAME, DB_VERSION, {
+        upgrade: (db, oldVersion)=>{
+            // We don't use 'break' in this switch statement, the fall-through
+            // behavior is what we want, because if there are multiple versions between
+            // the old version and the current version, we want ALL the migrations
+            // that correspond to those versions to run, not only the last one.
+            // eslint-disable-next-line default-case
+            switch(oldVersion){
+                case 0:
+                    db.createObjectStore(STORE_NAME);
+            }
+        }
+    }).catch((e)=>{
+        throw ERROR_FACTORY.create("idb-open" /* AppError.IDB_OPEN */ , {
+            originalErrorMessage: e.message
+        });
+    });
+    return dbPromise;
+}
+async function readHeartbeatsFromIndexedDB(app) {
+    try {
+        const db = await getDbPromise();
+        const result = await db.transaction(STORE_NAME).objectStore(STORE_NAME).get(computeKey(app));
+        return result;
+    } catch (e) {
+        if (e instanceof (0, _util.FirebaseError)) logger.warn(e.message);
+        else {
+            const idbGetError = ERROR_FACTORY.create("idb-get" /* AppError.IDB_GET */ , {
+                originalErrorMessage: e === null || e === void 0 ? void 0 : e.message
+            });
+            logger.warn(idbGetError.message);
+        }
+    }
+}
+async function writeHeartbeatsToIndexedDB(app, heartbeatObject) {
+    try {
+        const db = await getDbPromise();
+        const tx = db.transaction(STORE_NAME, "readwrite");
+        const objectStore = tx.objectStore(STORE_NAME);
+        await objectStore.put(heartbeatObject, computeKey(app));
+        await tx.done;
+    } catch (e) {
+        if (e instanceof (0, _util.FirebaseError)) logger.warn(e.message);
+        else {
+            const idbGetError = ERROR_FACTORY.create("idb-set" /* AppError.IDB_WRITE */ , {
+                originalErrorMessage: e === null || e === void 0 ? void 0 : e.message
+            });
+            logger.warn(idbGetError.message);
+        }
+    }
+}
+function computeKey(app) {
+    return `${app.name}!${app.options.appId}`;
+}
+/**
+ * @license
+ * Copyright 2021 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ const MAX_HEADER_BYTES = 1024;
+// 30 days
+const STORED_HEARTBEAT_RETENTION_MAX_MILLIS = 2592000000;
+class HeartbeatServiceImpl {
+    constructor(container){
+        this.container = container;
+        /**
+         * In-memory cache for heartbeats, used by getHeartbeatsHeader() to generate
+         * the header string.
+         * Stores one record per date. This will be consolidated into the standard
+         * format of one record per user agent string before being sent as a header.
+         * Populated from indexedDB when the controller is instantiated and should
+         * be kept in sync with indexedDB.
+         * Leave public for easier testing.
+         */ this._heartbeatsCache = null;
+        const app = this.container.getProvider("app").getImmediate();
+        this._storage = new HeartbeatStorageImpl(app);
+        this._heartbeatsCachePromise = this._storage.read().then((result)=>{
+            this._heartbeatsCache = result;
+            return result;
+        });
+    }
+    /**
+     * Called to report a heartbeat. The function will generate
+     * a HeartbeatsByUserAgent object, update heartbeatsCache, and persist it
+     * to IndexedDB.
+     * Note that we only store one heartbeat per day. So if a heartbeat for today is
+     * already logged, subsequent calls to this function in the same day will be ignored.
+     */ async triggerHeartbeat() {
+        var _a, _b;
+        const platformLogger = this.container.getProvider("platform-logger").getImmediate();
+        // This is the "Firebase user agent" string from the platform logger
+        // service, not the browser user agent.
+        const agent = platformLogger.getPlatformInfoString();
+        const date = getUTCDateString();
+        if (((_a = this._heartbeatsCache) === null || _a === void 0 ? void 0 : _a.heartbeats) == null) {
+            this._heartbeatsCache = await this._heartbeatsCachePromise;
+            // If we failed to construct a heartbeats cache, then return immediately.
+            if (((_b = this._heartbeatsCache) === null || _b === void 0 ? void 0 : _b.heartbeats) == null) return;
+        }
+        // Do not store a heartbeat if one is already stored for this day
+        // or if a header has already been sent today.
+        if (this._heartbeatsCache.lastSentHeartbeatDate === date || this._heartbeatsCache.heartbeats.some((singleDateHeartbeat)=>singleDateHeartbeat.date === date)) return;
+        else // There is no entry for this date. Create one.
+        this._heartbeatsCache.heartbeats.push({
+            date,
+            agent
+        });
+        // Remove entries older than 30 days.
+        this._heartbeatsCache.heartbeats = this._heartbeatsCache.heartbeats.filter((singleDateHeartbeat)=>{
+            const hbTimestamp = new Date(singleDateHeartbeat.date).valueOf();
+            const now = Date.now();
+            return now - hbTimestamp <= STORED_HEARTBEAT_RETENTION_MAX_MILLIS;
+        });
+        return this._storage.overwrite(this._heartbeatsCache);
+    }
+    /**
+     * Returns a base64 encoded string which can be attached to the heartbeat-specific header directly.
+     * It also clears all heartbeats from memory as well as in IndexedDB.
+     *
+     * NOTE: Consuming product SDKs should not send the header if this method
+     * returns an empty string.
+     */ async getHeartbeatsHeader() {
+        var _a;
+        if (this._heartbeatsCache === null) await this._heartbeatsCachePromise;
+        // If it's still null or the array is empty, there is no data to send.
+        if (((_a = this._heartbeatsCache) === null || _a === void 0 ? void 0 : _a.heartbeats) == null || this._heartbeatsCache.heartbeats.length === 0) return "";
+        const date = getUTCDateString();
+        // Extract as many heartbeats from the cache as will fit under the size limit.
+        const { heartbeatsToSend, unsentEntries } = extractHeartbeatsForHeader(this._heartbeatsCache.heartbeats);
+        const headerString = (0, _util.base64urlEncodeWithoutPadding)(JSON.stringify({
+            version: 2,
+            heartbeats: heartbeatsToSend
+        }));
+        // Store last sent date to prevent another being logged/sent for the same day.
+        this._heartbeatsCache.lastSentHeartbeatDate = date;
+        if (unsentEntries.length > 0) {
+            // Store any unsent entries if they exist.
+            this._heartbeatsCache.heartbeats = unsentEntries;
+            // This seems more likely than emptying the array (below) to lead to some odd state
+            // since the cache isn't empty and this will be called again on the next request,
+            // and is probably safest if we await it.
+            await this._storage.overwrite(this._heartbeatsCache);
+        } else {
+            this._heartbeatsCache.heartbeats = [];
+            // Do not wait for this, to reduce latency.
+            this._storage.overwrite(this._heartbeatsCache);
+        }
+        return headerString;
+    }
+}
+function getUTCDateString() {
+    const today = new Date();
+    // Returns date format 'YYYY-MM-DD'
+    return today.toISOString().substring(0, 10);
+}
+function extractHeartbeatsForHeader(heartbeatsCache, maxSize = MAX_HEADER_BYTES) {
+    // Heartbeats grouped by user agent in the standard format to be sent in
+    // the header.
+    const heartbeatsToSend = [];
+    // Single date format heartbeats that are not sent.
+    let unsentEntries = heartbeatsCache.slice();
+    for (const singleDateHeartbeat of heartbeatsCache){
+        // Look for an existing entry with the same user agent.
+        const heartbeatEntry = heartbeatsToSend.find((hb)=>hb.agent === singleDateHeartbeat.agent);
+        if (!heartbeatEntry) {
+            // If no entry for this user agent exists, create one.
+            heartbeatsToSend.push({
+                agent: singleDateHeartbeat.agent,
+                dates: [
+                    singleDateHeartbeat.date
+                ]
+            });
+            if (countBytes(heartbeatsToSend) > maxSize) {
+                // If the header would exceed max size, remove the added heartbeat
+                // entry and stop adding to the header.
+                heartbeatsToSend.pop();
+                break;
+            }
+        } else {
+            heartbeatEntry.dates.push(singleDateHeartbeat.date);
+            // If the header would exceed max size, remove the added date
+            // and stop adding to the header.
+            if (countBytes(heartbeatsToSend) > maxSize) {
+                heartbeatEntry.dates.pop();
+                break;
+            }
+        }
+        // Pop unsent entry from queue. (Skipped if adding the entry exceeded
+        // quota and the loop breaks early.)
+        unsentEntries = unsentEntries.slice(1);
+    }
+    return {
+        heartbeatsToSend,
+        unsentEntries
+    };
+}
+class HeartbeatStorageImpl {
+    constructor(app){
+        this.app = app;
+        this._canUseIndexedDBPromise = this.runIndexedDBEnvironmentCheck();
+    }
+    async runIndexedDBEnvironmentCheck() {
+        if (!(0, _util.isIndexedDBAvailable)()) return false;
+        else return (0, _util.validateIndexedDBOpenable)().then(()=>true).catch(()=>false);
+    }
+    /**
+     * Read all heartbeats.
+     */ async read() {
+        const canUseIndexedDB = await this._canUseIndexedDBPromise;
+        if (!canUseIndexedDB) return {
+            heartbeats: []
+        };
+        else {
+            const idbHeartbeatObject = await readHeartbeatsFromIndexedDB(this.app);
+            if (idbHeartbeatObject === null || idbHeartbeatObject === void 0 ? void 0 : idbHeartbeatObject.heartbeats) return idbHeartbeatObject;
+            else return {
+                heartbeats: []
+            };
+        }
+    }
+    // overwrite the storage with the provided heartbeats
+    async overwrite(heartbeatsObject) {
+        var _a;
+        const canUseIndexedDB = await this._canUseIndexedDBPromise;
+        if (!canUseIndexedDB) return;
+        else {
+            const existingHeartbeatsObject = await this.read();
+            return writeHeartbeatsToIndexedDB(this.app, {
+                lastSentHeartbeatDate: (_a = heartbeatsObject.lastSentHeartbeatDate) !== null && _a !== void 0 ? _a : existingHeartbeatsObject.lastSentHeartbeatDate,
+                heartbeats: heartbeatsObject.heartbeats
+            });
+        }
+    }
+    // add heartbeats
+    async add(heartbeatsObject) {
+        var _a;
+        const canUseIndexedDB = await this._canUseIndexedDBPromise;
+        if (!canUseIndexedDB) return;
+        else {
+            const existingHeartbeatsObject = await this.read();
+            return writeHeartbeatsToIndexedDB(this.app, {
+                lastSentHeartbeatDate: (_a = heartbeatsObject.lastSentHeartbeatDate) !== null && _a !== void 0 ? _a : existingHeartbeatsObject.lastSentHeartbeatDate,
+                heartbeats: [
+                    ...existingHeartbeatsObject.heartbeats,
+                    ...heartbeatsObject.heartbeats
+                ]
+            });
+        }
+    }
+}
+/**
+ * Calculate bytes of a HeartbeatsByUserAgent array after being wrapped
+ * in a platform logging header JSON object, stringified, and converted
+ * to base 64.
+ */ function countBytes(heartbeatsCache) {
+    // base64 has a restricted set of characters, all of which should be 1 byte.
+    return (0, _util.base64urlEncodeWithoutPadding)(// heartbeatsCache wrapper properties
+    JSON.stringify({
+        version: 2,
+        heartbeats: heartbeatsCache
+    })).length;
+}
+/**
+ * @license
+ * Copyright 2019 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ function registerCoreComponents(variant) {
+    _registerComponent(new (0, _component.Component)("platform-logger", (container)=>new PlatformLoggerServiceImpl(container), "PRIVATE" /* ComponentType.PRIVATE */ ));
+    _registerComponent(new (0, _component.Component)("heartbeat", (container)=>new HeartbeatServiceImpl(container), "PRIVATE" /* ComponentType.PRIVATE */ ));
+    // Register `app` package.
+    registerVersion(name$o, version$1, variant);
+    // BUILD_TARGET will be replaced by values like esm5, esm2017, cjs5, etc during the compilation
+    registerVersion(name$o, version$1, "esm2017");
+    // Register platform SDK identifier (no version).
+    registerVersion("fire-js", "");
+}
+/**
+ * Firebase App
+ *
+ * @remarks This package coordinates the communication between the different Firebase components
+ * @packageDocumentation
+ */ registerCoreComponents("");
+
+},{"@firebase/component":"bi1VB","@firebase/logger":"fZmft","@firebase/util":"ePiK6","idb":"kozAz","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"bi1VB":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "Component", ()=>Component);
+parcelHelpers.export(exports, "ComponentContainer", ()=>ComponentContainer);
+parcelHelpers.export(exports, "Provider", ()=>Provider);
+var _util = require("@firebase/util");
+/**
+ * Component for service name T, e.g. `auth`, `auth-internal`
+ */ class Component {
+    /**
+     *
+     * @param name The public service name, e.g. app, auth, firestore, database
+     * @param instanceFactory Service factory responsible for creating the public interface
+     * @param type whether the service provided by the component is public or private
+     */ constructor(name, instanceFactory, type){
+        this.name = name;
+        this.instanceFactory = instanceFactory;
+        this.type = type;
+        this.multipleInstances = false;
+        /**
+         * Properties to be added to the service namespace
+         */ this.serviceProps = {};
+        this.instantiationMode = "LAZY" /* InstantiationMode.LAZY */ ;
+        this.onInstanceCreated = null;
+    }
+    setInstantiationMode(mode) {
+        this.instantiationMode = mode;
+        return this;
+    }
+    setMultipleInstances(multipleInstances) {
+        this.multipleInstances = multipleInstances;
+        return this;
+    }
+    setServiceProps(props) {
+        this.serviceProps = props;
+        return this;
+    }
+    setInstanceCreatedCallback(callback) {
+        this.onInstanceCreated = callback;
+        return this;
+    }
+}
+/**
+ * @license
+ * Copyright 2019 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ const DEFAULT_ENTRY_NAME = "[DEFAULT]";
+/**
+ * @license
+ * Copyright 2019 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * Provider for instance for service name T, e.g. 'auth', 'auth-internal'
+ * NameServiceMapping[T] is an alias for the type of the instance
+ */ class Provider {
+    constructor(name, container){
+        this.name = name;
+        this.container = container;
+        this.component = null;
+        this.instances = new Map();
+        this.instancesDeferred = new Map();
+        this.instancesOptions = new Map();
+        this.onInitCallbacks = new Map();
+    }
+    /**
+     * @param identifier A provider can provide mulitple instances of a service
+     * if this.component.multipleInstances is true.
+     */ get(identifier) {
+        // if multipleInstances is not supported, use the default name
+        const normalizedIdentifier = this.normalizeInstanceIdentifier(identifier);
+        if (!this.instancesDeferred.has(normalizedIdentifier)) {
+            const deferred = new (0, _util.Deferred)();
+            this.instancesDeferred.set(normalizedIdentifier, deferred);
+            if (this.isInitialized(normalizedIdentifier) || this.shouldAutoInitialize()) // initialize the service if it can be auto-initialized
+            try {
+                const instance = this.getOrInitializeService({
+                    instanceIdentifier: normalizedIdentifier
+                });
+                if (instance) deferred.resolve(instance);
+            } catch (e) {
+            // when the instance factory throws an exception during get(), it should not cause
+            // a fatal error. We just return the unresolved promise in this case.
+            }
+        }
+        return this.instancesDeferred.get(normalizedIdentifier).promise;
+    }
+    getImmediate(options) {
+        var _a;
+        // if multipleInstances is not supported, use the default name
+        const normalizedIdentifier = this.normalizeInstanceIdentifier(options === null || options === void 0 ? void 0 : options.identifier);
+        const optional = (_a = options === null || options === void 0 ? void 0 : options.optional) !== null && _a !== void 0 ? _a : false;
+        if (this.isInitialized(normalizedIdentifier) || this.shouldAutoInitialize()) try {
+            return this.getOrInitializeService({
+                instanceIdentifier: normalizedIdentifier
+            });
+        } catch (e) {
+            if (optional) return null;
+            else throw e;
+        }
+        else {
+            // In case a component is not initialized and should/can not be auto-initialized at the moment, return null if the optional flag is set, or throw
+            if (optional) return null;
+            else throw Error(`Service ${this.name} is not available`);
+        }
+    }
+    getComponent() {
+        return this.component;
+    }
+    setComponent(component) {
+        if (component.name !== this.name) throw Error(`Mismatching Component ${component.name} for Provider ${this.name}.`);
+        if (this.component) throw Error(`Component for ${this.name} has already been provided`);
+        this.component = component;
+        // return early without attempting to initialize the component if the component requires explicit initialization (calling `Provider.initialize()`)
+        if (!this.shouldAutoInitialize()) return;
+        // if the service is eager, initialize the default instance
+        if (isComponentEager(component)) try {
+            this.getOrInitializeService({
+                instanceIdentifier: DEFAULT_ENTRY_NAME
+            });
+        } catch (e) {
+        // when the instance factory for an eager Component throws an exception during the eager
+        // initialization, it should not cause a fatal error.
+        // TODO: Investigate if we need to make it configurable, because some component may want to cause
+        // a fatal error in this case?
+        }
+        // Create service instances for the pending promises and resolve them
+        // NOTE: if this.multipleInstances is false, only the default instance will be created
+        // and all promises with resolve with it regardless of the identifier.
+        for (const [instanceIdentifier, instanceDeferred] of this.instancesDeferred.entries()){
+            const normalizedIdentifier = this.normalizeInstanceIdentifier(instanceIdentifier);
+            try {
+                // `getOrInitializeService()` should always return a valid instance since a component is guaranteed. use ! to make typescript happy.
+                const instance = this.getOrInitializeService({
+                    instanceIdentifier: normalizedIdentifier
+                });
+                instanceDeferred.resolve(instance);
+            } catch (e) {
+            // when the instance factory throws an exception, it should not cause
+            // a fatal error. We just leave the promise unresolved.
+            }
+        }
+    }
+    clearInstance(identifier = DEFAULT_ENTRY_NAME) {
+        this.instancesDeferred.delete(identifier);
+        this.instancesOptions.delete(identifier);
+        this.instances.delete(identifier);
+    }
+    // app.delete() will call this method on every provider to delete the services
+    // TODO: should we mark the provider as deleted?
+    async delete() {
+        const services = Array.from(this.instances.values());
+        await Promise.all([
+            ...services.filter((service)=>"INTERNAL" in service) // legacy services
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .map((service)=>service.INTERNAL.delete()),
+            ...services.filter((service)=>"_delete" in service) // modularized services
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .map((service)=>service._delete())
+        ]);
+    }
+    isComponentSet() {
+        return this.component != null;
+    }
+    isInitialized(identifier = DEFAULT_ENTRY_NAME) {
+        return this.instances.has(identifier);
+    }
+    getOptions(identifier = DEFAULT_ENTRY_NAME) {
+        return this.instancesOptions.get(identifier) || {};
+    }
+    initialize(opts = {}) {
+        const { options = {} } = opts;
+        const normalizedIdentifier = this.normalizeInstanceIdentifier(opts.instanceIdentifier);
+        if (this.isInitialized(normalizedIdentifier)) throw Error(`${this.name}(${normalizedIdentifier}) has already been initialized`);
+        if (!this.isComponentSet()) throw Error(`Component ${this.name} has not been registered yet`);
+        const instance = this.getOrInitializeService({
+            instanceIdentifier: normalizedIdentifier,
+            options
+        });
+        // resolve any pending promise waiting for the service instance
+        for (const [instanceIdentifier, instanceDeferred] of this.instancesDeferred.entries()){
+            const normalizedDeferredIdentifier = this.normalizeInstanceIdentifier(instanceIdentifier);
+            if (normalizedIdentifier === normalizedDeferredIdentifier) instanceDeferred.resolve(instance);
+        }
+        return instance;
+    }
+    /**
+     *
+     * @param callback - a function that will be invoked  after the provider has been initialized by calling provider.initialize().
+     * The function is invoked SYNCHRONOUSLY, so it should not execute any longrunning tasks in order to not block the program.
+     *
+     * @param identifier An optional instance identifier
+     * @returns a function to unregister the callback
+     */ onInit(callback, identifier) {
+        var _a;
+        const normalizedIdentifier = this.normalizeInstanceIdentifier(identifier);
+        const existingCallbacks = (_a = this.onInitCallbacks.get(normalizedIdentifier)) !== null && _a !== void 0 ? _a : new Set();
+        existingCallbacks.add(callback);
+        this.onInitCallbacks.set(normalizedIdentifier, existingCallbacks);
+        const existingInstance = this.instances.get(normalizedIdentifier);
+        if (existingInstance) callback(existingInstance, normalizedIdentifier);
+        return ()=>{
+            existingCallbacks.delete(callback);
+        };
+    }
+    /**
+     * Invoke onInit callbacks synchronously
+     * @param instance the service instance`
+     */ invokeOnInitCallbacks(instance, identifier) {
+        const callbacks = this.onInitCallbacks.get(identifier);
+        if (!callbacks) return;
+        for (const callback of callbacks)try {
+            callback(instance, identifier);
+        } catch (_a) {
+        // ignore errors in the onInit callback
+        }
+    }
+    getOrInitializeService({ instanceIdentifier, options = {} }) {
+        let instance = this.instances.get(instanceIdentifier);
+        if (!instance && this.component) {
+            instance = this.component.instanceFactory(this.container, {
+                instanceIdentifier: normalizeIdentifierForFactory(instanceIdentifier),
+                options
+            });
+            this.instances.set(instanceIdentifier, instance);
+            this.instancesOptions.set(instanceIdentifier, options);
+            /**
+             * Invoke onInit listeners.
+             * Note this.component.onInstanceCreated is different, which is used by the component creator,
+             * while onInit listeners are registered by consumers of the provider.
+             */ this.invokeOnInitCallbacks(instance, instanceIdentifier);
+            /**
+             * Order is important
+             * onInstanceCreated() should be called after this.instances.set(instanceIdentifier, instance); which
+             * makes `isInitialized()` return true.
+             */ if (this.component.onInstanceCreated) try {
+                this.component.onInstanceCreated(this.container, instanceIdentifier, instance);
+            } catch (_a) {
+            // ignore errors in the onInstanceCreatedCallback
+            }
+        }
+        return instance || null;
+    }
+    normalizeInstanceIdentifier(identifier = DEFAULT_ENTRY_NAME) {
+        if (this.component) return this.component.multipleInstances ? identifier : DEFAULT_ENTRY_NAME;
+        else return identifier; // assume multiple instances are supported before the component is provided.
+    }
+    shouldAutoInitialize() {
+        return !!this.component && this.component.instantiationMode !== "EXPLICIT" /* InstantiationMode.EXPLICIT */ ;
+    }
+}
+// undefined should be passed to the service factory for the default instance
+function normalizeIdentifierForFactory(identifier) {
+    return identifier === DEFAULT_ENTRY_NAME ? undefined : identifier;
+}
+function isComponentEager(component) {
+    return component.instantiationMode === "EAGER" /* InstantiationMode.EAGER */ ;
+}
+/**
+ * @license
+ * Copyright 2019 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * ComponentContainer that provides Providers for service name T, e.g. `auth`, `auth-internal`
+ */ class ComponentContainer {
+    constructor(name){
+        this.name = name;
+        this.providers = new Map();
+    }
+    /**
+     *
+     * @param component Component being added
+     * @param overwrite When a component with the same name has already been registered,
+     * if overwrite is true: overwrite the existing component with the new component and create a new
+     * provider with the new component. It can be useful in tests where you want to use different mocks
+     * for different tests.
+     * if overwrite is false: throw an exception
+     */ addComponent(component) {
+        const provider = this.getProvider(component.name);
+        if (provider.isComponentSet()) throw new Error(`Component ${component.name} has already been registered with ${this.name}`);
+        provider.setComponent(component);
+    }
+    addOrOverwriteComponent(component) {
+        const provider = this.getProvider(component.name);
+        if (provider.isComponentSet()) // delete the existing provider from the container, so we can register the new component
+        this.providers.delete(component.name);
+        this.addComponent(component);
+    }
+    /**
+     * getProvider provides a type safe interface where it can only be called with a field name
+     * present in NameServiceMapping interface.
+     *
+     * Firebase SDKs providing services should extend NameServiceMapping interface to register
+     * themselves.
+     */ getProvider(name) {
+        if (this.providers.has(name)) return this.providers.get(name);
+        // create a Provider for a service that hasn't registered with Firebase
+        const provider = new Provider(name, this);
+        this.providers.set(name, provider);
+        return provider;
+    }
+    getProviders() {
+        return Array.from(this.providers.values());
+    }
+}
+
+},{"@firebase/util":"ePiK6","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"ePiK6":[function(require,module,exports) {
+/**
+ * @license
+ * Copyright 2017 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * @fileoverview Firebase constants.  Some of these (@defines) can be overridden at compile-time.
+ */ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "CONSTANTS", ()=>CONSTANTS);
+parcelHelpers.export(exports, "DecodeBase64StringError", ()=>DecodeBase64StringError);
+parcelHelpers.export(exports, "Deferred", ()=>Deferred);
+parcelHelpers.export(exports, "ErrorFactory", ()=>ErrorFactory);
+parcelHelpers.export(exports, "FirebaseError", ()=>FirebaseError);
+parcelHelpers.export(exports, "MAX_VALUE_MILLIS", ()=>MAX_VALUE_MILLIS);
+parcelHelpers.export(exports, "RANDOM_FACTOR", ()=>RANDOM_FACTOR);
+parcelHelpers.export(exports, "Sha1", ()=>Sha1);
+parcelHelpers.export(exports, "areCookiesEnabled", ()=>areCookiesEnabled);
+parcelHelpers.export(exports, "assert", ()=>assert);
+parcelHelpers.export(exports, "assertionError", ()=>assertionError);
+parcelHelpers.export(exports, "async", ()=>async);
+parcelHelpers.export(exports, "base64", ()=>base64);
+parcelHelpers.export(exports, "base64Decode", ()=>base64Decode);
+parcelHelpers.export(exports, "base64Encode", ()=>base64Encode);
+parcelHelpers.export(exports, "base64urlEncodeWithoutPadding", ()=>base64urlEncodeWithoutPadding);
+parcelHelpers.export(exports, "calculateBackoffMillis", ()=>calculateBackoffMillis);
+parcelHelpers.export(exports, "contains", ()=>contains);
+parcelHelpers.export(exports, "createMockUserToken", ()=>createMockUserToken);
+parcelHelpers.export(exports, "createSubscribe", ()=>createSubscribe);
+parcelHelpers.export(exports, "decode", ()=>decode);
+parcelHelpers.export(exports, "deepCopy", ()=>deepCopy);
+parcelHelpers.export(exports, "deepEqual", ()=>deepEqual);
+parcelHelpers.export(exports, "deepExtend", ()=>deepExtend);
+parcelHelpers.export(exports, "errorPrefix", ()=>errorPrefix);
+parcelHelpers.export(exports, "extractQuerystring", ()=>extractQuerystring);
+parcelHelpers.export(exports, "getDefaultAppConfig", ()=>getDefaultAppConfig);
+parcelHelpers.export(exports, "getDefaultEmulatorHost", ()=>getDefaultEmulatorHost);
+parcelHelpers.export(exports, "getDefaultEmulatorHostnameAndPort", ()=>getDefaultEmulatorHostnameAndPort);
+parcelHelpers.export(exports, "getDefaults", ()=>getDefaults);
+parcelHelpers.export(exports, "getExperimentalSetting", ()=>getExperimentalSetting);
+parcelHelpers.export(exports, "getGlobal", ()=>getGlobal);
+parcelHelpers.export(exports, "getModularInstance", ()=>getModularInstance);
+parcelHelpers.export(exports, "getUA", ()=>getUA);
+parcelHelpers.export(exports, "isAdmin", ()=>isAdmin);
+parcelHelpers.export(exports, "isBrowser", ()=>isBrowser);
+parcelHelpers.export(exports, "isBrowserExtension", ()=>isBrowserExtension);
+parcelHelpers.export(exports, "isElectron", ()=>isElectron);
+parcelHelpers.export(exports, "isEmpty", ()=>isEmpty);
+parcelHelpers.export(exports, "isIE", ()=>isIE);
+parcelHelpers.export(exports, "isIndexedDBAvailable", ()=>isIndexedDBAvailable);
+parcelHelpers.export(exports, "isMobileCordova", ()=>isMobileCordova);
+parcelHelpers.export(exports, "isNode", ()=>isNode);
+parcelHelpers.export(exports, "isNodeSdk", ()=>isNodeSdk);
+parcelHelpers.export(exports, "isReactNative", ()=>isReactNative);
+parcelHelpers.export(exports, "isSafari", ()=>isSafari);
+parcelHelpers.export(exports, "isUWP", ()=>isUWP);
+parcelHelpers.export(exports, "isValidFormat", ()=>isValidFormat);
+parcelHelpers.export(exports, "isValidTimestamp", ()=>isValidTimestamp);
+parcelHelpers.export(exports, "issuedAtTime", ()=>issuedAtTime);
+parcelHelpers.export(exports, "jsonEval", ()=>jsonEval);
+parcelHelpers.export(exports, "map", ()=>map);
+parcelHelpers.export(exports, "ordinal", ()=>ordinal);
+parcelHelpers.export(exports, "promiseWithTimeout", ()=>promiseWithTimeout);
+parcelHelpers.export(exports, "querystring", ()=>querystring);
+parcelHelpers.export(exports, "querystringDecode", ()=>querystringDecode);
+parcelHelpers.export(exports, "safeGet", ()=>safeGet);
+parcelHelpers.export(exports, "stringLength", ()=>stringLength);
+parcelHelpers.export(exports, "stringToByteArray", ()=>stringToByteArray);
+parcelHelpers.export(exports, "stringify", ()=>stringify);
+parcelHelpers.export(exports, "uuidv4", ()=>uuidv4);
+parcelHelpers.export(exports, "validateArgCount", ()=>validateArgCount);
+parcelHelpers.export(exports, "validateCallback", ()=>validateCallback);
+parcelHelpers.export(exports, "validateContextObject", ()=>validateContextObject);
+parcelHelpers.export(exports, "validateIndexedDBOpenable", ()=>validateIndexedDBOpenable);
+parcelHelpers.export(exports, "validateNamespace", ()=>validateNamespace);
+var global = arguments[3];
+var process = require("d07263985281b344");
+const CONSTANTS = {
+    /**
+     * @define {boolean} Whether this is the client Node.js SDK.
+     */ NODE_CLIENT: false,
+    /**
+     * @define {boolean} Whether this is the Admin Node.js SDK.
+     */ NODE_ADMIN: false,
+    /**
+     * Firebase SDK Version
+     */ SDK_VERSION: "${JSCORE_VERSION}"
+};
+/**
+ * @license
+ * Copyright 2017 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * Throws an error if the provided assertion is falsy
+ */ const assert = function(assertion, message) {
+    if (!assertion) throw assertionError(message);
+};
+/**
+ * Returns an Error object suitable for throwing.
+ */ const assertionError = function(message) {
+    return new Error("Firebase Database (" + CONSTANTS.SDK_VERSION + ") INTERNAL ASSERT FAILED: " + message);
+};
+/**
+ * @license
+ * Copyright 2017 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ const stringToByteArray$1 = function(str) {
+    // TODO(user): Use native implementations if/when available
+    const out = [];
+    let p = 0;
+    for(let i = 0; i < str.length; i++){
+        let c = str.charCodeAt(i);
+        if (c < 128) out[p++] = c;
+        else if (c < 2048) {
+            out[p++] = c >> 6 | 192;
+            out[p++] = c & 63 | 128;
+        } else if ((c & 0xfc00) === 0xd800 && i + 1 < str.length && (str.charCodeAt(i + 1) & 0xfc00) === 0xdc00) {
+            // Surrogate Pair
+            c = 0x10000 + ((c & 0x03ff) << 10) + (str.charCodeAt(++i) & 0x03ff);
+            out[p++] = c >> 18 | 240;
+            out[p++] = c >> 12 & 63 | 128;
+            out[p++] = c >> 6 & 63 | 128;
+            out[p++] = c & 63 | 128;
+        } else {
+            out[p++] = c >> 12 | 224;
+            out[p++] = c >> 6 & 63 | 128;
+            out[p++] = c & 63 | 128;
+        }
+    }
+    return out;
+};
+/**
+ * Turns an array of numbers into the string given by the concatenation of the
+ * characters to which the numbers correspond.
+ * @param bytes Array of numbers representing characters.
+ * @return Stringification of the array.
+ */ const byteArrayToString = function(bytes) {
+    // TODO(user): Use native implementations if/when available
+    const out = [];
+    let pos = 0, c = 0;
+    while(pos < bytes.length){
+        const c1 = bytes[pos++];
+        if (c1 < 128) out[c++] = String.fromCharCode(c1);
+        else if (c1 > 191 && c1 < 224) {
+            const c2 = bytes[pos++];
+            out[c++] = String.fromCharCode((c1 & 31) << 6 | c2 & 63);
+        } else if (c1 > 239 && c1 < 365) {
+            // Surrogate Pair
+            const c2 = bytes[pos++];
+            const c3 = bytes[pos++];
+            const c4 = bytes[pos++];
+            const u = ((c1 & 7) << 18 | (c2 & 63) << 12 | (c3 & 63) << 6 | c4 & 63) - 0x10000;
+            out[c++] = String.fromCharCode(0xd800 + (u >> 10));
+            out[c++] = String.fromCharCode(0xdc00 + (u & 1023));
+        } else {
+            const c2 = bytes[pos++];
+            const c3 = bytes[pos++];
+            out[c++] = String.fromCharCode((c1 & 15) << 12 | (c2 & 63) << 6 | c3 & 63);
+        }
+    }
+    return out.join("");
+};
+// We define it as an object literal instead of a class because a class compiled down to es5 can't
+// be treeshaked. https://github.com/rollup/rollup/issues/1691
+// Static lookup maps, lazily populated by init_()
+const base64 = {
+    /**
+     * Maps bytes to characters.
+     */ byteToCharMap_: null,
+    /**
+     * Maps characters to bytes.
+     */ charToByteMap_: null,
+    /**
+     * Maps bytes to websafe characters.
+     * @private
+     */ byteToCharMapWebSafe_: null,
+    /**
+     * Maps websafe characters to bytes.
+     * @private
+     */ charToByteMapWebSafe_: null,
+    /**
+     * Our default alphabet, shared between
+     * ENCODED_VALS and ENCODED_VALS_WEBSAFE
+     */ ENCODED_VALS_BASE: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
+    /**
+     * Our default alphabet. Value 64 (=) is special; it means "nothing."
+     */ get ENCODED_VALS () {
+        return this.ENCODED_VALS_BASE + "+/=";
+    },
+    /**
+     * Our websafe alphabet.
+     */ get ENCODED_VALS_WEBSAFE () {
+        return this.ENCODED_VALS_BASE + "-_.";
+    },
+    /**
+     * Whether this browser supports the atob and btoa functions. This extension
+     * started at Mozilla but is now implemented by many browsers. We use the
+     * ASSUME_* variables to avoid pulling in the full useragent detection library
+     * but still allowing the standard per-browser compilations.
+     *
+     */ HAS_NATIVE_SUPPORT: typeof atob === "function",
+    /**
+     * Base64-encode an array of bytes.
+     *
+     * @param input An array of bytes (numbers with
+     *     value in [0, 255]) to encode.
+     * @param webSafe Boolean indicating we should use the
+     *     alternative alphabet.
+     * @return The base64 encoded string.
+     */ encodeByteArray (input, webSafe) {
+        if (!Array.isArray(input)) throw Error("encodeByteArray takes an array as a parameter");
+        this.init_();
+        const byteToCharMap = webSafe ? this.byteToCharMapWebSafe_ : this.byteToCharMap_;
+        const output = [];
+        for(let i = 0; i < input.length; i += 3){
+            const byte1 = input[i];
+            const haveByte2 = i + 1 < input.length;
+            const byte2 = haveByte2 ? input[i + 1] : 0;
+            const haveByte3 = i + 2 < input.length;
+            const byte3 = haveByte3 ? input[i + 2] : 0;
+            const outByte1 = byte1 >> 2;
+            const outByte2 = (byte1 & 0x03) << 4 | byte2 >> 4;
+            let outByte3 = (byte2 & 0x0f) << 2 | byte3 >> 6;
+            let outByte4 = byte3 & 0x3f;
+            if (!haveByte3) {
+                outByte4 = 64;
+                if (!haveByte2) outByte3 = 64;
+            }
+            output.push(byteToCharMap[outByte1], byteToCharMap[outByte2], byteToCharMap[outByte3], byteToCharMap[outByte4]);
+        }
+        return output.join("");
+    },
+    /**
+     * Base64-encode a string.
+     *
+     * @param input A string to encode.
+     * @param webSafe If true, we should use the
+     *     alternative alphabet.
+     * @return The base64 encoded string.
+     */ encodeString (input, webSafe) {
+        // Shortcut for Mozilla browsers that implement
+        // a native base64 encoder in the form of "btoa/atob"
+        if (this.HAS_NATIVE_SUPPORT && !webSafe) return btoa(input);
+        return this.encodeByteArray(stringToByteArray$1(input), webSafe);
+    },
+    /**
+     * Base64-decode a string.
+     *
+     * @param input to decode.
+     * @param webSafe True if we should use the
+     *     alternative alphabet.
+     * @return string representing the decoded value.
+     */ decodeString (input, webSafe) {
+        // Shortcut for Mozilla browsers that implement
+        // a native base64 encoder in the form of "btoa/atob"
+        if (this.HAS_NATIVE_SUPPORT && !webSafe) return atob(input);
+        return byteArrayToString(this.decodeStringToByteArray(input, webSafe));
+    },
+    /**
+     * Base64-decode a string.
+     *
+     * In base-64 decoding, groups of four characters are converted into three
+     * bytes.  If the encoder did not apply padding, the input length may not
+     * be a multiple of 4.
+     *
+     * In this case, the last group will have fewer than 4 characters, and
+     * padding will be inferred.  If the group has one or two characters, it decodes
+     * to one byte.  If the group has three characters, it decodes to two bytes.
+     *
+     * @param input Input to decode.
+     * @param webSafe True if we should use the web-safe alphabet.
+     * @return bytes representing the decoded value.
+     */ decodeStringToByteArray (input, webSafe) {
+        this.init_();
+        const charToByteMap = webSafe ? this.charToByteMapWebSafe_ : this.charToByteMap_;
+        const output = [];
+        for(let i = 0; i < input.length;){
+            const byte1 = charToByteMap[input.charAt(i++)];
+            const haveByte2 = i < input.length;
+            const byte2 = haveByte2 ? charToByteMap[input.charAt(i)] : 0;
+            ++i;
+            const haveByte3 = i < input.length;
+            const byte3 = haveByte3 ? charToByteMap[input.charAt(i)] : 64;
+            ++i;
+            const haveByte4 = i < input.length;
+            const byte4 = haveByte4 ? charToByteMap[input.charAt(i)] : 64;
+            ++i;
+            if (byte1 == null || byte2 == null || byte3 == null || byte4 == null) throw new DecodeBase64StringError();
+            const outByte1 = byte1 << 2 | byte2 >> 4;
+            output.push(outByte1);
+            if (byte3 !== 64) {
+                const outByte2 = byte2 << 4 & 0xf0 | byte3 >> 2;
+                output.push(outByte2);
+                if (byte4 !== 64) {
+                    const outByte3 = byte3 << 6 & 0xc0 | byte4;
+                    output.push(outByte3);
+                }
+            }
+        }
+        return output;
+    },
+    /**
+     * Lazy static initialization function. Called before
+     * accessing any of the static map variables.
+     * @private
+     */ init_ () {
+        if (!this.byteToCharMap_) {
+            this.byteToCharMap_ = {};
+            this.charToByteMap_ = {};
+            this.byteToCharMapWebSafe_ = {};
+            this.charToByteMapWebSafe_ = {};
+            // We want quick mappings back and forth, so we precompute two maps.
+            for(let i = 0; i < this.ENCODED_VALS.length; i++){
+                this.byteToCharMap_[i] = this.ENCODED_VALS.charAt(i);
+                this.charToByteMap_[this.byteToCharMap_[i]] = i;
+                this.byteToCharMapWebSafe_[i] = this.ENCODED_VALS_WEBSAFE.charAt(i);
+                this.charToByteMapWebSafe_[this.byteToCharMapWebSafe_[i]] = i;
+                // Be forgiving when decoding and correctly decode both encodings.
+                if (i >= this.ENCODED_VALS_BASE.length) {
+                    this.charToByteMap_[this.ENCODED_VALS_WEBSAFE.charAt(i)] = i;
+                    this.charToByteMapWebSafe_[this.ENCODED_VALS.charAt(i)] = i;
+                }
+            }
+        }
+    }
+};
+/**
+ * An error encountered while decoding base64 string.
+ */ class DecodeBase64StringError extends Error {
+    constructor(){
+        super(...arguments);
+        this.name = "DecodeBase64StringError";
+    }
+}
+/**
+ * URL-safe base64 encoding
+ */ const base64Encode = function(str) {
+    const utf8Bytes = stringToByteArray$1(str);
+    return base64.encodeByteArray(utf8Bytes, true);
+};
+/**
+ * URL-safe base64 encoding (without "." padding in the end).
+ * e.g. Used in JSON Web Token (JWT) parts.
+ */ const base64urlEncodeWithoutPadding = function(str) {
+    // Use base64url encoding and remove padding in the end (dot characters).
+    return base64Encode(str).replace(/\./g, "");
+};
+/**
+ * URL-safe base64 decoding
+ *
+ * NOTE: DO NOT use the global atob() function - it does NOT support the
+ * base64Url variant encoding.
+ *
+ * @param str To be decoded
+ * @return Decoded result, if possible
+ */ const base64Decode = function(str) {
+    try {
+        return base64.decodeString(str, true);
+    } catch (e) {
+        console.error("base64Decode failed: ", e);
+    }
+    return null;
+};
+/**
+ * @license
+ * Copyright 2017 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * Do a deep-copy of basic JavaScript Objects or Arrays.
+ */ function deepCopy(value) {
+    return deepExtend(undefined, value);
+}
+/**
+ * Copy properties from source to target (recursively allows extension
+ * of Objects and Arrays).  Scalar values in the target are over-written.
+ * If target is undefined, an object of the appropriate type will be created
+ * (and returned).
+ *
+ * We recursively copy all child properties of plain Objects in the source- so
+ * that namespace- like dictionaries are merged.
+ *
+ * Note that the target can be a function, in which case the properties in
+ * the source Object are copied onto it as static properties of the Function.
+ *
+ * Note: we don't merge __proto__ to prevent prototype pollution
+ */ function deepExtend(target, source) {
+    if (!(source instanceof Object)) return source;
+    switch(source.constructor){
+        case Date:
+            // Treat Dates like scalars; if the target date object had any child
+            // properties - they will be lost!
+            const dateValue = source;
+            return new Date(dateValue.getTime());
+        case Object:
+            if (target === undefined) target = {};
+            break;
+        case Array:
+            // Always copy the array source and overwrite the target.
+            target = [];
+            break;
+        default:
+            // Not a plain Object - treat it as a scalar.
+            return source;
+    }
+    for(const prop in source){
+        // use isValidKey to guard against prototype pollution. See https://snyk.io/vuln/SNYK-JS-LODASH-450202
+        if (!source.hasOwnProperty(prop) || !isValidKey(prop)) continue;
+        target[prop] = deepExtend(target[prop], source[prop]);
+    }
+    return target;
+}
+function isValidKey(key) {
+    return key !== "__proto__";
+}
+/**
+ * @license
+ * Copyright 2022 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * Polyfill for `globalThis` object.
+ * @returns the `globalThis` object for the given environment.
+ * @public
+ */ function getGlobal() {
+    if (typeof self !== "undefined") return self;
+    if (typeof window !== "undefined") return window;
+    if (typeof global !== "undefined") return global;
+    throw new Error("Unable to locate global object.");
+}
+/**
+ * @license
+ * Copyright 2022 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ const getDefaultsFromGlobal = ()=>getGlobal().__FIREBASE_DEFAULTS__;
+/**
+ * Attempt to read defaults from a JSON string provided to
+ * process(.)env(.)__FIREBASE_DEFAULTS__ or a JSON file whose path is in
+ * process(.)env(.)__FIREBASE_DEFAULTS_PATH__
+ * The dots are in parens because certain compilers (Vite?) cannot
+ * handle seeing that variable in comments.
+ * See https://github.com/firebase/firebase-js-sdk/issues/6838
+ */ const getDefaultsFromEnvVariable = ()=>{
+    if (typeof process === "undefined" || typeof process.env === "undefined") return;
+    const defaultsJsonString = undefined;
+    if (defaultsJsonString) return JSON.parse(defaultsJsonString);
+};
+const getDefaultsFromCookie = ()=>{
+    if (typeof document === "undefined") return;
+    let match;
+    try {
+        match = document.cookie.match(/__FIREBASE_DEFAULTS__=([^;]+)/);
+    } catch (e) {
+        // Some environments such as Angular Universal SSR have a
+        // `document` object but error on accessing `document.cookie`.
+        return;
+    }
+    const decoded = match && base64Decode(match[1]);
+    return decoded && JSON.parse(decoded);
+};
+/**
+ * Get the __FIREBASE_DEFAULTS__ object. It checks in order:
+ * (1) if such an object exists as a property of `globalThis`
+ * (2) if such an object was provided on a shell environment variable
+ * (3) if such an object exists in a cookie
+ * @public
+ */ const getDefaults = ()=>{
+    try {
+        return getDefaultsFromGlobal() || getDefaultsFromEnvVariable() || getDefaultsFromCookie();
+    } catch (e) {
+        /**
+         * Catch-all for being unable to get __FIREBASE_DEFAULTS__ due
+         * to any environment case we have not accounted for. Log to
+         * info instead of swallowing so we can find these unknown cases
+         * and add paths for them if needed.
+         */ console.info(`Unable to get __FIREBASE_DEFAULTS__ due to: ${e}`);
+        return;
+    }
+};
+/**
+ * Returns emulator host stored in the __FIREBASE_DEFAULTS__ object
+ * for the given product.
+ * @returns a URL host formatted like `127.0.0.1:9999` or `[::1]:4000` if available
+ * @public
+ */ const getDefaultEmulatorHost = (productName)=>{
+    var _a, _b;
+    return (_b = (_a = getDefaults()) === null || _a === void 0 ? void 0 : _a.emulatorHosts) === null || _b === void 0 ? void 0 : _b[productName];
+};
+/**
+ * Returns emulator hostname and port stored in the __FIREBASE_DEFAULTS__ object
+ * for the given product.
+ * @returns a pair of hostname and port like `["::1", 4000]` if available
+ * @public
+ */ const getDefaultEmulatorHostnameAndPort = (productName)=>{
+    const host = getDefaultEmulatorHost(productName);
+    if (!host) return undefined;
+    const separatorIndex = host.lastIndexOf(":"); // Finding the last since IPv6 addr also has colons.
+    if (separatorIndex <= 0 || separatorIndex + 1 === host.length) throw new Error(`Invalid host ${host} with no separate hostname and port!`);
+    // eslint-disable-next-line no-restricted-globals
+    const port = parseInt(host.substring(separatorIndex + 1), 10);
+    if (host[0] === "[") // Bracket-quoted `[ipv6addr]:port` => return "ipv6addr" (without brackets).
+    return [
+        host.substring(1, separatorIndex - 1),
+        port
+    ];
+    else return [
+        host.substring(0, separatorIndex),
+        port
+    ];
+};
+/**
+ * Returns Firebase app config stored in the __FIREBASE_DEFAULTS__ object.
+ * @public
+ */ const getDefaultAppConfig = ()=>{
+    var _a;
+    return (_a = getDefaults()) === null || _a === void 0 ? void 0 : _a.config;
+};
+/**
+ * Returns an experimental setting on the __FIREBASE_DEFAULTS__ object (properties
+ * prefixed by "_")
+ * @public
+ */ const getExperimentalSetting = (name)=>{
+    var _a;
+    return (_a = getDefaults()) === null || _a === void 0 ? void 0 : _a[`_${name}`];
+};
+/**
+ * @license
+ * Copyright 2017 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ class Deferred {
+    constructor(){
+        this.reject = ()=>{};
+        this.resolve = ()=>{};
+        this.promise = new Promise((resolve, reject)=>{
+            this.resolve = resolve;
+            this.reject = reject;
+        });
+    }
+    /**
+     * Our API internals are not promiseified and cannot because our callback APIs have subtle expectations around
+     * invoking promises inline, which Promises are forbidden to do. This method accepts an optional node-style callback
+     * and returns a node-style callback which will resolve or reject the Deferred's promise.
+     */ wrapCallback(callback) {
+        return (error, value)=>{
+            if (error) this.reject(error);
+            else this.resolve(value);
+            if (typeof callback === "function") {
+                // Attaching noop handler just in case developer wasn't expecting
+                // promises
+                this.promise.catch(()=>{});
+                // Some of our callbacks don't expect a value and our own tests
+                // assert that the parameter length is 1
+                if (callback.length === 1) callback(error);
+                else callback(error, value);
+            }
+        };
+    }
+}
+/**
+ * @license
+ * Copyright 2021 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ function createMockUserToken(token, projectId) {
+    if (token.uid) throw new Error('The "uid" field is no longer supported by mockUserToken. Please use "sub" instead for Firebase Auth User ID.');
+    // Unsecured JWTs use "none" as the algorithm.
+    const header = {
+        alg: "none",
+        type: "JWT"
+    };
+    const project = projectId || "demo-project";
+    const iat = token.iat || 0;
+    const sub = token.sub || token.user_id;
+    if (!sub) throw new Error("mockUserToken must contain 'sub' or 'user_id' field!");
+    const payload = Object.assign({
+        // Set all required fields to decent defaults
+        iss: `https://securetoken.google.com/${project}`,
+        aud: project,
+        iat,
+        exp: iat + 3600,
+        auth_time: iat,
+        sub,
+        user_id: sub,
+        firebase: {
+            sign_in_provider: "custom",
+            identities: {}
+        }
+    }, token);
+    // Unsecured JWTs use the empty string as a signature.
+    const signature = "";
+    return [
+        base64urlEncodeWithoutPadding(JSON.stringify(header)),
+        base64urlEncodeWithoutPadding(JSON.stringify(payload)),
+        signature
+    ].join(".");
+}
+/**
+ * @license
+ * Copyright 2017 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * Returns navigator.userAgent string or '' if it's not defined.
+ * @return user agent string
+ */ function getUA() {
+    if (typeof navigator !== "undefined" && typeof navigator["userAgent"] === "string") return navigator["userAgent"];
+    else return "";
+}
+/**
+ * Detect Cordova / PhoneGap / Ionic frameworks on a mobile device.
+ *
+ * Deliberately does not rely on checking `file://` URLs (as this fails PhoneGap
+ * in the Ripple emulator) nor Cordova `onDeviceReady`, which would normally
+ * wait for a callback.
+ */ function isMobileCordova() {
+    return typeof window !== "undefined" && // @ts-ignore Setting up an broadly applicable index signature for Window
+    // just to deal with this case would probably be a bad idea.
+    !!(window["cordova"] || window["phonegap"] || window["PhoneGap"]) && /ios|iphone|ipod|ipad|android|blackberry|iemobile/i.test(getUA());
+}
+/**
+ * Detect Node.js.
+ *
+ * @return true if Node.js environment is detected or specified.
+ */ // Node detection logic from: https://github.com/iliakan/detect-node/
+function isNode() {
+    var _a;
+    const forceEnvironment = (_a = getDefaults()) === null || _a === void 0 ? void 0 : _a.forceEnvironment;
+    if (forceEnvironment === "node") return true;
+    else if (forceEnvironment === "browser") return false;
+    try {
+        return Object.prototype.toString.call(global.process) === "[object process]";
+    } catch (e) {
+        return false;
+    }
+}
+/**
+ * Detect Browser Environment
+ */ function isBrowser() {
+    return typeof self === "object" && self.self === self;
+}
+function isBrowserExtension() {
+    const runtime = typeof chrome === "object" ? chrome.runtime : typeof browser === "object" ? browser.runtime : undefined;
+    return typeof runtime === "object" && runtime.id !== undefined;
+}
+/**
+ * Detect React Native.
+ *
+ * @return true if ReactNative environment is detected.
+ */ function isReactNative() {
+    return typeof navigator === "object" && navigator["product"] === "ReactNative";
+}
+/** Detects Electron apps. */ function isElectron() {
+    return getUA().indexOf("Electron/") >= 0;
+}
+/** Detects Internet Explorer. */ function isIE() {
+    const ua = getUA();
+    return ua.indexOf("MSIE ") >= 0 || ua.indexOf("Trident/") >= 0;
+}
+/** Detects Universal Windows Platform apps. */ function isUWP() {
+    return getUA().indexOf("MSAppHost/") >= 0;
+}
+/**
+ * Detect whether the current SDK build is the Node version.
+ *
+ * @return true if it's the Node SDK build.
+ */ function isNodeSdk() {
+    return CONSTANTS.NODE_CLIENT === true || CONSTANTS.NODE_ADMIN === true;
+}
+/** Returns true if we are running in Safari. */ function isSafari() {
+    return !isNode() && navigator.userAgent.includes("Safari") && !navigator.userAgent.includes("Chrome");
+}
+/**
+ * This method checks if indexedDB is supported by current browser/service worker context
+ * @return true if indexedDB is supported by current browser/service worker context
+ */ function isIndexedDBAvailable() {
+    try {
+        return typeof indexedDB === "object";
+    } catch (e) {
+        return false;
+    }
+}
+/**
+ * This method validates browser/sw context for indexedDB by opening a dummy indexedDB database and reject
+ * if errors occur during the database open operation.
+ *
+ * @throws exception if current browser/sw context can't run idb.open (ex: Safari iframe, Firefox
+ * private browsing)
+ */ function validateIndexedDBOpenable() {
+    return new Promise((resolve, reject)=>{
+        try {
+            let preExist = true;
+            const DB_CHECK_NAME = "validate-browser-context-for-indexeddb-analytics-module";
+            const request = self.indexedDB.open(DB_CHECK_NAME);
+            request.onsuccess = ()=>{
+                request.result.close();
+                // delete database only when it doesn't pre-exist
+                if (!preExist) self.indexedDB.deleteDatabase(DB_CHECK_NAME);
+                resolve(true);
+            };
+            request.onupgradeneeded = ()=>{
+                preExist = false;
+            };
+            request.onerror = ()=>{
+                var _a;
+                reject(((_a = request.error) === null || _a === void 0 ? void 0 : _a.message) || "");
+            };
+        } catch (error) {
+            reject(error);
+        }
+    });
+}
+/**
+ *
+ * This method checks whether cookie is enabled within current browser
+ * @return true if cookie is enabled within current browser
+ */ function areCookiesEnabled() {
+    if (typeof navigator === "undefined" || !navigator.cookieEnabled) return false;
+    return true;
+}
+/**
+ * @license
+ * Copyright 2017 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * @fileoverview Standardized Firebase Error.
+ *
+ * Usage:
+ *
+ *   // Typescript string literals for type-safe codes
+ *   type Err =
+ *     'unknown' |
+ *     'object-not-found'
+ *     ;
+ *
+ *   // Closure enum for type-safe error codes
+ *   // at-enum {string}
+ *   var Err = {
+ *     UNKNOWN: 'unknown',
+ *     OBJECT_NOT_FOUND: 'object-not-found',
+ *   }
+ *
+ *   let errors: Map<Err, string> = {
+ *     'generic-error': "Unknown error",
+ *     'file-not-found': "Could not find file: {$file}",
+ *   };
+ *
+ *   // Type-safe function - must pass a valid error code as param.
+ *   let error = new ErrorFactory<Err>('service', 'Service', errors);
+ *
+ *   ...
+ *   throw error.create(Err.GENERIC);
+ *   ...
+ *   throw error.create(Err.FILE_NOT_FOUND, {'file': fileName});
+ *   ...
+ *   // Service: Could not file file: foo.txt (service/file-not-found).
+ *
+ *   catch (e) {
+ *     assert(e.message === "Could not find file: foo.txt.");
+ *     if ((e as FirebaseError)?.code === 'service/file-not-found') {
+ *       console.log("Could not read file: " + e['file']);
+ *     }
+ *   }
+ */ const ERROR_NAME = "FirebaseError";
+// Based on code from:
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error#Custom_Error_Types
+class FirebaseError extends Error {
+    constructor(/** The error code for this error. */ code, message, /** Custom data for this error. */ customData){
+        super(message);
+        this.code = code;
+        this.customData = customData;
+        /** The custom name for all FirebaseErrors. */ this.name = ERROR_NAME;
+        // Fix For ES5
+        // https://github.com/Microsoft/TypeScript-wiki/blob/master/Breaking-Changes.md#extending-built-ins-like-error-array-and-map-may-no-longer-work
+        Object.setPrototypeOf(this, FirebaseError.prototype);
+        // Maintains proper stack trace for where our error was thrown.
+        // Only available on V8.
+        if (Error.captureStackTrace) Error.captureStackTrace(this, ErrorFactory.prototype.create);
+    }
+}
+class ErrorFactory {
+    constructor(service, serviceName, errors){
+        this.service = service;
+        this.serviceName = serviceName;
+        this.errors = errors;
+    }
+    create(code, ...data) {
+        const customData = data[0] || {};
+        const fullCode = `${this.service}/${code}`;
+        const template = this.errors[code];
+        const message = template ? replaceTemplate(template, customData) : "Error";
+        // Service Name: Error message (service/code).
+        const fullMessage = `${this.serviceName}: ${message} (${fullCode}).`;
+        const error = new FirebaseError(fullCode, fullMessage, customData);
+        return error;
+    }
+}
+function replaceTemplate(template, data) {
+    return template.replace(PATTERN, (_, key)=>{
+        const value = data[key];
+        return value != null ? String(value) : `<${key}?>`;
+    });
+}
+const PATTERN = /\{\$([^}]+)}/g;
+/**
+ * @license
+ * Copyright 2017 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * Evaluates a JSON string into a javascript object.
+ *
+ * @param {string} str A string containing JSON.
+ * @return {*} The javascript object representing the specified JSON.
+ */ function jsonEval(str) {
+    return JSON.parse(str);
+}
+/**
+ * Returns JSON representing a javascript object.
+ * @param {*} data Javascript object to be stringified.
+ * @return {string} The JSON contents of the object.
+ */ function stringify(data) {
+    return JSON.stringify(data);
+}
+/**
+ * @license
+ * Copyright 2017 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * Decodes a Firebase auth. token into constituent parts.
+ *
+ * Notes:
+ * - May return with invalid / incomplete claims if there's no native base64 decoding support.
+ * - Doesn't check if the token is actually valid.
+ */ const decode = function(token) {
+    let header = {}, claims = {}, data = {}, signature = "";
+    try {
+        const parts = token.split(".");
+        header = jsonEval(base64Decode(parts[0]) || "");
+        claims = jsonEval(base64Decode(parts[1]) || "");
+        signature = parts[2];
+        data = claims["d"] || {};
+        delete claims["d"];
+    } catch (e) {}
+    return {
+        header,
+        claims,
+        data,
+        signature
+    };
+};
+/**
+ * Decodes a Firebase auth. token and checks the validity of its time-based claims. Will return true if the
+ * token is within the time window authorized by the 'nbf' (not-before) and 'iat' (issued-at) claims.
+ *
+ * Notes:
+ * - May return a false negative if there's no native base64 decoding support.
+ * - Doesn't check if the token is actually valid.
+ */ const isValidTimestamp = function(token) {
+    const claims = decode(token).claims;
+    const now = Math.floor(new Date().getTime() / 1000);
+    let validSince = 0, validUntil = 0;
+    if (typeof claims === "object") {
+        if (claims.hasOwnProperty("nbf")) validSince = claims["nbf"];
+        else if (claims.hasOwnProperty("iat")) validSince = claims["iat"];
+        if (claims.hasOwnProperty("exp")) validUntil = claims["exp"];
+        else // token will expire after 24h by default
+        validUntil = validSince + 86400;
+    }
+    return !!now && !!validSince && !!validUntil && now >= validSince && now <= validUntil;
+};
+/**
+ * Decodes a Firebase auth. token and returns its issued at time if valid, null otherwise.
+ *
+ * Notes:
+ * - May return null if there's no native base64 decoding support.
+ * - Doesn't check if the token is actually valid.
+ */ const issuedAtTime = function(token) {
+    const claims = decode(token).claims;
+    if (typeof claims === "object" && claims.hasOwnProperty("iat")) return claims["iat"];
+    return null;
+};
+/**
+ * Decodes a Firebase auth. token and checks the validity of its format. Expects a valid issued-at time.
+ *
+ * Notes:
+ * - May return a false negative if there's no native base64 decoding support.
+ * - Doesn't check if the token is actually valid.
+ */ const isValidFormat = function(token) {
+    const decoded = decode(token), claims = decoded.claims;
+    return !!claims && typeof claims === "object" && claims.hasOwnProperty("iat");
+};
+/**
+ * Attempts to peer into an auth token and determine if it's an admin auth token by looking at the claims portion.
+ *
+ * Notes:
+ * - May return a false negative if there's no native base64 decoding support.
+ * - Doesn't check if the token is actually valid.
+ */ const isAdmin = function(token) {
+    const claims = decode(token).claims;
+    return typeof claims === "object" && claims["admin"] === true;
+};
+/**
+ * @license
+ * Copyright 2017 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ function contains(obj, key) {
+    return Object.prototype.hasOwnProperty.call(obj, key);
+}
+function safeGet(obj, key) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) return obj[key];
+    else return undefined;
+}
+function isEmpty(obj) {
+    for(const key in obj){
+        if (Object.prototype.hasOwnProperty.call(obj, key)) return false;
+    }
+    return true;
+}
+function map(obj, fn, contextObj) {
+    const res = {};
+    for(const key in obj)if (Object.prototype.hasOwnProperty.call(obj, key)) res[key] = fn.call(contextObj, obj[key], key, obj);
+    return res;
+}
+/**
+ * Deep equal two objects. Support Arrays and Objects.
+ */ function deepEqual(a, b) {
+    if (a === b) return true;
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    for (const k of aKeys){
+        if (!bKeys.includes(k)) return false;
+        const aProp = a[k];
+        const bProp = b[k];
+        if (isObject(aProp) && isObject(bProp)) {
+            if (!deepEqual(aProp, bProp)) return false;
+        } else if (aProp !== bProp) return false;
+    }
+    for (const k of bKeys){
+        if (!aKeys.includes(k)) return false;
+    }
+    return true;
+}
+function isObject(thing) {
+    return thing !== null && typeof thing === "object";
+}
+/**
+ * @license
+ * Copyright 2022 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * Rejects if the given promise doesn't resolve in timeInMS milliseconds.
+ * @internal
+ */ function promiseWithTimeout(promise, timeInMS = 2000) {
+    const deferredPromise = new Deferred();
+    setTimeout(()=>deferredPromise.reject("timeout!"), timeInMS);
+    promise.then(deferredPromise.resolve, deferredPromise.reject);
+    return deferredPromise.promise;
+}
+/**
+ * @license
+ * Copyright 2017 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * Returns a querystring-formatted string (e.g. &arg=val&arg2=val2) from a
+ * params object (e.g. {arg: 'val', arg2: 'val2'})
+ * Note: You must prepend it with ? when adding it to a URL.
+ */ function querystring(querystringParams) {
+    const params = [];
+    for (const [key, value] of Object.entries(querystringParams))if (Array.isArray(value)) value.forEach((arrayVal)=>{
+        params.push(encodeURIComponent(key) + "=" + encodeURIComponent(arrayVal));
+    });
+    else params.push(encodeURIComponent(key) + "=" + encodeURIComponent(value));
+    return params.length ? "&" + params.join("&") : "";
+}
+/**
+ * Decodes a querystring (e.g. ?arg=val&arg2=val2) into a params object
+ * (e.g. {arg: 'val', arg2: 'val2'})
+ */ function querystringDecode(querystring) {
+    const obj = {};
+    const tokens = querystring.replace(/^\?/, "").split("&");
+    tokens.forEach((token)=>{
+        if (token) {
+            const [key, value] = token.split("=");
+            obj[decodeURIComponent(key)] = decodeURIComponent(value);
+        }
+    });
+    return obj;
+}
+/**
+ * Extract the query string part of a URL, including the leading question mark (if present).
+ */ function extractQuerystring(url) {
+    const queryStart = url.indexOf("?");
+    if (!queryStart) return "";
+    const fragmentStart = url.indexOf("#", queryStart);
+    return url.substring(queryStart, fragmentStart > 0 ? fragmentStart : undefined);
+}
+/**
+ * @license
+ * Copyright 2017 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * @fileoverview SHA-1 cryptographic hash.
+ * Variable names follow the notation in FIPS PUB 180-3:
+ * http://csrc.nist.gov/publications/fips/fips180-3/fips180-3_final.pdf.
+ *
+ * Usage:
+ *   var sha1 = new sha1();
+ *   sha1.update(bytes);
+ *   var hash = sha1.digest();
+ *
+ * Performance:
+ *   Chrome 23:   ~400 Mbit/s
+ *   Firefox 16:  ~250 Mbit/s
+ *
+ */ /**
+ * SHA-1 cryptographic hash constructor.
+ *
+ * The properties declared here are discussed in the above algorithm document.
+ * @constructor
+ * @final
+ * @struct
+ */ class Sha1 {
+    constructor(){
+        /**
+         * Holds the previous values of accumulated variables a-e in the compress_
+         * function.
+         * @private
+         */ this.chain_ = [];
+        /**
+         * A buffer holding the partially computed hash result.
+         * @private
+         */ this.buf_ = [];
+        /**
+         * An array of 80 bytes, each a part of the message to be hashed.  Referred to
+         * as the message schedule in the docs.
+         * @private
+         */ this.W_ = [];
+        /**
+         * Contains data needed to pad messages less than 64 bytes.
+         * @private
+         */ this.pad_ = [];
+        /**
+         * @private {number}
+         */ this.inbuf_ = 0;
+        /**
+         * @private {number}
+         */ this.total_ = 0;
+        this.blockSize = 64;
+        this.pad_[0] = 128;
+        for(let i = 1; i < this.blockSize; ++i)this.pad_[i] = 0;
+        this.reset();
+    }
+    reset() {
+        this.chain_[0] = 0x67452301;
+        this.chain_[1] = 0xefcdab89;
+        this.chain_[2] = 0x98badcfe;
+        this.chain_[3] = 0x10325476;
+        this.chain_[4] = 0xc3d2e1f0;
+        this.inbuf_ = 0;
+        this.total_ = 0;
+    }
+    /**
+     * Internal compress helper function.
+     * @param buf Block to compress.
+     * @param offset Offset of the block in the buffer.
+     * @private
+     */ compress_(buf, offset) {
+        if (!offset) offset = 0;
+        const W = this.W_;
+        // get 16 big endian words
+        if (typeof buf === "string") for(let i = 0; i < 16; i++){
+            // TODO(user): [bug 8140122] Recent versions of Safari for Mac OS and iOS
+            // have a bug that turns the post-increment ++ operator into pre-increment
+            // during JIT compilation.  We have code that depends heavily on SHA-1 for
+            // correctness and which is affected by this bug, so I've removed all uses
+            // of post-increment ++ in which the result value is used.  We can revert
+            // this change once the Safari bug
+            // (https://bugs.webkit.org/show_bug.cgi?id=109036) has been fixed and
+            // most clients have been updated.
+            W[i] = buf.charCodeAt(offset) << 24 | buf.charCodeAt(offset + 1) << 16 | buf.charCodeAt(offset + 2) << 8 | buf.charCodeAt(offset + 3);
+            offset += 4;
+        }
+        else for(let i = 0; i < 16; i++){
+            W[i] = buf[offset] << 24 | buf[offset + 1] << 16 | buf[offset + 2] << 8 | buf[offset + 3];
+            offset += 4;
+        }
+        // expand to 80 words
+        for(let i = 16; i < 80; i++){
+            const t = W[i - 3] ^ W[i - 8] ^ W[i - 14] ^ W[i - 16];
+            W[i] = (t << 1 | t >>> 31) & 0xffffffff;
+        }
+        let a = this.chain_[0];
+        let b = this.chain_[1];
+        let c = this.chain_[2];
+        let d = this.chain_[3];
+        let e = this.chain_[4];
+        let f, k;
+        // TODO(user): Try to unroll this loop to speed up the computation.
+        for(let i = 0; i < 80; i++){
+            if (i < 40) {
+                if (i < 20) {
+                    f = d ^ b & (c ^ d);
+                    k = 0x5a827999;
+                } else {
+                    f = b ^ c ^ d;
+                    k = 0x6ed9eba1;
+                }
+            } else if (i < 60) {
+                f = b & c | d & (b | c);
+                k = 0x8f1bbcdc;
+            } else {
+                f = b ^ c ^ d;
+                k = 0xca62c1d6;
+            }
+            const t = (a << 5 | a >>> 27) + f + e + k + W[i] & 0xffffffff;
+            e = d;
+            d = c;
+            c = (b << 30 | b >>> 2) & 0xffffffff;
+            b = a;
+            a = t;
+        }
+        this.chain_[0] = this.chain_[0] + a & 0xffffffff;
+        this.chain_[1] = this.chain_[1] + b & 0xffffffff;
+        this.chain_[2] = this.chain_[2] + c & 0xffffffff;
+        this.chain_[3] = this.chain_[3] + d & 0xffffffff;
+        this.chain_[4] = this.chain_[4] + e & 0xffffffff;
+    }
+    update(bytes, length) {
+        // TODO(johnlenz): tighten the function signature and remove this check
+        if (bytes == null) return;
+        if (length === undefined) length = bytes.length;
+        const lengthMinusBlock = length - this.blockSize;
+        let n = 0;
+        // Using local instead of member variables gives ~5% speedup on Firefox 16.
+        const buf = this.buf_;
+        let inbuf = this.inbuf_;
+        // The outer while loop should execute at most twice.
+        while(n < length){
+            // When we have no data in the block to top up, we can directly process the
+            // input buffer (assuming it contains sufficient data). This gives ~25%
+            // speedup on Chrome 23 and ~15% speedup on Firefox 16, but requires that
+            // the data is provided in large chunks (or in multiples of 64 bytes).
+            if (inbuf === 0) while(n <= lengthMinusBlock){
+                this.compress_(bytes, n);
+                n += this.blockSize;
+            }
+            if (typeof bytes === "string") while(n < length){
+                buf[inbuf] = bytes.charCodeAt(n);
+                ++inbuf;
+                ++n;
+                if (inbuf === this.blockSize) {
+                    this.compress_(buf);
+                    inbuf = 0;
+                    break;
+                }
+            }
+            else while(n < length){
+                buf[inbuf] = bytes[n];
+                ++inbuf;
+                ++n;
+                if (inbuf === this.blockSize) {
+                    this.compress_(buf);
+                    inbuf = 0;
+                    break;
+                }
+            }
+        }
+        this.inbuf_ = inbuf;
+        this.total_ += length;
+    }
+    /** @override */ digest() {
+        const digest = [];
+        let totalBits = this.total_ * 8;
+        // Add pad 0x80 0x00*.
+        if (this.inbuf_ < 56) this.update(this.pad_, 56 - this.inbuf_);
+        else this.update(this.pad_, this.blockSize - (this.inbuf_ - 56));
+        // Add # bits.
+        for(let i = this.blockSize - 1; i >= 56; i--){
+            this.buf_[i] = totalBits & 255;
+            totalBits /= 256; // Don't use bit-shifting here!
+        }
+        this.compress_(this.buf_);
+        let n = 0;
+        for(let i = 0; i < 5; i++)for(let j = 24; j >= 0; j -= 8){
+            digest[n] = this.chain_[i] >> j & 255;
+            ++n;
+        }
+        return digest;
+    }
+}
+/**
+ * Helper to make a Subscribe function (just like Promise helps make a
+ * Thenable).
+ *
+ * @param executor Function which can make calls to a single Observer
+ *     as a proxy.
+ * @param onNoObservers Callback when count of Observers goes to zero.
+ */ function createSubscribe(executor, onNoObservers) {
+    const proxy = new ObserverProxy(executor, onNoObservers);
+    return proxy.subscribe.bind(proxy);
+}
+/**
+ * Implement fan-out for any number of Observers attached via a subscribe
+ * function.
+ */ class ObserverProxy {
+    /**
+     * @param executor Function which can make calls to a single Observer
+     *     as a proxy.
+     * @param onNoObservers Callback when count of Observers goes to zero.
+     */ constructor(executor, onNoObservers){
+        this.observers = [];
+        this.unsubscribes = [];
+        this.observerCount = 0;
+        // Micro-task scheduling by calling task.then().
+        this.task = Promise.resolve();
+        this.finalized = false;
+        this.onNoObservers = onNoObservers;
+        // Call the executor asynchronously so subscribers that are called
+        // synchronously after the creation of the subscribe function
+        // can still receive the very first value generated in the executor.
+        this.task.then(()=>{
+            executor(this);
+        }).catch((e)=>{
+            this.error(e);
+        });
+    }
+    next(value) {
+        this.forEachObserver((observer)=>{
+            observer.next(value);
+        });
+    }
+    error(error) {
+        this.forEachObserver((observer)=>{
+            observer.error(error);
+        });
+        this.close(error);
+    }
+    complete() {
+        this.forEachObserver((observer)=>{
+            observer.complete();
+        });
+        this.close();
+    }
+    /**
+     * Subscribe function that can be used to add an Observer to the fan-out list.
+     *
+     * - We require that no event is sent to a subscriber sychronously to their
+     *   call to subscribe().
+     */ subscribe(nextOrObserver, error, complete) {
+        let observer;
+        if (nextOrObserver === undefined && error === undefined && complete === undefined) throw new Error("Missing Observer.");
+        // Assemble an Observer object when passed as callback functions.
+        if (implementsAnyMethods(nextOrObserver, [
+            "next",
+            "error",
+            "complete"
+        ])) observer = nextOrObserver;
+        else observer = {
+            next: nextOrObserver,
+            error,
+            complete
+        };
+        if (observer.next === undefined) observer.next = noop;
+        if (observer.error === undefined) observer.error = noop;
+        if (observer.complete === undefined) observer.complete = noop;
+        const unsub = this.unsubscribeOne.bind(this, this.observers.length);
+        // Attempt to subscribe to a terminated Observable - we
+        // just respond to the Observer with the final error or complete
+        // event.
+        if (this.finalized) // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        this.task.then(()=>{
+            try {
+                if (this.finalError) observer.error(this.finalError);
+                else observer.complete();
+            } catch (e) {
+            // nothing
+            }
+            return;
+        });
+        this.observers.push(observer);
+        return unsub;
+    }
+    // Unsubscribe is synchronous - we guarantee that no events are sent to
+    // any unsubscribed Observer.
+    unsubscribeOne(i) {
+        if (this.observers === undefined || this.observers[i] === undefined) return;
+        delete this.observers[i];
+        this.observerCount -= 1;
+        if (this.observerCount === 0 && this.onNoObservers !== undefined) this.onNoObservers(this);
+    }
+    forEachObserver(fn) {
+        if (this.finalized) // Already closed by previous event....just eat the additional values.
+        return;
+        // Since sendOne calls asynchronously - there is no chance that
+        // this.observers will become undefined.
+        for(let i = 0; i < this.observers.length; i++)this.sendOne(i, fn);
+    }
+    // Call the Observer via one of it's callback function. We are careful to
+    // confirm that the observe has not been unsubscribed since this asynchronous
+    // function had been queued.
+    sendOne(i, fn) {
+        // Execute the callback asynchronously
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        this.task.then(()=>{
+            if (this.observers !== undefined && this.observers[i] !== undefined) try {
+                fn(this.observers[i]);
+            } catch (e) {
+                // Ignore exceptions raised in Observers or missing methods of an
+                // Observer.
+                // Log error to console. b/31404806
+                if (typeof console !== "undefined" && console.error) console.error(e);
+            }
+        });
+    }
+    close(err) {
+        if (this.finalized) return;
+        this.finalized = true;
+        if (err !== undefined) this.finalError = err;
+        // Proxy is no longer needed - garbage collect references
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        this.task.then(()=>{
+            this.observers = undefined;
+            this.onNoObservers = undefined;
+        });
+    }
+}
+/** Turn synchronous function into one called asynchronously. */ // eslint-disable-next-line @typescript-eslint/ban-types
+function async(fn, onError) {
+    return (...args)=>{
+        Promise.resolve(true).then(()=>{
+            fn(...args);
+        }).catch((error)=>{
+            if (onError) onError(error);
+        });
+    };
+}
+/**
+ * Return true if the object passed in implements any of the named methods.
+ */ function implementsAnyMethods(obj, methods) {
+    if (typeof obj !== "object" || obj === null) return false;
+    for (const method of methods){
+        if (method in obj && typeof obj[method] === "function") return true;
+    }
+    return false;
+}
+function noop() {
+// do nothing
+}
+/**
+ * @license
+ * Copyright 2017 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * Check to make sure the appropriate number of arguments are provided for a public function.
+ * Throws an error if it fails.
+ *
+ * @param fnName The function name
+ * @param minCount The minimum number of arguments to allow for the function call
+ * @param maxCount The maximum number of argument to allow for the function call
+ * @param argCount The actual number of arguments provided.
+ */ const validateArgCount = function(fnName, minCount, maxCount, argCount) {
+    let argError;
+    if (argCount < minCount) argError = "at least " + minCount;
+    else if (argCount > maxCount) argError = maxCount === 0 ? "none" : "no more than " + maxCount;
+    if (argError) {
+        const error = fnName + " failed: Was called with " + argCount + (argCount === 1 ? " argument." : " arguments.") + " Expects " + argError + ".";
+        throw new Error(error);
+    }
+};
+/**
+ * Generates a string to prefix an error message about failed argument validation
+ *
+ * @param fnName The function name
+ * @param argName The name of the argument
+ * @return The prefix to add to the error thrown for validation.
+ */ function errorPrefix(fnName, argName) {
+    return `${fnName} failed: ${argName} argument `;
+}
+/**
+ * @param fnName
+ * @param argumentNumber
+ * @param namespace
+ * @param optional
+ */ function validateNamespace(fnName, namespace, optional) {
+    if (optional && !namespace) return;
+    if (typeof namespace !== "string") //TODO: I should do more validation here. We only allow certain chars in namespaces.
+    throw new Error(errorPrefix(fnName, "namespace") + "must be a valid firebase namespace.");
+}
+function validateCallback(fnName, argumentName, // eslint-disable-next-line @typescript-eslint/ban-types
+callback, optional) {
+    if (optional && !callback) return;
+    if (typeof callback !== "function") throw new Error(errorPrefix(fnName, argumentName) + "must be a valid function.");
+}
+function validateContextObject(fnName, argumentName, context, optional) {
+    if (optional && !context) return;
+    if (typeof context !== "object" || context === null) throw new Error(errorPrefix(fnName, argumentName) + "must be a valid context object.");
+}
+/**
+ * @license
+ * Copyright 2017 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ // Code originally came from goog.crypt.stringToUtf8ByteArray, but for some reason they
+// automatically replaced '\r\n' with '\n', and they didn't handle surrogate pairs,
+// so it's been modified.
+// Note that not all Unicode characters appear as single characters in JavaScript strings.
+// fromCharCode returns the UTF-16 encoding of a character - so some Unicode characters
+// use 2 characters in Javascript.  All 4-byte UTF-8 characters begin with a first
+// character in the range 0xD800 - 0xDBFF (the first character of a so-called surrogate
+// pair).
+// See http://www.ecma-international.org/ecma-262/5.1/#sec-15.1.3
+/**
+ * @param {string} str
+ * @return {Array}
+ */ const stringToByteArray = function(str) {
+    const out = [];
+    let p = 0;
+    for(let i = 0; i < str.length; i++){
+        let c = str.charCodeAt(i);
+        // Is this the lead surrogate in a surrogate pair?
+        if (c >= 0xd800 && c <= 0xdbff) {
+            const high = c - 0xd800; // the high 10 bits.
+            i++;
+            assert(i < str.length, "Surrogate pair missing trail surrogate.");
+            const low = str.charCodeAt(i) - 0xdc00; // the low 10 bits.
+            c = 0x10000 + (high << 10) + low;
+        }
+        if (c < 128) out[p++] = c;
+        else if (c < 2048) {
+            out[p++] = c >> 6 | 192;
+            out[p++] = c & 63 | 128;
+        } else if (c < 65536) {
+            out[p++] = c >> 12 | 224;
+            out[p++] = c >> 6 & 63 | 128;
+            out[p++] = c & 63 | 128;
+        } else {
+            out[p++] = c >> 18 | 240;
+            out[p++] = c >> 12 & 63 | 128;
+            out[p++] = c >> 6 & 63 | 128;
+            out[p++] = c & 63 | 128;
+        }
+    }
+    return out;
+};
+/**
+ * Calculate length without actually converting; useful for doing cheaper validation.
+ * @param {string} str
+ * @return {number}
+ */ const stringLength = function(str) {
+    let p = 0;
+    for(let i = 0; i < str.length; i++){
+        const c = str.charCodeAt(i);
+        if (c < 128) p++;
+        else if (c < 2048) p += 2;
+        else if (c >= 0xd800 && c <= 0xdbff) {
+            // Lead surrogate of a surrogate pair.  The pair together will take 4 bytes to represent.
+            p += 4;
+            i++; // skip trail surrogate.
+        } else p += 3;
+    }
+    return p;
+};
+/**
+ * @license
+ * Copyright 2022 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * Copied from https://stackoverflow.com/a/2117523
+ * Generates a new uuid.
+ * @public
+ */ const uuidv4 = function() {
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c)=>{
+        const r = Math.random() * 16 | 0, v = c === "x" ? r : r & 0x3 | 0x8;
+        return v.toString(16);
+    });
+};
+/**
+ * @license
+ * Copyright 2019 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * The amount of milliseconds to exponentially increase.
+ */ const DEFAULT_INTERVAL_MILLIS = 1000;
+/**
+ * The factor to backoff by.
+ * Should be a number greater than 1.
+ */ const DEFAULT_BACKOFF_FACTOR = 2;
+/**
+ * The maximum milliseconds to increase to.
+ *
+ * <p>Visible for testing
+ */ const MAX_VALUE_MILLIS = 14400000; // Four hours, like iOS and Android.
+/**
+ * The percentage of backoff time to randomize by.
+ * See
+ * http://go/safe-client-behavior#step-1-determine-the-appropriate-retry-interval-to-handle-spike-traffic
+ * for context.
+ *
+ * <p>Visible for testing
+ */ const RANDOM_FACTOR = 0.5;
+/**
+ * Based on the backoff method from
+ * https://github.com/google/closure-library/blob/master/closure/goog/math/exponentialbackoff.js.
+ * Extracted here so we don't need to pass metadata and a stateful ExponentialBackoff object around.
+ */ function calculateBackoffMillis(backoffCount, intervalMillis = DEFAULT_INTERVAL_MILLIS, backoffFactor = DEFAULT_BACKOFF_FACTOR) {
+    // Calculates an exponentially increasing value.
+    // Deviation: calculates value from count and a constant interval, so we only need to save value
+    // and count to restore state.
+    const currBaseValue = intervalMillis * Math.pow(backoffFactor, backoffCount);
+    // A random "fuzz" to avoid waves of retries.
+    // Deviation: randomFactor is required.
+    const randomWait = Math.round(// A fraction of the backoff value to add/subtract.
+    // Deviation: changes multiplication order to improve readability.
+    RANDOM_FACTOR * currBaseValue * // A random float (rounded to int by Math.round above) in the range [-1, 1]. Determines
+    // if we add or subtract.
+    (Math.random() - 0.5) * 2);
+    // Limits backoff to max to avoid effectively permanent backoff.
+    return Math.min(MAX_VALUE_MILLIS, currBaseValue + randomWait);
+}
+/**
+ * @license
+ * Copyright 2020 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * Provide English ordinal letters after a number
+ */ function ordinal(i) {
+    if (!Number.isFinite(i)) return `${i}`;
+    return i + indicator(i);
+}
+function indicator(i) {
+    i = Math.abs(i);
+    const cent = i % 100;
+    if (cent >= 10 && cent <= 20) return "th";
+    const dec = i % 10;
+    if (dec === 1) return "st";
+    if (dec === 2) return "nd";
+    if (dec === 3) return "rd";
+    return "th";
+}
+/**
+ * @license
+ * Copyright 2021 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ function getModularInstance(service) {
+    if (service && service._delegate) return service._delegate;
+    else return service;
+}
+
+},{"d07263985281b344":"d5jf4","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"d5jf4":[function(require,module,exports) {
+// shim for using process in browser
+var process = module.exports = {};
+// cached from whatever global is present so that test runners that stub it
+// don't break things.  But we need to wrap it in a try catch in case it is
+// wrapped in strict mode code which doesn't define any globals.  It's inside a
+// function because try/catches deoptimize in certain engines.
+var cachedSetTimeout;
+var cachedClearTimeout;
+function defaultSetTimout() {
+    throw new Error("setTimeout has not been defined");
+}
+function defaultClearTimeout() {
+    throw new Error("clearTimeout has not been defined");
+}
+(function() {
+    try {
+        if (typeof setTimeout === "function") cachedSetTimeout = setTimeout;
+        else cachedSetTimeout = defaultSetTimout;
+    } catch (e) {
+        cachedSetTimeout = defaultSetTimout;
+    }
+    try {
+        if (typeof clearTimeout === "function") cachedClearTimeout = clearTimeout;
+        else cachedClearTimeout = defaultClearTimeout;
+    } catch (e) {
+        cachedClearTimeout = defaultClearTimeout;
+    }
+})();
+function runTimeout(fun) {
+    if (cachedSetTimeout === setTimeout) //normal enviroments in sane situations
+    return setTimeout(fun, 0);
+    // if setTimeout wasn't available but was latter defined
+    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
+        cachedSetTimeout = setTimeout;
+        return setTimeout(fun, 0);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedSetTimeout(fun, 0);
+    } catch (e) {
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
+            return cachedSetTimeout.call(null, fun, 0);
+        } catch (e) {
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
+            return cachedSetTimeout.call(this, fun, 0);
+        }
+    }
+}
+function runClearTimeout(marker) {
+    if (cachedClearTimeout === clearTimeout) //normal enviroments in sane situations
+    return clearTimeout(marker);
+    // if clearTimeout wasn't available but was latter defined
+    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
+        cachedClearTimeout = clearTimeout;
+        return clearTimeout(marker);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedClearTimeout(marker);
+    } catch (e) {
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
+            return cachedClearTimeout.call(null, marker);
+        } catch (e) {
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
+            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
+            return cachedClearTimeout.call(this, marker);
+        }
+    }
+}
+var queue = [];
+var draining = false;
+var currentQueue;
+var queueIndex = -1;
+function cleanUpNextTick() {
+    if (!draining || !currentQueue) return;
+    draining = false;
+    if (currentQueue.length) queue = currentQueue.concat(queue);
+    else queueIndex = -1;
+    if (queue.length) drainQueue();
+}
+function drainQueue() {
+    if (draining) return;
+    var timeout = runTimeout(cleanUpNextTick);
+    draining = true;
+    var len = queue.length;
+    while(len){
+        currentQueue = queue;
+        queue = [];
+        while(++queueIndex < len)if (currentQueue) currentQueue[queueIndex].run();
+        queueIndex = -1;
+        len = queue.length;
+    }
+    currentQueue = null;
+    draining = false;
+    runClearTimeout(timeout);
+}
+process.nextTick = function(fun) {
+    var args = new Array(arguments.length - 1);
+    if (arguments.length > 1) for(var i = 1; i < arguments.length; i++)args[i - 1] = arguments[i];
+    queue.push(new Item(fun, args));
+    if (queue.length === 1 && !draining) runTimeout(drainQueue);
+};
+// v8 likes predictible objects
+function Item(fun, array) {
+    this.fun = fun;
+    this.array = array;
+}
+Item.prototype.run = function() {
+    this.fun.apply(null, this.array);
+};
+process.title = "browser";
+process.browser = true;
+process.env = {};
+process.argv = [];
+process.version = ""; // empty string to avoid regexp issues
+process.versions = {};
+function noop() {}
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+process.prependListener = noop;
+process.prependOnceListener = noop;
+process.listeners = function(name) {
+    return [];
+};
+process.binding = function(name) {
+    throw new Error("process.binding is not supported");
+};
+process.cwd = function() {
+    return "/";
+};
+process.chdir = function(dir) {
+    throw new Error("process.chdir is not supported");
+};
+process.umask = function() {
+    return 0;
+};
+
+},{}],"gkKU3":[function(require,module,exports) {
 exports.interopDefault = function(a) {
     return a && a.__esModule ? a : {
         default: a
@@ -810,7 +4003,436 @@ exports.export = function(dest, destName, get) {
     });
 };
 
-},{}],"SJ4UY":[function(require,module,exports) {
+},{}],"fZmft":[function(require,module,exports) {
+/**
+ * @license
+ * Copyright 2017 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */ /**
+ * A container for all of the Logger instances
+ */ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "LogLevel", ()=>LogLevel);
+parcelHelpers.export(exports, "Logger", ()=>Logger);
+parcelHelpers.export(exports, "setLogLevel", ()=>setLogLevel);
+parcelHelpers.export(exports, "setUserLogHandler", ()=>setUserLogHandler);
+const instances = [];
+/**
+ * The JS SDK supports 5 log levels and also allows a user the ability to
+ * silence the logs altogether.
+ *
+ * The order is a follows:
+ * DEBUG < VERBOSE < INFO < WARN < ERROR
+ *
+ * All of the log types above the current log level will be captured (i.e. if
+ * you set the log level to `INFO`, errors will still be logged, but `DEBUG` and
+ * `VERBOSE` logs will not)
+ */ var LogLevel;
+(function(LogLevel) {
+    LogLevel[LogLevel["DEBUG"] = 0] = "DEBUG";
+    LogLevel[LogLevel["VERBOSE"] = 1] = "VERBOSE";
+    LogLevel[LogLevel["INFO"] = 2] = "INFO";
+    LogLevel[LogLevel["WARN"] = 3] = "WARN";
+    LogLevel[LogLevel["ERROR"] = 4] = "ERROR";
+    LogLevel[LogLevel["SILENT"] = 5] = "SILENT";
+})(LogLevel || (LogLevel = {}));
+const levelStringToEnum = {
+    "debug": LogLevel.DEBUG,
+    "verbose": LogLevel.VERBOSE,
+    "info": LogLevel.INFO,
+    "warn": LogLevel.WARN,
+    "error": LogLevel.ERROR,
+    "silent": LogLevel.SILENT
+};
+/**
+ * The default log level
+ */ const defaultLogLevel = LogLevel.INFO;
+/**
+ * By default, `console.debug` is not displayed in the developer console (in
+ * chrome). To avoid forcing users to have to opt-in to these logs twice
+ * (i.e. once for firebase, and once in the console), we are sending `DEBUG`
+ * logs to the `console.log` function.
+ */ const ConsoleMethod = {
+    [LogLevel.DEBUG]: "log",
+    [LogLevel.VERBOSE]: "log",
+    [LogLevel.INFO]: "info",
+    [LogLevel.WARN]: "warn",
+    [LogLevel.ERROR]: "error"
+};
+/**
+ * The default log handler will forward DEBUG, VERBOSE, INFO, WARN, and ERROR
+ * messages on to their corresponding console counterparts (if the log method
+ * is supported by the current log level)
+ */ const defaultLogHandler = (instance, logType, ...args)=>{
+    if (logType < instance.logLevel) return;
+    const now = new Date().toISOString();
+    const method = ConsoleMethod[logType];
+    if (method) console[method](`[${now}]  ${instance.name}:`, ...args);
+    else throw new Error(`Attempted to log a message with an invalid logType (value: ${logType})`);
+};
+class Logger {
+    /**
+     * Gives you an instance of a Logger to capture messages according to
+     * Firebase's logging scheme.
+     *
+     * @param name The name that the logs will be associated with
+     */ constructor(name){
+        this.name = name;
+        /**
+         * The log level of the given Logger instance.
+         */ this._logLevel = defaultLogLevel;
+        /**
+         * The main (internal) log handler for the Logger instance.
+         * Can be set to a new function in internal package code but not by user.
+         */ this._logHandler = defaultLogHandler;
+        /**
+         * The optional, additional, user-defined log handler for the Logger instance.
+         */ this._userLogHandler = null;
+        /**
+         * Capture the current instance for later use
+         */ instances.push(this);
+    }
+    get logLevel() {
+        return this._logLevel;
+    }
+    set logLevel(val) {
+        if (!(val in LogLevel)) throw new TypeError(`Invalid value "${val}" assigned to \`logLevel\``);
+        this._logLevel = val;
+    }
+    // Workaround for setter/getter having to be the same type.
+    setLogLevel(val) {
+        this._logLevel = typeof val === "string" ? levelStringToEnum[val] : val;
+    }
+    get logHandler() {
+        return this._logHandler;
+    }
+    set logHandler(val) {
+        if (typeof val !== "function") throw new TypeError("Value assigned to `logHandler` must be a function");
+        this._logHandler = val;
+    }
+    get userLogHandler() {
+        return this._userLogHandler;
+    }
+    set userLogHandler(val) {
+        this._userLogHandler = val;
+    }
+    /**
+     * The functions below are all based on the `console` interface
+     */ debug(...args) {
+        this._userLogHandler && this._userLogHandler(this, LogLevel.DEBUG, ...args);
+        this._logHandler(this, LogLevel.DEBUG, ...args);
+    }
+    log(...args) {
+        this._userLogHandler && this._userLogHandler(this, LogLevel.VERBOSE, ...args);
+        this._logHandler(this, LogLevel.VERBOSE, ...args);
+    }
+    info(...args) {
+        this._userLogHandler && this._userLogHandler(this, LogLevel.INFO, ...args);
+        this._logHandler(this, LogLevel.INFO, ...args);
+    }
+    warn(...args) {
+        this._userLogHandler && this._userLogHandler(this, LogLevel.WARN, ...args);
+        this._logHandler(this, LogLevel.WARN, ...args);
+    }
+    error(...args) {
+        this._userLogHandler && this._userLogHandler(this, LogLevel.ERROR, ...args);
+        this._logHandler(this, LogLevel.ERROR, ...args);
+    }
+}
+function setLogLevel(level) {
+    instances.forEach((inst)=>{
+        inst.setLogLevel(level);
+    });
+}
+function setUserLogHandler(logCallback, options) {
+    for (const instance of instances){
+        let customLogLevel = null;
+        if (options && options.level) customLogLevel = levelStringToEnum[options.level];
+        if (logCallback === null) instance.userLogHandler = null;
+        else instance.userLogHandler = (instance, level, ...args)=>{
+            const message = args.map((arg)=>{
+                if (arg == null) return null;
+                else if (typeof arg === "string") return arg;
+                else if (typeof arg === "number" || typeof arg === "boolean") return arg.toString();
+                else if (arg instanceof Error) return arg.message;
+                else try {
+                    return JSON.stringify(arg);
+                } catch (ignored) {
+                    return null;
+                }
+            }).filter((arg)=>arg).join(" ");
+            if (level >= (customLogLevel !== null && customLogLevel !== void 0 ? customLogLevel : instance.logLevel)) logCallback({
+                level: LogLevel[level].toLowerCase(),
+                message,
+                args,
+                type: instance.name
+            });
+        };
+    }
+}
+
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"kozAz":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "unwrap", ()=>(0, _wrapIdbValueJs.u));
+parcelHelpers.export(exports, "wrap", ()=>(0, _wrapIdbValueJs.w));
+parcelHelpers.export(exports, "deleteDB", ()=>deleteDB);
+parcelHelpers.export(exports, "openDB", ()=>openDB);
+var _wrapIdbValueJs = require("./wrap-idb-value.js");
+/**
+ * Open a database.
+ *
+ * @param name Name of the database.
+ * @param version Schema version.
+ * @param callbacks Additional callbacks.
+ */ function openDB(name, version, { blocked, upgrade, blocking, terminated } = {}) {
+    const request = indexedDB.open(name, version);
+    const openPromise = (0, _wrapIdbValueJs.w)(request);
+    if (upgrade) request.addEventListener("upgradeneeded", (event)=>{
+        upgrade((0, _wrapIdbValueJs.w)(request.result), event.oldVersion, event.newVersion, (0, _wrapIdbValueJs.w)(request.transaction), event);
+    });
+    if (blocked) request.addEventListener("blocked", (event)=>blocked(// Casting due to https://github.com/microsoft/TypeScript-DOM-lib-generator/pull/1405
+        event.oldVersion, event.newVersion, event));
+    openPromise.then((db)=>{
+        if (terminated) db.addEventListener("close", ()=>terminated());
+        if (blocking) db.addEventListener("versionchange", (event)=>blocking(event.oldVersion, event.newVersion, event));
+    }).catch(()=>{});
+    return openPromise;
+}
+/**
+ * Delete a database.
+ *
+ * @param name Name of the database.
+ */ function deleteDB(name, { blocked } = {}) {
+    const request = indexedDB.deleteDatabase(name);
+    if (blocked) request.addEventListener("blocked", (event)=>blocked(// Casting due to https://github.com/microsoft/TypeScript-DOM-lib-generator/pull/1405
+        event.oldVersion, event));
+    return (0, _wrapIdbValueJs.w)(request).then(()=>undefined);
+}
+const readMethods = [
+    "get",
+    "getKey",
+    "getAll",
+    "getAllKeys",
+    "count"
+];
+const writeMethods = [
+    "put",
+    "add",
+    "delete",
+    "clear"
+];
+const cachedMethods = new Map();
+function getMethod(target, prop) {
+    if (!(target instanceof IDBDatabase && !(prop in target) && typeof prop === "string")) return;
+    if (cachedMethods.get(prop)) return cachedMethods.get(prop);
+    const targetFuncName = prop.replace(/FromIndex$/, "");
+    const useIndex = prop !== targetFuncName;
+    const isWrite = writeMethods.includes(targetFuncName);
+    if (// Bail if the target doesn't exist on the target. Eg, getAll isn't in Edge.
+    !(targetFuncName in (useIndex ? IDBIndex : IDBObjectStore).prototype) || !(isWrite || readMethods.includes(targetFuncName))) return;
+    const method = async function(storeName, ...args) {
+        // isWrite ? 'readwrite' : undefined gzipps better, but fails in Edge :(
+        const tx = this.transaction(storeName, isWrite ? "readwrite" : "readonly");
+        let target = tx.store;
+        if (useIndex) target = target.index(args.shift());
+        // Must reject if op rejects.
+        // If it's a write operation, must reject if tx.done rejects.
+        // Must reject with op rejection first.
+        // Must resolve with op value.
+        // Must handle both promises (no unhandled rejections)
+        return (await Promise.all([
+            target[targetFuncName](...args),
+            isWrite && tx.done
+        ]))[0];
+    };
+    cachedMethods.set(prop, method);
+    return method;
+}
+(0, _wrapIdbValueJs.r)((oldTraps)=>({
+        ...oldTraps,
+        get: (target, prop, receiver)=>getMethod(target, prop) || oldTraps.get(target, prop, receiver),
+        has: (target, prop)=>!!getMethod(target, prop) || oldTraps.has(target, prop)
+    }));
+
+},{"./wrap-idb-value.js":"lS54k","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"lS54k":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "a", ()=>reverseTransformCache);
+parcelHelpers.export(exports, "i", ()=>instanceOfAny);
+parcelHelpers.export(exports, "r", ()=>replaceTraps);
+parcelHelpers.export(exports, "u", ()=>unwrap);
+parcelHelpers.export(exports, "w", ()=>wrap);
+const instanceOfAny = (object, constructors)=>constructors.some((c)=>object instanceof c);
+let idbProxyableTypes;
+let cursorAdvanceMethods;
+// This is a function to prevent it throwing up in node environments.
+function getIdbProxyableTypes() {
+    return idbProxyableTypes || (idbProxyableTypes = [
+        IDBDatabase,
+        IDBObjectStore,
+        IDBIndex,
+        IDBCursor,
+        IDBTransaction
+    ]);
+}
+// This is a function to prevent it throwing up in node environments.
+function getCursorAdvanceMethods() {
+    return cursorAdvanceMethods || (cursorAdvanceMethods = [
+        IDBCursor.prototype.advance,
+        IDBCursor.prototype.continue,
+        IDBCursor.prototype.continuePrimaryKey
+    ]);
+}
+const cursorRequestMap = new WeakMap();
+const transactionDoneMap = new WeakMap();
+const transactionStoreNamesMap = new WeakMap();
+const transformCache = new WeakMap();
+const reverseTransformCache = new WeakMap();
+function promisifyRequest(request) {
+    const promise = new Promise((resolve, reject)=>{
+        const unlisten = ()=>{
+            request.removeEventListener("success", success);
+            request.removeEventListener("error", error);
+        };
+        const success = ()=>{
+            resolve(wrap(request.result));
+            unlisten();
+        };
+        const error = ()=>{
+            reject(request.error);
+            unlisten();
+        };
+        request.addEventListener("success", success);
+        request.addEventListener("error", error);
+    });
+    promise.then((value)=>{
+        // Since cursoring reuses the IDBRequest (*sigh*), we cache it for later retrieval
+        // (see wrapFunction).
+        if (value instanceof IDBCursor) cursorRequestMap.set(value, request);
+    // Catching to avoid "Uncaught Promise exceptions"
+    }).catch(()=>{});
+    // This mapping exists in reverseTransformCache but doesn't doesn't exist in transformCache. This
+    // is because we create many promises from a single IDBRequest.
+    reverseTransformCache.set(promise, request);
+    return promise;
+}
+function cacheDonePromiseForTransaction(tx) {
+    // Early bail if we've already created a done promise for this transaction.
+    if (transactionDoneMap.has(tx)) return;
+    const done = new Promise((resolve, reject)=>{
+        const unlisten = ()=>{
+            tx.removeEventListener("complete", complete);
+            tx.removeEventListener("error", error);
+            tx.removeEventListener("abort", error);
+        };
+        const complete = ()=>{
+            resolve();
+            unlisten();
+        };
+        const error = ()=>{
+            reject(tx.error || new DOMException("AbortError", "AbortError"));
+            unlisten();
+        };
+        tx.addEventListener("complete", complete);
+        tx.addEventListener("error", error);
+        tx.addEventListener("abort", error);
+    });
+    // Cache it for later retrieval.
+    transactionDoneMap.set(tx, done);
+}
+let idbProxyTraps = {
+    get (target, prop, receiver) {
+        if (target instanceof IDBTransaction) {
+            // Special handling for transaction.done.
+            if (prop === "done") return transactionDoneMap.get(target);
+            // Polyfill for objectStoreNames because of Edge.
+            if (prop === "objectStoreNames") return target.objectStoreNames || transactionStoreNamesMap.get(target);
+            // Make tx.store return the only store in the transaction, or undefined if there are many.
+            if (prop === "store") return receiver.objectStoreNames[1] ? undefined : receiver.objectStore(receiver.objectStoreNames[0]);
+        }
+        // Else transform whatever we get back.
+        return wrap(target[prop]);
+    },
+    set (target, prop, value) {
+        target[prop] = value;
+        return true;
+    },
+    has (target, prop) {
+        if (target instanceof IDBTransaction && (prop === "done" || prop === "store")) return true;
+        return prop in target;
+    }
+};
+function replaceTraps(callback) {
+    idbProxyTraps = callback(idbProxyTraps);
+}
+function wrapFunction(func) {
+    // Due to expected object equality (which is enforced by the caching in `wrap`), we
+    // only create one new func per func.
+    // Edge doesn't support objectStoreNames (booo), so we polyfill it here.
+    if (func === IDBDatabase.prototype.transaction && !("objectStoreNames" in IDBTransaction.prototype)) return function(storeNames, ...args) {
+        const tx = func.call(unwrap(this), storeNames, ...args);
+        transactionStoreNamesMap.set(tx, storeNames.sort ? storeNames.sort() : [
+            storeNames
+        ]);
+        return wrap(tx);
+    };
+    // Cursor methods are special, as the behaviour is a little more different to standard IDB. In
+    // IDB, you advance the cursor and wait for a new 'success' on the IDBRequest that gave you the
+    // cursor. It's kinda like a promise that can resolve with many values. That doesn't make sense
+    // with real promises, so each advance methods returns a new promise for the cursor object, or
+    // undefined if the end of the cursor has been reached.
+    if (getCursorAdvanceMethods().includes(func)) return function(...args) {
+        // Calling the original function with the proxy as 'this' causes ILLEGAL INVOCATION, so we use
+        // the original object.
+        func.apply(unwrap(this), args);
+        return wrap(cursorRequestMap.get(this));
+    };
+    return function(...args) {
+        // Calling the original function with the proxy as 'this' causes ILLEGAL INVOCATION, so we use
+        // the original object.
+        return wrap(func.apply(unwrap(this), args));
+    };
+}
+function transformCachableValue(value) {
+    if (typeof value === "function") return wrapFunction(value);
+    // This doesn't return, it just creates a 'done' promise for the transaction,
+    // which is later returned for transaction.done (see idbObjectHandler).
+    if (value instanceof IDBTransaction) cacheDonePromiseForTransaction(value);
+    if (instanceOfAny(value, getIdbProxyableTypes())) return new Proxy(value, idbProxyTraps);
+    // Return the same value back if we're not going to transform it.
+    return value;
+}
+function wrap(value) {
+    // We sometimes generate multiple promises from a single IDBRequest (eg when cursoring), because
+    // IDB is weird and a single IDBRequest can yield many responses, so these can't be cached.
+    if (value instanceof IDBRequest) return promisifyRequest(value);
+    // If we've already transformed this value before, reuse the transformed value.
+    // This is faster, but it also provides object equality.
+    if (transformCache.has(value)) return transformCache.get(value);
+    const newValue = transformCachableValue(value);
+    // Not all types are transformed.
+    // These may be primitive types, so they can't be WeakMap keys.
+    if (newValue !== value) {
+        transformCache.set(value, newValue);
+        reverseTransformCache.set(newValue, value);
+    }
+    return newValue;
+}
+const unwrap = (value)=>reverseTransformCache.get(value);
+
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"SJ4UY":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 var _database = require("@firebase/database");
@@ -12065,3581 +15687,7 @@ RepoInfo;
  * @packageDocumentation
  */ registerDatabase();
 
-},{"6b38617303e2f7b9":"d5jf4","@firebase/app":"3AcPV","@firebase/component":"bi1VB","@firebase/util":"ePiK6","@firebase/logger":"fZmft","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"d5jf4":[function(require,module,exports) {
-// shim for using process in browser
-var process = module.exports = {};
-// cached from whatever global is present so that test runners that stub it
-// don't break things.  But we need to wrap it in a try catch in case it is
-// wrapped in strict mode code which doesn't define any globals.  It's inside a
-// function because try/catches deoptimize in certain engines.
-var cachedSetTimeout;
-var cachedClearTimeout;
-function defaultSetTimout() {
-    throw new Error("setTimeout has not been defined");
-}
-function defaultClearTimeout() {
-    throw new Error("clearTimeout has not been defined");
-}
-(function() {
-    try {
-        if (typeof setTimeout === "function") cachedSetTimeout = setTimeout;
-        else cachedSetTimeout = defaultSetTimout;
-    } catch (e) {
-        cachedSetTimeout = defaultSetTimout;
-    }
-    try {
-        if (typeof clearTimeout === "function") cachedClearTimeout = clearTimeout;
-        else cachedClearTimeout = defaultClearTimeout;
-    } catch (e) {
-        cachedClearTimeout = defaultClearTimeout;
-    }
-})();
-function runTimeout(fun) {
-    if (cachedSetTimeout === setTimeout) //normal enviroments in sane situations
-    return setTimeout(fun, 0);
-    // if setTimeout wasn't available but was latter defined
-    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
-        cachedSetTimeout = setTimeout;
-        return setTimeout(fun, 0);
-    }
-    try {
-        // when when somebody has screwed with setTimeout but no I.E. maddness
-        return cachedSetTimeout(fun, 0);
-    } catch (e) {
-        try {
-            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
-            return cachedSetTimeout.call(null, fun, 0);
-        } catch (e) {
-            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
-            return cachedSetTimeout.call(this, fun, 0);
-        }
-    }
-}
-function runClearTimeout(marker) {
-    if (cachedClearTimeout === clearTimeout) //normal enviroments in sane situations
-    return clearTimeout(marker);
-    // if clearTimeout wasn't available but was latter defined
-    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
-        cachedClearTimeout = clearTimeout;
-        return clearTimeout(marker);
-    }
-    try {
-        // when when somebody has screwed with setTimeout but no I.E. maddness
-        return cachedClearTimeout(marker);
-    } catch (e) {
-        try {
-            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
-            return cachedClearTimeout.call(null, marker);
-        } catch (e) {
-            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
-            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
-            return cachedClearTimeout.call(this, marker);
-        }
-    }
-}
-var queue = [];
-var draining = false;
-var currentQueue;
-var queueIndex = -1;
-function cleanUpNextTick() {
-    if (!draining || !currentQueue) return;
-    draining = false;
-    if (currentQueue.length) queue = currentQueue.concat(queue);
-    else queueIndex = -1;
-    if (queue.length) drainQueue();
-}
-function drainQueue() {
-    if (draining) return;
-    var timeout = runTimeout(cleanUpNextTick);
-    draining = true;
-    var len = queue.length;
-    while(len){
-        currentQueue = queue;
-        queue = [];
-        while(++queueIndex < len)if (currentQueue) currentQueue[queueIndex].run();
-        queueIndex = -1;
-        len = queue.length;
-    }
-    currentQueue = null;
-    draining = false;
-    runClearTimeout(timeout);
-}
-process.nextTick = function(fun) {
-    var args = new Array(arguments.length - 1);
-    if (arguments.length > 1) for(var i = 1; i < arguments.length; i++)args[i - 1] = arguments[i];
-    queue.push(new Item(fun, args));
-    if (queue.length === 1 && !draining) runTimeout(drainQueue);
-};
-// v8 likes predictible objects
-function Item(fun, array) {
-    this.fun = fun;
-    this.array = array;
-}
-Item.prototype.run = function() {
-    this.fun.apply(null, this.array);
-};
-process.title = "browser";
-process.browser = true;
-process.env = {};
-process.argv = [];
-process.version = ""; // empty string to avoid regexp issues
-process.versions = {};
-function noop() {}
-process.on = noop;
-process.addListener = noop;
-process.once = noop;
-process.off = noop;
-process.removeListener = noop;
-process.removeAllListeners = noop;
-process.emit = noop;
-process.prependListener = noop;
-process.prependOnceListener = noop;
-process.listeners = function(name) {
-    return [];
-};
-process.binding = function(name) {
-    throw new Error("process.binding is not supported");
-};
-process.cwd = function() {
-    return "/";
-};
-process.chdir = function(dir) {
-    throw new Error("process.chdir is not supported");
-};
-process.umask = function() {
-    return 0;
-};
-
-},{}],"3AcPV":[function(require,module,exports) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "FirebaseError", ()=>(0, _util.FirebaseError));
-parcelHelpers.export(exports, "SDK_VERSION", ()=>SDK_VERSION);
-parcelHelpers.export(exports, "_DEFAULT_ENTRY_NAME", ()=>DEFAULT_ENTRY_NAME);
-parcelHelpers.export(exports, "_addComponent", ()=>_addComponent);
-parcelHelpers.export(exports, "_addOrOverwriteComponent", ()=>_addOrOverwriteComponent);
-parcelHelpers.export(exports, "_apps", ()=>_apps);
-parcelHelpers.export(exports, "_clearComponents", ()=>_clearComponents);
-parcelHelpers.export(exports, "_components", ()=>_components);
-parcelHelpers.export(exports, "_getProvider", ()=>_getProvider);
-parcelHelpers.export(exports, "_registerComponent", ()=>_registerComponent);
-parcelHelpers.export(exports, "_removeServiceInstance", ()=>_removeServiceInstance);
-parcelHelpers.export(exports, "deleteApp", ()=>deleteApp);
-parcelHelpers.export(exports, "getApp", ()=>getApp);
-parcelHelpers.export(exports, "getApps", ()=>getApps);
-parcelHelpers.export(exports, "initializeApp", ()=>initializeApp);
-parcelHelpers.export(exports, "onLog", ()=>onLog);
-parcelHelpers.export(exports, "registerVersion", ()=>registerVersion);
-parcelHelpers.export(exports, "setLogLevel", ()=>setLogLevel);
-var _component = require("@firebase/component");
-var _logger = require("@firebase/logger");
-var _util = require("@firebase/util");
-var _idb = require("idb");
-/**
- * @license
- * Copyright 2019 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ class PlatformLoggerServiceImpl {
-    constructor(container){
-        this.container = container;
-    }
-    // In initial implementation, this will be called by installations on
-    // auth token refresh, and installations will send this string.
-    getPlatformInfoString() {
-        const providers = this.container.getProviders();
-        // Loop through providers and get library/version pairs from any that are
-        // version components.
-        return providers.map((provider)=>{
-            if (isVersionServiceProvider(provider)) {
-                const service = provider.getImmediate();
-                return `${service.library}/${service.version}`;
-            } else return null;
-        }).filter((logString)=>logString).join(" ");
-    }
-}
-/**
- *
- * @param provider check if this provider provides a VersionService
- *
- * NOTE: Using Provider<'app-version'> is a hack to indicate that the provider
- * provides VersionService. The provider is not necessarily a 'app-version'
- * provider.
- */ function isVersionServiceProvider(provider) {
-    const component = provider.getComponent();
-    return (component === null || component === void 0 ? void 0 : component.type) === "VERSION" /* ComponentType.VERSION */ ;
-}
-const name$o = "@firebase/app";
-const version$1 = "0.9.25";
-/**
- * @license
- * Copyright 2019 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ const logger = new (0, _logger.Logger)("@firebase/app");
-const name$n = "@firebase/app-compat";
-const name$m = "@firebase/analytics-compat";
-const name$l = "@firebase/analytics";
-const name$k = "@firebase/app-check-compat";
-const name$j = "@firebase/app-check";
-const name$i = "@firebase/auth";
-const name$h = "@firebase/auth-compat";
-const name$g = "@firebase/database";
-const name$f = "@firebase/database-compat";
-const name$e = "@firebase/functions";
-const name$d = "@firebase/functions-compat";
-const name$c = "@firebase/installations";
-const name$b = "@firebase/installations-compat";
-const name$a = "@firebase/messaging";
-const name$9 = "@firebase/messaging-compat";
-const name$8 = "@firebase/performance";
-const name$7 = "@firebase/performance-compat";
-const name$6 = "@firebase/remote-config";
-const name$5 = "@firebase/remote-config-compat";
-const name$4 = "@firebase/storage";
-const name$3 = "@firebase/storage-compat";
-const name$2 = "@firebase/firestore";
-const name$1 = "@firebase/firestore-compat";
-const name = "firebase";
-const version = "10.7.1";
-/**
- * @license
- * Copyright 2019 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * The default app name
- *
- * @internal
- */ const DEFAULT_ENTRY_NAME = "[DEFAULT]";
-const PLATFORM_LOG_STRING = {
-    [name$o]: "fire-core",
-    [name$n]: "fire-core-compat",
-    [name$l]: "fire-analytics",
-    [name$m]: "fire-analytics-compat",
-    [name$j]: "fire-app-check",
-    [name$k]: "fire-app-check-compat",
-    [name$i]: "fire-auth",
-    [name$h]: "fire-auth-compat",
-    [name$g]: "fire-rtdb",
-    [name$f]: "fire-rtdb-compat",
-    [name$e]: "fire-fn",
-    [name$d]: "fire-fn-compat",
-    [name$c]: "fire-iid",
-    [name$b]: "fire-iid-compat",
-    [name$a]: "fire-fcm",
-    [name$9]: "fire-fcm-compat",
-    [name$8]: "fire-perf",
-    [name$7]: "fire-perf-compat",
-    [name$6]: "fire-rc",
-    [name$5]: "fire-rc-compat",
-    [name$4]: "fire-gcs",
-    [name$3]: "fire-gcs-compat",
-    [name$2]: "fire-fst",
-    [name$1]: "fire-fst-compat",
-    "fire-js": "fire-js",
-    [name]: "fire-js-all"
-};
-/**
- * @license
- * Copyright 2019 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * @internal
- */ const _apps = new Map();
-/**
- * Registered components.
- *
- * @internal
- */ // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _components = new Map();
-/**
- * @param component - the component being added to this app's container
- *
- * @internal
- */ function _addComponent(app, component) {
-    try {
-        app.container.addComponent(component);
-    } catch (e) {
-        logger.debug(`Component ${component.name} failed to register with FirebaseApp ${app.name}`, e);
-    }
-}
-/**
- *
- * @internal
- */ function _addOrOverwriteComponent(app, component) {
-    app.container.addOrOverwriteComponent(component);
-}
-/**
- *
- * @param component - the component to register
- * @returns whether or not the component is registered successfully
- *
- * @internal
- */ function _registerComponent(component) {
-    const componentName = component.name;
-    if (_components.has(componentName)) {
-        logger.debug(`There were multiple attempts to register component ${componentName}.`);
-        return false;
-    }
-    _components.set(componentName, component);
-    // add the component to existing app instances
-    for (const app of _apps.values())_addComponent(app, component);
-    return true;
-}
-/**
- *
- * @param app - FirebaseApp instance
- * @param name - service name
- *
- * @returns the provider for the service with the matching name
- *
- * @internal
- */ function _getProvider(app, name) {
-    const heartbeatController = app.container.getProvider("heartbeat").getImmediate({
-        optional: true
-    });
-    if (heartbeatController) heartbeatController.triggerHeartbeat();
-    return app.container.getProvider(name);
-}
-/**
- *
- * @param app - FirebaseApp instance
- * @param name - service name
- * @param instanceIdentifier - service instance identifier in case the service supports multiple instances
- *
- * @internal
- */ function _removeServiceInstance(app, name, instanceIdentifier = DEFAULT_ENTRY_NAME) {
-    _getProvider(app, name).clearInstance(instanceIdentifier);
-}
-/**
- * Test only
- *
- * @internal
- */ function _clearComponents() {
-    _components.clear();
-}
-/**
- * @license
- * Copyright 2019 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ const ERRORS = {
-    ["no-app" /* AppError.NO_APP */ ]: "No Firebase App '{$appName}' has been created - call initializeApp() first",
-    ["bad-app-name" /* AppError.BAD_APP_NAME */ ]: "Illegal App name: '{$appName}",
-    ["duplicate-app" /* AppError.DUPLICATE_APP */ ]: "Firebase App named '{$appName}' already exists with different options or config",
-    ["app-deleted" /* AppError.APP_DELETED */ ]: "Firebase App named '{$appName}' already deleted",
-    ["no-options" /* AppError.NO_OPTIONS */ ]: "Need to provide options, when not being deployed to hosting via source.",
-    ["invalid-app-argument" /* AppError.INVALID_APP_ARGUMENT */ ]: "firebase.{$appName}() takes either no argument or a Firebase App instance.",
-    ["invalid-log-argument" /* AppError.INVALID_LOG_ARGUMENT */ ]: "First argument to `onLog` must be null or a function.",
-    ["idb-open" /* AppError.IDB_OPEN */ ]: "Error thrown when opening IndexedDB. Original error: {$originalErrorMessage}.",
-    ["idb-get" /* AppError.IDB_GET */ ]: "Error thrown when reading from IndexedDB. Original error: {$originalErrorMessage}.",
-    ["idb-set" /* AppError.IDB_WRITE */ ]: "Error thrown when writing to IndexedDB. Original error: {$originalErrorMessage}.",
-    ["idb-delete" /* AppError.IDB_DELETE */ ]: "Error thrown when deleting from IndexedDB. Original error: {$originalErrorMessage}."
-};
-const ERROR_FACTORY = new (0, _util.ErrorFactory)("app", "Firebase", ERRORS);
-/**
- * @license
- * Copyright 2019 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ class FirebaseAppImpl {
-    constructor(options, config, container){
-        this._isDeleted = false;
-        this._options = Object.assign({}, options);
-        this._config = Object.assign({}, config);
-        this._name = config.name;
-        this._automaticDataCollectionEnabled = config.automaticDataCollectionEnabled;
-        this._container = container;
-        this.container.addComponent(new (0, _component.Component)("app", ()=>this, "PUBLIC" /* ComponentType.PUBLIC */ ));
-    }
-    get automaticDataCollectionEnabled() {
-        this.checkDestroyed();
-        return this._automaticDataCollectionEnabled;
-    }
-    set automaticDataCollectionEnabled(val) {
-        this.checkDestroyed();
-        this._automaticDataCollectionEnabled = val;
-    }
-    get name() {
-        this.checkDestroyed();
-        return this._name;
-    }
-    get options() {
-        this.checkDestroyed();
-        return this._options;
-    }
-    get config() {
-        this.checkDestroyed();
-        return this._config;
-    }
-    get container() {
-        return this._container;
-    }
-    get isDeleted() {
-        return this._isDeleted;
-    }
-    set isDeleted(val) {
-        this._isDeleted = val;
-    }
-    /**
-     * This function will throw an Error if the App has already been deleted -
-     * use before performing API actions on the App.
-     */ checkDestroyed() {
-        if (this.isDeleted) throw ERROR_FACTORY.create("app-deleted" /* AppError.APP_DELETED */ , {
-            appName: this._name
-        });
-    }
-}
-/**
- * @license
- * Copyright 2019 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * The current SDK version.
- *
- * @public
- */ const SDK_VERSION = version;
-function initializeApp(_options, rawConfig = {}) {
-    let options = _options;
-    if (typeof rawConfig !== "object") {
-        const name = rawConfig;
-        rawConfig = {
-            name
-        };
-    }
-    const config = Object.assign({
-        name: DEFAULT_ENTRY_NAME,
-        automaticDataCollectionEnabled: false
-    }, rawConfig);
-    const name = config.name;
-    if (typeof name !== "string" || !name) throw ERROR_FACTORY.create("bad-app-name" /* AppError.BAD_APP_NAME */ , {
-        appName: String(name)
-    });
-    options || (options = (0, _util.getDefaultAppConfig)());
-    if (!options) throw ERROR_FACTORY.create("no-options" /* AppError.NO_OPTIONS */ );
-    const existingApp = _apps.get(name);
-    if (existingApp) {
-        // return the existing app if options and config deep equal the ones in the existing app.
-        if ((0, _util.deepEqual)(options, existingApp.options) && (0, _util.deepEqual)(config, existingApp.config)) return existingApp;
-        else throw ERROR_FACTORY.create("duplicate-app" /* AppError.DUPLICATE_APP */ , {
-            appName: name
-        });
-    }
-    const container = new (0, _component.ComponentContainer)(name);
-    for (const component of _components.values())container.addComponent(component);
-    const newApp = new FirebaseAppImpl(options, config, container);
-    _apps.set(name, newApp);
-    return newApp;
-}
-/**
- * Retrieves a {@link @firebase/app#FirebaseApp} instance.
- *
- * When called with no arguments, the default app is returned. When an app name
- * is provided, the app corresponding to that name is returned.
- *
- * An exception is thrown if the app being retrieved has not yet been
- * initialized.
- *
- * @example
- * ```javascript
- * // Return the default app
- * const app = getApp();
- * ```
- *
- * @example
- * ```javascript
- * // Return a named app
- * const otherApp = getApp("otherApp");
- * ```
- *
- * @param name - Optional name of the app to return. If no name is
- *   provided, the default is `"[DEFAULT]"`.
- *
- * @returns The app corresponding to the provided app name.
- *   If no app name is provided, the default app is returned.
- *
- * @public
- */ function getApp(name = DEFAULT_ENTRY_NAME) {
-    const app = _apps.get(name);
-    if (!app && name === DEFAULT_ENTRY_NAME && (0, _util.getDefaultAppConfig)()) return initializeApp();
-    if (!app) throw ERROR_FACTORY.create("no-app" /* AppError.NO_APP */ , {
-        appName: name
-    });
-    return app;
-}
-/**
- * A (read-only) array of all initialized apps.
- * @public
- */ function getApps() {
-    return Array.from(_apps.values());
-}
-/**
- * Renders this app unusable and frees the resources of all associated
- * services.
- *
- * @example
- * ```javascript
- * deleteApp(app)
- *   .then(function() {
- *     console.log("App deleted successfully");
- *   })
- *   .catch(function(error) {
- *     console.log("Error deleting app:", error);
- *   });
- * ```
- *
- * @public
- */ async function deleteApp(app) {
-    const name = app.name;
-    if (_apps.has(name)) {
-        _apps.delete(name);
-        await Promise.all(app.container.getProviders().map((provider)=>provider.delete()));
-        app.isDeleted = true;
-    }
-}
-/**
- * Registers a library's name and version for platform logging purposes.
- * @param library - Name of 1p or 3p library (e.g. firestore, angularfire)
- * @param version - Current version of that library.
- * @param variant - Bundle variant, e.g., node, rn, etc.
- *
- * @public
- */ function registerVersion(libraryKeyOrName, version, variant) {
-    var _a;
-    // TODO: We can use this check to whitelist strings when/if we set up
-    // a good whitelist system.
-    let library = (_a = PLATFORM_LOG_STRING[libraryKeyOrName]) !== null && _a !== void 0 ? _a : libraryKeyOrName;
-    if (variant) library += `-${variant}`;
-    const libraryMismatch = library.match(/\s|\//);
-    const versionMismatch = version.match(/\s|\//);
-    if (libraryMismatch || versionMismatch) {
-        const warning = [
-            `Unable to register library "${library}" with version "${version}":`
-        ];
-        if (libraryMismatch) warning.push(`library name "${library}" contains illegal characters (whitespace or "/")`);
-        if (libraryMismatch && versionMismatch) warning.push("and");
-        if (versionMismatch) warning.push(`version name "${version}" contains illegal characters (whitespace or "/")`);
-        logger.warn(warning.join(" "));
-        return;
-    }
-    _registerComponent(new (0, _component.Component)(`${library}-version`, ()=>({
-            library,
-            version
-        }), "VERSION" /* ComponentType.VERSION */ ));
-}
-/**
- * Sets log handler for all Firebase SDKs.
- * @param logCallback - An optional custom log handler that executes user code whenever
- * the Firebase SDK makes a logging call.
- *
- * @public
- */ function onLog(logCallback, options) {
-    if (logCallback !== null && typeof logCallback !== "function") throw ERROR_FACTORY.create("invalid-log-argument" /* AppError.INVALID_LOG_ARGUMENT */ );
-    (0, _logger.setUserLogHandler)(logCallback, options);
-}
-/**
- * Sets log level for all Firebase SDKs.
- *
- * All of the log types above the current log level are captured (i.e. if
- * you set the log level to `info`, errors are logged, but `debug` and
- * `verbose` logs are not).
- *
- * @public
- */ function setLogLevel(logLevel) {
-    (0, _logger.setLogLevel)(logLevel);
-}
-/**
- * @license
- * Copyright 2021 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ const DB_NAME = "firebase-heartbeat-database";
-const DB_VERSION = 1;
-const STORE_NAME = "firebase-heartbeat-store";
-let dbPromise = null;
-function getDbPromise() {
-    if (!dbPromise) dbPromise = (0, _idb.openDB)(DB_NAME, DB_VERSION, {
-        upgrade: (db, oldVersion)=>{
-            // We don't use 'break' in this switch statement, the fall-through
-            // behavior is what we want, because if there are multiple versions between
-            // the old version and the current version, we want ALL the migrations
-            // that correspond to those versions to run, not only the last one.
-            // eslint-disable-next-line default-case
-            switch(oldVersion){
-                case 0:
-                    db.createObjectStore(STORE_NAME);
-            }
-        }
-    }).catch((e)=>{
-        throw ERROR_FACTORY.create("idb-open" /* AppError.IDB_OPEN */ , {
-            originalErrorMessage: e.message
-        });
-    });
-    return dbPromise;
-}
-async function readHeartbeatsFromIndexedDB(app) {
-    try {
-        const db = await getDbPromise();
-        const result = await db.transaction(STORE_NAME).objectStore(STORE_NAME).get(computeKey(app));
-        return result;
-    } catch (e) {
-        if (e instanceof (0, _util.FirebaseError)) logger.warn(e.message);
-        else {
-            const idbGetError = ERROR_FACTORY.create("idb-get" /* AppError.IDB_GET */ , {
-                originalErrorMessage: e === null || e === void 0 ? void 0 : e.message
-            });
-            logger.warn(idbGetError.message);
-        }
-    }
-}
-async function writeHeartbeatsToIndexedDB(app, heartbeatObject) {
-    try {
-        const db = await getDbPromise();
-        const tx = db.transaction(STORE_NAME, "readwrite");
-        const objectStore = tx.objectStore(STORE_NAME);
-        await objectStore.put(heartbeatObject, computeKey(app));
-        await tx.done;
-    } catch (e) {
-        if (e instanceof (0, _util.FirebaseError)) logger.warn(e.message);
-        else {
-            const idbGetError = ERROR_FACTORY.create("idb-set" /* AppError.IDB_WRITE */ , {
-                originalErrorMessage: e === null || e === void 0 ? void 0 : e.message
-            });
-            logger.warn(idbGetError.message);
-        }
-    }
-}
-function computeKey(app) {
-    return `${app.name}!${app.options.appId}`;
-}
-/**
- * @license
- * Copyright 2021 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ const MAX_HEADER_BYTES = 1024;
-// 30 days
-const STORED_HEARTBEAT_RETENTION_MAX_MILLIS = 2592000000;
-class HeartbeatServiceImpl {
-    constructor(container){
-        this.container = container;
-        /**
-         * In-memory cache for heartbeats, used by getHeartbeatsHeader() to generate
-         * the header string.
-         * Stores one record per date. This will be consolidated into the standard
-         * format of one record per user agent string before being sent as a header.
-         * Populated from indexedDB when the controller is instantiated and should
-         * be kept in sync with indexedDB.
-         * Leave public for easier testing.
-         */ this._heartbeatsCache = null;
-        const app = this.container.getProvider("app").getImmediate();
-        this._storage = new HeartbeatStorageImpl(app);
-        this._heartbeatsCachePromise = this._storage.read().then((result)=>{
-            this._heartbeatsCache = result;
-            return result;
-        });
-    }
-    /**
-     * Called to report a heartbeat. The function will generate
-     * a HeartbeatsByUserAgent object, update heartbeatsCache, and persist it
-     * to IndexedDB.
-     * Note that we only store one heartbeat per day. So if a heartbeat for today is
-     * already logged, subsequent calls to this function in the same day will be ignored.
-     */ async triggerHeartbeat() {
-        var _a, _b;
-        const platformLogger = this.container.getProvider("platform-logger").getImmediate();
-        // This is the "Firebase user agent" string from the platform logger
-        // service, not the browser user agent.
-        const agent = platformLogger.getPlatformInfoString();
-        const date = getUTCDateString();
-        if (((_a = this._heartbeatsCache) === null || _a === void 0 ? void 0 : _a.heartbeats) == null) {
-            this._heartbeatsCache = await this._heartbeatsCachePromise;
-            // If we failed to construct a heartbeats cache, then return immediately.
-            if (((_b = this._heartbeatsCache) === null || _b === void 0 ? void 0 : _b.heartbeats) == null) return;
-        }
-        // Do not store a heartbeat if one is already stored for this day
-        // or if a header has already been sent today.
-        if (this._heartbeatsCache.lastSentHeartbeatDate === date || this._heartbeatsCache.heartbeats.some((singleDateHeartbeat)=>singleDateHeartbeat.date === date)) return;
-        else // There is no entry for this date. Create one.
-        this._heartbeatsCache.heartbeats.push({
-            date,
-            agent
-        });
-        // Remove entries older than 30 days.
-        this._heartbeatsCache.heartbeats = this._heartbeatsCache.heartbeats.filter((singleDateHeartbeat)=>{
-            const hbTimestamp = new Date(singleDateHeartbeat.date).valueOf();
-            const now = Date.now();
-            return now - hbTimestamp <= STORED_HEARTBEAT_RETENTION_MAX_MILLIS;
-        });
-        return this._storage.overwrite(this._heartbeatsCache);
-    }
-    /**
-     * Returns a base64 encoded string which can be attached to the heartbeat-specific header directly.
-     * It also clears all heartbeats from memory as well as in IndexedDB.
-     *
-     * NOTE: Consuming product SDKs should not send the header if this method
-     * returns an empty string.
-     */ async getHeartbeatsHeader() {
-        var _a;
-        if (this._heartbeatsCache === null) await this._heartbeatsCachePromise;
-        // If it's still null or the array is empty, there is no data to send.
-        if (((_a = this._heartbeatsCache) === null || _a === void 0 ? void 0 : _a.heartbeats) == null || this._heartbeatsCache.heartbeats.length === 0) return "";
-        const date = getUTCDateString();
-        // Extract as many heartbeats from the cache as will fit under the size limit.
-        const { heartbeatsToSend, unsentEntries } = extractHeartbeatsForHeader(this._heartbeatsCache.heartbeats);
-        const headerString = (0, _util.base64urlEncodeWithoutPadding)(JSON.stringify({
-            version: 2,
-            heartbeats: heartbeatsToSend
-        }));
-        // Store last sent date to prevent another being logged/sent for the same day.
-        this._heartbeatsCache.lastSentHeartbeatDate = date;
-        if (unsentEntries.length > 0) {
-            // Store any unsent entries if they exist.
-            this._heartbeatsCache.heartbeats = unsentEntries;
-            // This seems more likely than emptying the array (below) to lead to some odd state
-            // since the cache isn't empty and this will be called again on the next request,
-            // and is probably safest if we await it.
-            await this._storage.overwrite(this._heartbeatsCache);
-        } else {
-            this._heartbeatsCache.heartbeats = [];
-            // Do not wait for this, to reduce latency.
-            this._storage.overwrite(this._heartbeatsCache);
-        }
-        return headerString;
-    }
-}
-function getUTCDateString() {
-    const today = new Date();
-    // Returns date format 'YYYY-MM-DD'
-    return today.toISOString().substring(0, 10);
-}
-function extractHeartbeatsForHeader(heartbeatsCache, maxSize = MAX_HEADER_BYTES) {
-    // Heartbeats grouped by user agent in the standard format to be sent in
-    // the header.
-    const heartbeatsToSend = [];
-    // Single date format heartbeats that are not sent.
-    let unsentEntries = heartbeatsCache.slice();
-    for (const singleDateHeartbeat of heartbeatsCache){
-        // Look for an existing entry with the same user agent.
-        const heartbeatEntry = heartbeatsToSend.find((hb)=>hb.agent === singleDateHeartbeat.agent);
-        if (!heartbeatEntry) {
-            // If no entry for this user agent exists, create one.
-            heartbeatsToSend.push({
-                agent: singleDateHeartbeat.agent,
-                dates: [
-                    singleDateHeartbeat.date
-                ]
-            });
-            if (countBytes(heartbeatsToSend) > maxSize) {
-                // If the header would exceed max size, remove the added heartbeat
-                // entry and stop adding to the header.
-                heartbeatsToSend.pop();
-                break;
-            }
-        } else {
-            heartbeatEntry.dates.push(singleDateHeartbeat.date);
-            // If the header would exceed max size, remove the added date
-            // and stop adding to the header.
-            if (countBytes(heartbeatsToSend) > maxSize) {
-                heartbeatEntry.dates.pop();
-                break;
-            }
-        }
-        // Pop unsent entry from queue. (Skipped if adding the entry exceeded
-        // quota and the loop breaks early.)
-        unsentEntries = unsentEntries.slice(1);
-    }
-    return {
-        heartbeatsToSend,
-        unsentEntries
-    };
-}
-class HeartbeatStorageImpl {
-    constructor(app){
-        this.app = app;
-        this._canUseIndexedDBPromise = this.runIndexedDBEnvironmentCheck();
-    }
-    async runIndexedDBEnvironmentCheck() {
-        if (!(0, _util.isIndexedDBAvailable)()) return false;
-        else return (0, _util.validateIndexedDBOpenable)().then(()=>true).catch(()=>false);
-    }
-    /**
-     * Read all heartbeats.
-     */ async read() {
-        const canUseIndexedDB = await this._canUseIndexedDBPromise;
-        if (!canUseIndexedDB) return {
-            heartbeats: []
-        };
-        else {
-            const idbHeartbeatObject = await readHeartbeatsFromIndexedDB(this.app);
-            if (idbHeartbeatObject === null || idbHeartbeatObject === void 0 ? void 0 : idbHeartbeatObject.heartbeats) return idbHeartbeatObject;
-            else return {
-                heartbeats: []
-            };
-        }
-    }
-    // overwrite the storage with the provided heartbeats
-    async overwrite(heartbeatsObject) {
-        var _a;
-        const canUseIndexedDB = await this._canUseIndexedDBPromise;
-        if (!canUseIndexedDB) return;
-        else {
-            const existingHeartbeatsObject = await this.read();
-            return writeHeartbeatsToIndexedDB(this.app, {
-                lastSentHeartbeatDate: (_a = heartbeatsObject.lastSentHeartbeatDate) !== null && _a !== void 0 ? _a : existingHeartbeatsObject.lastSentHeartbeatDate,
-                heartbeats: heartbeatsObject.heartbeats
-            });
-        }
-    }
-    // add heartbeats
-    async add(heartbeatsObject) {
-        var _a;
-        const canUseIndexedDB = await this._canUseIndexedDBPromise;
-        if (!canUseIndexedDB) return;
-        else {
-            const existingHeartbeatsObject = await this.read();
-            return writeHeartbeatsToIndexedDB(this.app, {
-                lastSentHeartbeatDate: (_a = heartbeatsObject.lastSentHeartbeatDate) !== null && _a !== void 0 ? _a : existingHeartbeatsObject.lastSentHeartbeatDate,
-                heartbeats: [
-                    ...existingHeartbeatsObject.heartbeats,
-                    ...heartbeatsObject.heartbeats
-                ]
-            });
-        }
-    }
-}
-/**
- * Calculate bytes of a HeartbeatsByUserAgent array after being wrapped
- * in a platform logging header JSON object, stringified, and converted
- * to base 64.
- */ function countBytes(heartbeatsCache) {
-    // base64 has a restricted set of characters, all of which should be 1 byte.
-    return (0, _util.base64urlEncodeWithoutPadding)(// heartbeatsCache wrapper properties
-    JSON.stringify({
-        version: 2,
-        heartbeats: heartbeatsCache
-    })).length;
-}
-/**
- * @license
- * Copyright 2019 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ function registerCoreComponents(variant) {
-    _registerComponent(new (0, _component.Component)("platform-logger", (container)=>new PlatformLoggerServiceImpl(container), "PRIVATE" /* ComponentType.PRIVATE */ ));
-    _registerComponent(new (0, _component.Component)("heartbeat", (container)=>new HeartbeatServiceImpl(container), "PRIVATE" /* ComponentType.PRIVATE */ ));
-    // Register `app` package.
-    registerVersion(name$o, version$1, variant);
-    // BUILD_TARGET will be replaced by values like esm5, esm2017, cjs5, etc during the compilation
-    registerVersion(name$o, version$1, "esm2017");
-    // Register platform SDK identifier (no version).
-    registerVersion("fire-js", "");
-}
-/**
- * Firebase App
- *
- * @remarks This package coordinates the communication between the different Firebase components
- * @packageDocumentation
- */ registerCoreComponents("");
-
-},{"@firebase/component":"bi1VB","@firebase/logger":"fZmft","@firebase/util":"ePiK6","idb":"kozAz","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"bi1VB":[function(require,module,exports) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "Component", ()=>Component);
-parcelHelpers.export(exports, "ComponentContainer", ()=>ComponentContainer);
-parcelHelpers.export(exports, "Provider", ()=>Provider);
-var _util = require("@firebase/util");
-/**
- * Component for service name T, e.g. `auth`, `auth-internal`
- */ class Component {
-    /**
-     *
-     * @param name The public service name, e.g. app, auth, firestore, database
-     * @param instanceFactory Service factory responsible for creating the public interface
-     * @param type whether the service provided by the component is public or private
-     */ constructor(name, instanceFactory, type){
-        this.name = name;
-        this.instanceFactory = instanceFactory;
-        this.type = type;
-        this.multipleInstances = false;
-        /**
-         * Properties to be added to the service namespace
-         */ this.serviceProps = {};
-        this.instantiationMode = "LAZY" /* InstantiationMode.LAZY */ ;
-        this.onInstanceCreated = null;
-    }
-    setInstantiationMode(mode) {
-        this.instantiationMode = mode;
-        return this;
-    }
-    setMultipleInstances(multipleInstances) {
-        this.multipleInstances = multipleInstances;
-        return this;
-    }
-    setServiceProps(props) {
-        this.serviceProps = props;
-        return this;
-    }
-    setInstanceCreatedCallback(callback) {
-        this.onInstanceCreated = callback;
-        return this;
-    }
-}
-/**
- * @license
- * Copyright 2019 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ const DEFAULT_ENTRY_NAME = "[DEFAULT]";
-/**
- * @license
- * Copyright 2019 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * Provider for instance for service name T, e.g. 'auth', 'auth-internal'
- * NameServiceMapping[T] is an alias for the type of the instance
- */ class Provider {
-    constructor(name, container){
-        this.name = name;
-        this.container = container;
-        this.component = null;
-        this.instances = new Map();
-        this.instancesDeferred = new Map();
-        this.instancesOptions = new Map();
-        this.onInitCallbacks = new Map();
-    }
-    /**
-     * @param identifier A provider can provide mulitple instances of a service
-     * if this.component.multipleInstances is true.
-     */ get(identifier) {
-        // if multipleInstances is not supported, use the default name
-        const normalizedIdentifier = this.normalizeInstanceIdentifier(identifier);
-        if (!this.instancesDeferred.has(normalizedIdentifier)) {
-            const deferred = new (0, _util.Deferred)();
-            this.instancesDeferred.set(normalizedIdentifier, deferred);
-            if (this.isInitialized(normalizedIdentifier) || this.shouldAutoInitialize()) // initialize the service if it can be auto-initialized
-            try {
-                const instance = this.getOrInitializeService({
-                    instanceIdentifier: normalizedIdentifier
-                });
-                if (instance) deferred.resolve(instance);
-            } catch (e) {
-            // when the instance factory throws an exception during get(), it should not cause
-            // a fatal error. We just return the unresolved promise in this case.
-            }
-        }
-        return this.instancesDeferred.get(normalizedIdentifier).promise;
-    }
-    getImmediate(options) {
-        var _a;
-        // if multipleInstances is not supported, use the default name
-        const normalizedIdentifier = this.normalizeInstanceIdentifier(options === null || options === void 0 ? void 0 : options.identifier);
-        const optional = (_a = options === null || options === void 0 ? void 0 : options.optional) !== null && _a !== void 0 ? _a : false;
-        if (this.isInitialized(normalizedIdentifier) || this.shouldAutoInitialize()) try {
-            return this.getOrInitializeService({
-                instanceIdentifier: normalizedIdentifier
-            });
-        } catch (e) {
-            if (optional) return null;
-            else throw e;
-        }
-        else {
-            // In case a component is not initialized and should/can not be auto-initialized at the moment, return null if the optional flag is set, or throw
-            if (optional) return null;
-            else throw Error(`Service ${this.name} is not available`);
-        }
-    }
-    getComponent() {
-        return this.component;
-    }
-    setComponent(component) {
-        if (component.name !== this.name) throw Error(`Mismatching Component ${component.name} for Provider ${this.name}.`);
-        if (this.component) throw Error(`Component for ${this.name} has already been provided`);
-        this.component = component;
-        // return early without attempting to initialize the component if the component requires explicit initialization (calling `Provider.initialize()`)
-        if (!this.shouldAutoInitialize()) return;
-        // if the service is eager, initialize the default instance
-        if (isComponentEager(component)) try {
-            this.getOrInitializeService({
-                instanceIdentifier: DEFAULT_ENTRY_NAME
-            });
-        } catch (e) {
-        // when the instance factory for an eager Component throws an exception during the eager
-        // initialization, it should not cause a fatal error.
-        // TODO: Investigate if we need to make it configurable, because some component may want to cause
-        // a fatal error in this case?
-        }
-        // Create service instances for the pending promises and resolve them
-        // NOTE: if this.multipleInstances is false, only the default instance will be created
-        // and all promises with resolve with it regardless of the identifier.
-        for (const [instanceIdentifier, instanceDeferred] of this.instancesDeferred.entries()){
-            const normalizedIdentifier = this.normalizeInstanceIdentifier(instanceIdentifier);
-            try {
-                // `getOrInitializeService()` should always return a valid instance since a component is guaranteed. use ! to make typescript happy.
-                const instance = this.getOrInitializeService({
-                    instanceIdentifier: normalizedIdentifier
-                });
-                instanceDeferred.resolve(instance);
-            } catch (e) {
-            // when the instance factory throws an exception, it should not cause
-            // a fatal error. We just leave the promise unresolved.
-            }
-        }
-    }
-    clearInstance(identifier = DEFAULT_ENTRY_NAME) {
-        this.instancesDeferred.delete(identifier);
-        this.instancesOptions.delete(identifier);
-        this.instances.delete(identifier);
-    }
-    // app.delete() will call this method on every provider to delete the services
-    // TODO: should we mark the provider as deleted?
-    async delete() {
-        const services = Array.from(this.instances.values());
-        await Promise.all([
-            ...services.filter((service)=>"INTERNAL" in service) // legacy services
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .map((service)=>service.INTERNAL.delete()),
-            ...services.filter((service)=>"_delete" in service) // modularized services
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .map((service)=>service._delete())
-        ]);
-    }
-    isComponentSet() {
-        return this.component != null;
-    }
-    isInitialized(identifier = DEFAULT_ENTRY_NAME) {
-        return this.instances.has(identifier);
-    }
-    getOptions(identifier = DEFAULT_ENTRY_NAME) {
-        return this.instancesOptions.get(identifier) || {};
-    }
-    initialize(opts = {}) {
-        const { options = {} } = opts;
-        const normalizedIdentifier = this.normalizeInstanceIdentifier(opts.instanceIdentifier);
-        if (this.isInitialized(normalizedIdentifier)) throw Error(`${this.name}(${normalizedIdentifier}) has already been initialized`);
-        if (!this.isComponentSet()) throw Error(`Component ${this.name} has not been registered yet`);
-        const instance = this.getOrInitializeService({
-            instanceIdentifier: normalizedIdentifier,
-            options
-        });
-        // resolve any pending promise waiting for the service instance
-        for (const [instanceIdentifier, instanceDeferred] of this.instancesDeferred.entries()){
-            const normalizedDeferredIdentifier = this.normalizeInstanceIdentifier(instanceIdentifier);
-            if (normalizedIdentifier === normalizedDeferredIdentifier) instanceDeferred.resolve(instance);
-        }
-        return instance;
-    }
-    /**
-     *
-     * @param callback - a function that will be invoked  after the provider has been initialized by calling provider.initialize().
-     * The function is invoked SYNCHRONOUSLY, so it should not execute any longrunning tasks in order to not block the program.
-     *
-     * @param identifier An optional instance identifier
-     * @returns a function to unregister the callback
-     */ onInit(callback, identifier) {
-        var _a;
-        const normalizedIdentifier = this.normalizeInstanceIdentifier(identifier);
-        const existingCallbacks = (_a = this.onInitCallbacks.get(normalizedIdentifier)) !== null && _a !== void 0 ? _a : new Set();
-        existingCallbacks.add(callback);
-        this.onInitCallbacks.set(normalizedIdentifier, existingCallbacks);
-        const existingInstance = this.instances.get(normalizedIdentifier);
-        if (existingInstance) callback(existingInstance, normalizedIdentifier);
-        return ()=>{
-            existingCallbacks.delete(callback);
-        };
-    }
-    /**
-     * Invoke onInit callbacks synchronously
-     * @param instance the service instance`
-     */ invokeOnInitCallbacks(instance, identifier) {
-        const callbacks = this.onInitCallbacks.get(identifier);
-        if (!callbacks) return;
-        for (const callback of callbacks)try {
-            callback(instance, identifier);
-        } catch (_a) {
-        // ignore errors in the onInit callback
-        }
-    }
-    getOrInitializeService({ instanceIdentifier, options = {} }) {
-        let instance = this.instances.get(instanceIdentifier);
-        if (!instance && this.component) {
-            instance = this.component.instanceFactory(this.container, {
-                instanceIdentifier: normalizeIdentifierForFactory(instanceIdentifier),
-                options
-            });
-            this.instances.set(instanceIdentifier, instance);
-            this.instancesOptions.set(instanceIdentifier, options);
-            /**
-             * Invoke onInit listeners.
-             * Note this.component.onInstanceCreated is different, which is used by the component creator,
-             * while onInit listeners are registered by consumers of the provider.
-             */ this.invokeOnInitCallbacks(instance, instanceIdentifier);
-            /**
-             * Order is important
-             * onInstanceCreated() should be called after this.instances.set(instanceIdentifier, instance); which
-             * makes `isInitialized()` return true.
-             */ if (this.component.onInstanceCreated) try {
-                this.component.onInstanceCreated(this.container, instanceIdentifier, instance);
-            } catch (_a) {
-            // ignore errors in the onInstanceCreatedCallback
-            }
-        }
-        return instance || null;
-    }
-    normalizeInstanceIdentifier(identifier = DEFAULT_ENTRY_NAME) {
-        if (this.component) return this.component.multipleInstances ? identifier : DEFAULT_ENTRY_NAME;
-        else return identifier; // assume multiple instances are supported before the component is provided.
-    }
-    shouldAutoInitialize() {
-        return !!this.component && this.component.instantiationMode !== "EXPLICIT" /* InstantiationMode.EXPLICIT */ ;
-    }
-}
-// undefined should be passed to the service factory for the default instance
-function normalizeIdentifierForFactory(identifier) {
-    return identifier === DEFAULT_ENTRY_NAME ? undefined : identifier;
-}
-function isComponentEager(component) {
-    return component.instantiationMode === "EAGER" /* InstantiationMode.EAGER */ ;
-}
-/**
- * @license
- * Copyright 2019 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * ComponentContainer that provides Providers for service name T, e.g. `auth`, `auth-internal`
- */ class ComponentContainer {
-    constructor(name){
-        this.name = name;
-        this.providers = new Map();
-    }
-    /**
-     *
-     * @param component Component being added
-     * @param overwrite When a component with the same name has already been registered,
-     * if overwrite is true: overwrite the existing component with the new component and create a new
-     * provider with the new component. It can be useful in tests where you want to use different mocks
-     * for different tests.
-     * if overwrite is false: throw an exception
-     */ addComponent(component) {
-        const provider = this.getProvider(component.name);
-        if (provider.isComponentSet()) throw new Error(`Component ${component.name} has already been registered with ${this.name}`);
-        provider.setComponent(component);
-    }
-    addOrOverwriteComponent(component) {
-        const provider = this.getProvider(component.name);
-        if (provider.isComponentSet()) // delete the existing provider from the container, so we can register the new component
-        this.providers.delete(component.name);
-        this.addComponent(component);
-    }
-    /**
-     * getProvider provides a type safe interface where it can only be called with a field name
-     * present in NameServiceMapping interface.
-     *
-     * Firebase SDKs providing services should extend NameServiceMapping interface to register
-     * themselves.
-     */ getProvider(name) {
-        if (this.providers.has(name)) return this.providers.get(name);
-        // create a Provider for a service that hasn't registered with Firebase
-        const provider = new Provider(name, this);
-        this.providers.set(name, provider);
-        return provider;
-    }
-    getProviders() {
-        return Array.from(this.providers.values());
-    }
-}
-
-},{"@firebase/util":"ePiK6","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"ePiK6":[function(require,module,exports) {
-/**
- * @license
- * Copyright 2017 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * @fileoverview Firebase constants.  Some of these (@defines) can be overridden at compile-time.
- */ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "CONSTANTS", ()=>CONSTANTS);
-parcelHelpers.export(exports, "DecodeBase64StringError", ()=>DecodeBase64StringError);
-parcelHelpers.export(exports, "Deferred", ()=>Deferred);
-parcelHelpers.export(exports, "ErrorFactory", ()=>ErrorFactory);
-parcelHelpers.export(exports, "FirebaseError", ()=>FirebaseError);
-parcelHelpers.export(exports, "MAX_VALUE_MILLIS", ()=>MAX_VALUE_MILLIS);
-parcelHelpers.export(exports, "RANDOM_FACTOR", ()=>RANDOM_FACTOR);
-parcelHelpers.export(exports, "Sha1", ()=>Sha1);
-parcelHelpers.export(exports, "areCookiesEnabled", ()=>areCookiesEnabled);
-parcelHelpers.export(exports, "assert", ()=>assert);
-parcelHelpers.export(exports, "assertionError", ()=>assertionError);
-parcelHelpers.export(exports, "async", ()=>async);
-parcelHelpers.export(exports, "base64", ()=>base64);
-parcelHelpers.export(exports, "base64Decode", ()=>base64Decode);
-parcelHelpers.export(exports, "base64Encode", ()=>base64Encode);
-parcelHelpers.export(exports, "base64urlEncodeWithoutPadding", ()=>base64urlEncodeWithoutPadding);
-parcelHelpers.export(exports, "calculateBackoffMillis", ()=>calculateBackoffMillis);
-parcelHelpers.export(exports, "contains", ()=>contains);
-parcelHelpers.export(exports, "createMockUserToken", ()=>createMockUserToken);
-parcelHelpers.export(exports, "createSubscribe", ()=>createSubscribe);
-parcelHelpers.export(exports, "decode", ()=>decode);
-parcelHelpers.export(exports, "deepCopy", ()=>deepCopy);
-parcelHelpers.export(exports, "deepEqual", ()=>deepEqual);
-parcelHelpers.export(exports, "deepExtend", ()=>deepExtend);
-parcelHelpers.export(exports, "errorPrefix", ()=>errorPrefix);
-parcelHelpers.export(exports, "extractQuerystring", ()=>extractQuerystring);
-parcelHelpers.export(exports, "getDefaultAppConfig", ()=>getDefaultAppConfig);
-parcelHelpers.export(exports, "getDefaultEmulatorHost", ()=>getDefaultEmulatorHost);
-parcelHelpers.export(exports, "getDefaultEmulatorHostnameAndPort", ()=>getDefaultEmulatorHostnameAndPort);
-parcelHelpers.export(exports, "getDefaults", ()=>getDefaults);
-parcelHelpers.export(exports, "getExperimentalSetting", ()=>getExperimentalSetting);
-parcelHelpers.export(exports, "getGlobal", ()=>getGlobal);
-parcelHelpers.export(exports, "getModularInstance", ()=>getModularInstance);
-parcelHelpers.export(exports, "getUA", ()=>getUA);
-parcelHelpers.export(exports, "isAdmin", ()=>isAdmin);
-parcelHelpers.export(exports, "isBrowser", ()=>isBrowser);
-parcelHelpers.export(exports, "isBrowserExtension", ()=>isBrowserExtension);
-parcelHelpers.export(exports, "isElectron", ()=>isElectron);
-parcelHelpers.export(exports, "isEmpty", ()=>isEmpty);
-parcelHelpers.export(exports, "isIE", ()=>isIE);
-parcelHelpers.export(exports, "isIndexedDBAvailable", ()=>isIndexedDBAvailable);
-parcelHelpers.export(exports, "isMobileCordova", ()=>isMobileCordova);
-parcelHelpers.export(exports, "isNode", ()=>isNode);
-parcelHelpers.export(exports, "isNodeSdk", ()=>isNodeSdk);
-parcelHelpers.export(exports, "isReactNative", ()=>isReactNative);
-parcelHelpers.export(exports, "isSafari", ()=>isSafari);
-parcelHelpers.export(exports, "isUWP", ()=>isUWP);
-parcelHelpers.export(exports, "isValidFormat", ()=>isValidFormat);
-parcelHelpers.export(exports, "isValidTimestamp", ()=>isValidTimestamp);
-parcelHelpers.export(exports, "issuedAtTime", ()=>issuedAtTime);
-parcelHelpers.export(exports, "jsonEval", ()=>jsonEval);
-parcelHelpers.export(exports, "map", ()=>map);
-parcelHelpers.export(exports, "ordinal", ()=>ordinal);
-parcelHelpers.export(exports, "promiseWithTimeout", ()=>promiseWithTimeout);
-parcelHelpers.export(exports, "querystring", ()=>querystring);
-parcelHelpers.export(exports, "querystringDecode", ()=>querystringDecode);
-parcelHelpers.export(exports, "safeGet", ()=>safeGet);
-parcelHelpers.export(exports, "stringLength", ()=>stringLength);
-parcelHelpers.export(exports, "stringToByteArray", ()=>stringToByteArray);
-parcelHelpers.export(exports, "stringify", ()=>stringify);
-parcelHelpers.export(exports, "uuidv4", ()=>uuidv4);
-parcelHelpers.export(exports, "validateArgCount", ()=>validateArgCount);
-parcelHelpers.export(exports, "validateCallback", ()=>validateCallback);
-parcelHelpers.export(exports, "validateContextObject", ()=>validateContextObject);
-parcelHelpers.export(exports, "validateIndexedDBOpenable", ()=>validateIndexedDBOpenable);
-parcelHelpers.export(exports, "validateNamespace", ()=>validateNamespace);
-var global = arguments[3];
-var process = require("d07263985281b344");
-const CONSTANTS = {
-    /**
-     * @define {boolean} Whether this is the client Node.js SDK.
-     */ NODE_CLIENT: false,
-    /**
-     * @define {boolean} Whether this is the Admin Node.js SDK.
-     */ NODE_ADMIN: false,
-    /**
-     * Firebase SDK Version
-     */ SDK_VERSION: "${JSCORE_VERSION}"
-};
-/**
- * @license
- * Copyright 2017 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * Throws an error if the provided assertion is falsy
- */ const assert = function(assertion, message) {
-    if (!assertion) throw assertionError(message);
-};
-/**
- * Returns an Error object suitable for throwing.
- */ const assertionError = function(message) {
-    return new Error("Firebase Database (" + CONSTANTS.SDK_VERSION + ") INTERNAL ASSERT FAILED: " + message);
-};
-/**
- * @license
- * Copyright 2017 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ const stringToByteArray$1 = function(str) {
-    // TODO(user): Use native implementations if/when available
-    const out = [];
-    let p = 0;
-    for(let i = 0; i < str.length; i++){
-        let c = str.charCodeAt(i);
-        if (c < 128) out[p++] = c;
-        else if (c < 2048) {
-            out[p++] = c >> 6 | 192;
-            out[p++] = c & 63 | 128;
-        } else if ((c & 0xfc00) === 0xd800 && i + 1 < str.length && (str.charCodeAt(i + 1) & 0xfc00) === 0xdc00) {
-            // Surrogate Pair
-            c = 0x10000 + ((c & 0x03ff) << 10) + (str.charCodeAt(++i) & 0x03ff);
-            out[p++] = c >> 18 | 240;
-            out[p++] = c >> 12 & 63 | 128;
-            out[p++] = c >> 6 & 63 | 128;
-            out[p++] = c & 63 | 128;
-        } else {
-            out[p++] = c >> 12 | 224;
-            out[p++] = c >> 6 & 63 | 128;
-            out[p++] = c & 63 | 128;
-        }
-    }
-    return out;
-};
-/**
- * Turns an array of numbers into the string given by the concatenation of the
- * characters to which the numbers correspond.
- * @param bytes Array of numbers representing characters.
- * @return Stringification of the array.
- */ const byteArrayToString = function(bytes) {
-    // TODO(user): Use native implementations if/when available
-    const out = [];
-    let pos = 0, c = 0;
-    while(pos < bytes.length){
-        const c1 = bytes[pos++];
-        if (c1 < 128) out[c++] = String.fromCharCode(c1);
-        else if (c1 > 191 && c1 < 224) {
-            const c2 = bytes[pos++];
-            out[c++] = String.fromCharCode((c1 & 31) << 6 | c2 & 63);
-        } else if (c1 > 239 && c1 < 365) {
-            // Surrogate Pair
-            const c2 = bytes[pos++];
-            const c3 = bytes[pos++];
-            const c4 = bytes[pos++];
-            const u = ((c1 & 7) << 18 | (c2 & 63) << 12 | (c3 & 63) << 6 | c4 & 63) - 0x10000;
-            out[c++] = String.fromCharCode(0xd800 + (u >> 10));
-            out[c++] = String.fromCharCode(0xdc00 + (u & 1023));
-        } else {
-            const c2 = bytes[pos++];
-            const c3 = bytes[pos++];
-            out[c++] = String.fromCharCode((c1 & 15) << 12 | (c2 & 63) << 6 | c3 & 63);
-        }
-    }
-    return out.join("");
-};
-// We define it as an object literal instead of a class because a class compiled down to es5 can't
-// be treeshaked. https://github.com/rollup/rollup/issues/1691
-// Static lookup maps, lazily populated by init_()
-const base64 = {
-    /**
-     * Maps bytes to characters.
-     */ byteToCharMap_: null,
-    /**
-     * Maps characters to bytes.
-     */ charToByteMap_: null,
-    /**
-     * Maps bytes to websafe characters.
-     * @private
-     */ byteToCharMapWebSafe_: null,
-    /**
-     * Maps websafe characters to bytes.
-     * @private
-     */ charToByteMapWebSafe_: null,
-    /**
-     * Our default alphabet, shared between
-     * ENCODED_VALS and ENCODED_VALS_WEBSAFE
-     */ ENCODED_VALS_BASE: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
-    /**
-     * Our default alphabet. Value 64 (=) is special; it means "nothing."
-     */ get ENCODED_VALS () {
-        return this.ENCODED_VALS_BASE + "+/=";
-    },
-    /**
-     * Our websafe alphabet.
-     */ get ENCODED_VALS_WEBSAFE () {
-        return this.ENCODED_VALS_BASE + "-_.";
-    },
-    /**
-     * Whether this browser supports the atob and btoa functions. This extension
-     * started at Mozilla but is now implemented by many browsers. We use the
-     * ASSUME_* variables to avoid pulling in the full useragent detection library
-     * but still allowing the standard per-browser compilations.
-     *
-     */ HAS_NATIVE_SUPPORT: typeof atob === "function",
-    /**
-     * Base64-encode an array of bytes.
-     *
-     * @param input An array of bytes (numbers with
-     *     value in [0, 255]) to encode.
-     * @param webSafe Boolean indicating we should use the
-     *     alternative alphabet.
-     * @return The base64 encoded string.
-     */ encodeByteArray (input, webSafe) {
-        if (!Array.isArray(input)) throw Error("encodeByteArray takes an array as a parameter");
-        this.init_();
-        const byteToCharMap = webSafe ? this.byteToCharMapWebSafe_ : this.byteToCharMap_;
-        const output = [];
-        for(let i = 0; i < input.length; i += 3){
-            const byte1 = input[i];
-            const haveByte2 = i + 1 < input.length;
-            const byte2 = haveByte2 ? input[i + 1] : 0;
-            const haveByte3 = i + 2 < input.length;
-            const byte3 = haveByte3 ? input[i + 2] : 0;
-            const outByte1 = byte1 >> 2;
-            const outByte2 = (byte1 & 0x03) << 4 | byte2 >> 4;
-            let outByte3 = (byte2 & 0x0f) << 2 | byte3 >> 6;
-            let outByte4 = byte3 & 0x3f;
-            if (!haveByte3) {
-                outByte4 = 64;
-                if (!haveByte2) outByte3 = 64;
-            }
-            output.push(byteToCharMap[outByte1], byteToCharMap[outByte2], byteToCharMap[outByte3], byteToCharMap[outByte4]);
-        }
-        return output.join("");
-    },
-    /**
-     * Base64-encode a string.
-     *
-     * @param input A string to encode.
-     * @param webSafe If true, we should use the
-     *     alternative alphabet.
-     * @return The base64 encoded string.
-     */ encodeString (input, webSafe) {
-        // Shortcut for Mozilla browsers that implement
-        // a native base64 encoder in the form of "btoa/atob"
-        if (this.HAS_NATIVE_SUPPORT && !webSafe) return btoa(input);
-        return this.encodeByteArray(stringToByteArray$1(input), webSafe);
-    },
-    /**
-     * Base64-decode a string.
-     *
-     * @param input to decode.
-     * @param webSafe True if we should use the
-     *     alternative alphabet.
-     * @return string representing the decoded value.
-     */ decodeString (input, webSafe) {
-        // Shortcut for Mozilla browsers that implement
-        // a native base64 encoder in the form of "btoa/atob"
-        if (this.HAS_NATIVE_SUPPORT && !webSafe) return atob(input);
-        return byteArrayToString(this.decodeStringToByteArray(input, webSafe));
-    },
-    /**
-     * Base64-decode a string.
-     *
-     * In base-64 decoding, groups of four characters are converted into three
-     * bytes.  If the encoder did not apply padding, the input length may not
-     * be a multiple of 4.
-     *
-     * In this case, the last group will have fewer than 4 characters, and
-     * padding will be inferred.  If the group has one or two characters, it decodes
-     * to one byte.  If the group has three characters, it decodes to two bytes.
-     *
-     * @param input Input to decode.
-     * @param webSafe True if we should use the web-safe alphabet.
-     * @return bytes representing the decoded value.
-     */ decodeStringToByteArray (input, webSafe) {
-        this.init_();
-        const charToByteMap = webSafe ? this.charToByteMapWebSafe_ : this.charToByteMap_;
-        const output = [];
-        for(let i = 0; i < input.length;){
-            const byte1 = charToByteMap[input.charAt(i++)];
-            const haveByte2 = i < input.length;
-            const byte2 = haveByte2 ? charToByteMap[input.charAt(i)] : 0;
-            ++i;
-            const haveByte3 = i < input.length;
-            const byte3 = haveByte3 ? charToByteMap[input.charAt(i)] : 64;
-            ++i;
-            const haveByte4 = i < input.length;
-            const byte4 = haveByte4 ? charToByteMap[input.charAt(i)] : 64;
-            ++i;
-            if (byte1 == null || byte2 == null || byte3 == null || byte4 == null) throw new DecodeBase64StringError();
-            const outByte1 = byte1 << 2 | byte2 >> 4;
-            output.push(outByte1);
-            if (byte3 !== 64) {
-                const outByte2 = byte2 << 4 & 0xf0 | byte3 >> 2;
-                output.push(outByte2);
-                if (byte4 !== 64) {
-                    const outByte3 = byte3 << 6 & 0xc0 | byte4;
-                    output.push(outByte3);
-                }
-            }
-        }
-        return output;
-    },
-    /**
-     * Lazy static initialization function. Called before
-     * accessing any of the static map variables.
-     * @private
-     */ init_ () {
-        if (!this.byteToCharMap_) {
-            this.byteToCharMap_ = {};
-            this.charToByteMap_ = {};
-            this.byteToCharMapWebSafe_ = {};
-            this.charToByteMapWebSafe_ = {};
-            // We want quick mappings back and forth, so we precompute two maps.
-            for(let i = 0; i < this.ENCODED_VALS.length; i++){
-                this.byteToCharMap_[i] = this.ENCODED_VALS.charAt(i);
-                this.charToByteMap_[this.byteToCharMap_[i]] = i;
-                this.byteToCharMapWebSafe_[i] = this.ENCODED_VALS_WEBSAFE.charAt(i);
-                this.charToByteMapWebSafe_[this.byteToCharMapWebSafe_[i]] = i;
-                // Be forgiving when decoding and correctly decode both encodings.
-                if (i >= this.ENCODED_VALS_BASE.length) {
-                    this.charToByteMap_[this.ENCODED_VALS_WEBSAFE.charAt(i)] = i;
-                    this.charToByteMapWebSafe_[this.ENCODED_VALS.charAt(i)] = i;
-                }
-            }
-        }
-    }
-};
-/**
- * An error encountered while decoding base64 string.
- */ class DecodeBase64StringError extends Error {
-    constructor(){
-        super(...arguments);
-        this.name = "DecodeBase64StringError";
-    }
-}
-/**
- * URL-safe base64 encoding
- */ const base64Encode = function(str) {
-    const utf8Bytes = stringToByteArray$1(str);
-    return base64.encodeByteArray(utf8Bytes, true);
-};
-/**
- * URL-safe base64 encoding (without "." padding in the end).
- * e.g. Used in JSON Web Token (JWT) parts.
- */ const base64urlEncodeWithoutPadding = function(str) {
-    // Use base64url encoding and remove padding in the end (dot characters).
-    return base64Encode(str).replace(/\./g, "");
-};
-/**
- * URL-safe base64 decoding
- *
- * NOTE: DO NOT use the global atob() function - it does NOT support the
- * base64Url variant encoding.
- *
- * @param str To be decoded
- * @return Decoded result, if possible
- */ const base64Decode = function(str) {
-    try {
-        return base64.decodeString(str, true);
-    } catch (e) {
-        console.error("base64Decode failed: ", e);
-    }
-    return null;
-};
-/**
- * @license
- * Copyright 2017 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * Do a deep-copy of basic JavaScript Objects or Arrays.
- */ function deepCopy(value) {
-    return deepExtend(undefined, value);
-}
-/**
- * Copy properties from source to target (recursively allows extension
- * of Objects and Arrays).  Scalar values in the target are over-written.
- * If target is undefined, an object of the appropriate type will be created
- * (and returned).
- *
- * We recursively copy all child properties of plain Objects in the source- so
- * that namespace- like dictionaries are merged.
- *
- * Note that the target can be a function, in which case the properties in
- * the source Object are copied onto it as static properties of the Function.
- *
- * Note: we don't merge __proto__ to prevent prototype pollution
- */ function deepExtend(target, source) {
-    if (!(source instanceof Object)) return source;
-    switch(source.constructor){
-        case Date:
-            // Treat Dates like scalars; if the target date object had any child
-            // properties - they will be lost!
-            const dateValue = source;
-            return new Date(dateValue.getTime());
-        case Object:
-            if (target === undefined) target = {};
-            break;
-        case Array:
-            // Always copy the array source and overwrite the target.
-            target = [];
-            break;
-        default:
-            // Not a plain Object - treat it as a scalar.
-            return source;
-    }
-    for(const prop in source){
-        // use isValidKey to guard against prototype pollution. See https://snyk.io/vuln/SNYK-JS-LODASH-450202
-        if (!source.hasOwnProperty(prop) || !isValidKey(prop)) continue;
-        target[prop] = deepExtend(target[prop], source[prop]);
-    }
-    return target;
-}
-function isValidKey(key) {
-    return key !== "__proto__";
-}
-/**
- * @license
- * Copyright 2022 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * Polyfill for `globalThis` object.
- * @returns the `globalThis` object for the given environment.
- * @public
- */ function getGlobal() {
-    if (typeof self !== "undefined") return self;
-    if (typeof window !== "undefined") return window;
-    if (typeof global !== "undefined") return global;
-    throw new Error("Unable to locate global object.");
-}
-/**
- * @license
- * Copyright 2022 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ const getDefaultsFromGlobal = ()=>getGlobal().__FIREBASE_DEFAULTS__;
-/**
- * Attempt to read defaults from a JSON string provided to
- * process(.)env(.)__FIREBASE_DEFAULTS__ or a JSON file whose path is in
- * process(.)env(.)__FIREBASE_DEFAULTS_PATH__
- * The dots are in parens because certain compilers (Vite?) cannot
- * handle seeing that variable in comments.
- * See https://github.com/firebase/firebase-js-sdk/issues/6838
- */ const getDefaultsFromEnvVariable = ()=>{
-    if (typeof process === "undefined" || typeof process.env === "undefined") return;
-    const defaultsJsonString = undefined;
-    if (defaultsJsonString) return JSON.parse(defaultsJsonString);
-};
-const getDefaultsFromCookie = ()=>{
-    if (typeof document === "undefined") return;
-    let match;
-    try {
-        match = document.cookie.match(/__FIREBASE_DEFAULTS__=([^;]+)/);
-    } catch (e) {
-        // Some environments such as Angular Universal SSR have a
-        // `document` object but error on accessing `document.cookie`.
-        return;
-    }
-    const decoded = match && base64Decode(match[1]);
-    return decoded && JSON.parse(decoded);
-};
-/**
- * Get the __FIREBASE_DEFAULTS__ object. It checks in order:
- * (1) if such an object exists as a property of `globalThis`
- * (2) if such an object was provided on a shell environment variable
- * (3) if such an object exists in a cookie
- * @public
- */ const getDefaults = ()=>{
-    try {
-        return getDefaultsFromGlobal() || getDefaultsFromEnvVariable() || getDefaultsFromCookie();
-    } catch (e) {
-        /**
-         * Catch-all for being unable to get __FIREBASE_DEFAULTS__ due
-         * to any environment case we have not accounted for. Log to
-         * info instead of swallowing so we can find these unknown cases
-         * and add paths for them if needed.
-         */ console.info(`Unable to get __FIREBASE_DEFAULTS__ due to: ${e}`);
-        return;
-    }
-};
-/**
- * Returns emulator host stored in the __FIREBASE_DEFAULTS__ object
- * for the given product.
- * @returns a URL host formatted like `127.0.0.1:9999` or `[::1]:4000` if available
- * @public
- */ const getDefaultEmulatorHost = (productName)=>{
-    var _a, _b;
-    return (_b = (_a = getDefaults()) === null || _a === void 0 ? void 0 : _a.emulatorHosts) === null || _b === void 0 ? void 0 : _b[productName];
-};
-/**
- * Returns emulator hostname and port stored in the __FIREBASE_DEFAULTS__ object
- * for the given product.
- * @returns a pair of hostname and port like `["::1", 4000]` if available
- * @public
- */ const getDefaultEmulatorHostnameAndPort = (productName)=>{
-    const host = getDefaultEmulatorHost(productName);
-    if (!host) return undefined;
-    const separatorIndex = host.lastIndexOf(":"); // Finding the last since IPv6 addr also has colons.
-    if (separatorIndex <= 0 || separatorIndex + 1 === host.length) throw new Error(`Invalid host ${host} with no separate hostname and port!`);
-    // eslint-disable-next-line no-restricted-globals
-    const port = parseInt(host.substring(separatorIndex + 1), 10);
-    if (host[0] === "[") // Bracket-quoted `[ipv6addr]:port` => return "ipv6addr" (without brackets).
-    return [
-        host.substring(1, separatorIndex - 1),
-        port
-    ];
-    else return [
-        host.substring(0, separatorIndex),
-        port
-    ];
-};
-/**
- * Returns Firebase app config stored in the __FIREBASE_DEFAULTS__ object.
- * @public
- */ const getDefaultAppConfig = ()=>{
-    var _a;
-    return (_a = getDefaults()) === null || _a === void 0 ? void 0 : _a.config;
-};
-/**
- * Returns an experimental setting on the __FIREBASE_DEFAULTS__ object (properties
- * prefixed by "_")
- * @public
- */ const getExperimentalSetting = (name)=>{
-    var _a;
-    return (_a = getDefaults()) === null || _a === void 0 ? void 0 : _a[`_${name}`];
-};
-/**
- * @license
- * Copyright 2017 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ class Deferred {
-    constructor(){
-        this.reject = ()=>{};
-        this.resolve = ()=>{};
-        this.promise = new Promise((resolve, reject)=>{
-            this.resolve = resolve;
-            this.reject = reject;
-        });
-    }
-    /**
-     * Our API internals are not promiseified and cannot because our callback APIs have subtle expectations around
-     * invoking promises inline, which Promises are forbidden to do. This method accepts an optional node-style callback
-     * and returns a node-style callback which will resolve or reject the Deferred's promise.
-     */ wrapCallback(callback) {
-        return (error, value)=>{
-            if (error) this.reject(error);
-            else this.resolve(value);
-            if (typeof callback === "function") {
-                // Attaching noop handler just in case developer wasn't expecting
-                // promises
-                this.promise.catch(()=>{});
-                // Some of our callbacks don't expect a value and our own tests
-                // assert that the parameter length is 1
-                if (callback.length === 1) callback(error);
-                else callback(error, value);
-            }
-        };
-    }
-}
-/**
- * @license
- * Copyright 2021 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ function createMockUserToken(token, projectId) {
-    if (token.uid) throw new Error('The "uid" field is no longer supported by mockUserToken. Please use "sub" instead for Firebase Auth User ID.');
-    // Unsecured JWTs use "none" as the algorithm.
-    const header = {
-        alg: "none",
-        type: "JWT"
-    };
-    const project = projectId || "demo-project";
-    const iat = token.iat || 0;
-    const sub = token.sub || token.user_id;
-    if (!sub) throw new Error("mockUserToken must contain 'sub' or 'user_id' field!");
-    const payload = Object.assign({
-        // Set all required fields to decent defaults
-        iss: `https://securetoken.google.com/${project}`,
-        aud: project,
-        iat,
-        exp: iat + 3600,
-        auth_time: iat,
-        sub,
-        user_id: sub,
-        firebase: {
-            sign_in_provider: "custom",
-            identities: {}
-        }
-    }, token);
-    // Unsecured JWTs use the empty string as a signature.
-    const signature = "";
-    return [
-        base64urlEncodeWithoutPadding(JSON.stringify(header)),
-        base64urlEncodeWithoutPadding(JSON.stringify(payload)),
-        signature
-    ].join(".");
-}
-/**
- * @license
- * Copyright 2017 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * Returns navigator.userAgent string or '' if it's not defined.
- * @return user agent string
- */ function getUA() {
-    if (typeof navigator !== "undefined" && typeof navigator["userAgent"] === "string") return navigator["userAgent"];
-    else return "";
-}
-/**
- * Detect Cordova / PhoneGap / Ionic frameworks on a mobile device.
- *
- * Deliberately does not rely on checking `file://` URLs (as this fails PhoneGap
- * in the Ripple emulator) nor Cordova `onDeviceReady`, which would normally
- * wait for a callback.
- */ function isMobileCordova() {
-    return typeof window !== "undefined" && // @ts-ignore Setting up an broadly applicable index signature for Window
-    // just to deal with this case would probably be a bad idea.
-    !!(window["cordova"] || window["phonegap"] || window["PhoneGap"]) && /ios|iphone|ipod|ipad|android|blackberry|iemobile/i.test(getUA());
-}
-/**
- * Detect Node.js.
- *
- * @return true if Node.js environment is detected or specified.
- */ // Node detection logic from: https://github.com/iliakan/detect-node/
-function isNode() {
-    var _a;
-    const forceEnvironment = (_a = getDefaults()) === null || _a === void 0 ? void 0 : _a.forceEnvironment;
-    if (forceEnvironment === "node") return true;
-    else if (forceEnvironment === "browser") return false;
-    try {
-        return Object.prototype.toString.call(global.process) === "[object process]";
-    } catch (e) {
-        return false;
-    }
-}
-/**
- * Detect Browser Environment
- */ function isBrowser() {
-    return typeof self === "object" && self.self === self;
-}
-function isBrowserExtension() {
-    const runtime = typeof chrome === "object" ? chrome.runtime : typeof browser === "object" ? browser.runtime : undefined;
-    return typeof runtime === "object" && runtime.id !== undefined;
-}
-/**
- * Detect React Native.
- *
- * @return true if ReactNative environment is detected.
- */ function isReactNative() {
-    return typeof navigator === "object" && navigator["product"] === "ReactNative";
-}
-/** Detects Electron apps. */ function isElectron() {
-    return getUA().indexOf("Electron/") >= 0;
-}
-/** Detects Internet Explorer. */ function isIE() {
-    const ua = getUA();
-    return ua.indexOf("MSIE ") >= 0 || ua.indexOf("Trident/") >= 0;
-}
-/** Detects Universal Windows Platform apps. */ function isUWP() {
-    return getUA().indexOf("MSAppHost/") >= 0;
-}
-/**
- * Detect whether the current SDK build is the Node version.
- *
- * @return true if it's the Node SDK build.
- */ function isNodeSdk() {
-    return CONSTANTS.NODE_CLIENT === true || CONSTANTS.NODE_ADMIN === true;
-}
-/** Returns true if we are running in Safari. */ function isSafari() {
-    return !isNode() && navigator.userAgent.includes("Safari") && !navigator.userAgent.includes("Chrome");
-}
-/**
- * This method checks if indexedDB is supported by current browser/service worker context
- * @return true if indexedDB is supported by current browser/service worker context
- */ function isIndexedDBAvailable() {
-    try {
-        return typeof indexedDB === "object";
-    } catch (e) {
-        return false;
-    }
-}
-/**
- * This method validates browser/sw context for indexedDB by opening a dummy indexedDB database and reject
- * if errors occur during the database open operation.
- *
- * @throws exception if current browser/sw context can't run idb.open (ex: Safari iframe, Firefox
- * private browsing)
- */ function validateIndexedDBOpenable() {
-    return new Promise((resolve, reject)=>{
-        try {
-            let preExist = true;
-            const DB_CHECK_NAME = "validate-browser-context-for-indexeddb-analytics-module";
-            const request = self.indexedDB.open(DB_CHECK_NAME);
-            request.onsuccess = ()=>{
-                request.result.close();
-                // delete database only when it doesn't pre-exist
-                if (!preExist) self.indexedDB.deleteDatabase(DB_CHECK_NAME);
-                resolve(true);
-            };
-            request.onupgradeneeded = ()=>{
-                preExist = false;
-            };
-            request.onerror = ()=>{
-                var _a;
-                reject(((_a = request.error) === null || _a === void 0 ? void 0 : _a.message) || "");
-            };
-        } catch (error) {
-            reject(error);
-        }
-    });
-}
-/**
- *
- * This method checks whether cookie is enabled within current browser
- * @return true if cookie is enabled within current browser
- */ function areCookiesEnabled() {
-    if (typeof navigator === "undefined" || !navigator.cookieEnabled) return false;
-    return true;
-}
-/**
- * @license
- * Copyright 2017 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * @fileoverview Standardized Firebase Error.
- *
- * Usage:
- *
- *   // Typescript string literals for type-safe codes
- *   type Err =
- *     'unknown' |
- *     'object-not-found'
- *     ;
- *
- *   // Closure enum for type-safe error codes
- *   // at-enum {string}
- *   var Err = {
- *     UNKNOWN: 'unknown',
- *     OBJECT_NOT_FOUND: 'object-not-found',
- *   }
- *
- *   let errors: Map<Err, string> = {
- *     'generic-error': "Unknown error",
- *     'file-not-found': "Could not find file: {$file}",
- *   };
- *
- *   // Type-safe function - must pass a valid error code as param.
- *   let error = new ErrorFactory<Err>('service', 'Service', errors);
- *
- *   ...
- *   throw error.create(Err.GENERIC);
- *   ...
- *   throw error.create(Err.FILE_NOT_FOUND, {'file': fileName});
- *   ...
- *   // Service: Could not file file: foo.txt (service/file-not-found).
- *
- *   catch (e) {
- *     assert(e.message === "Could not find file: foo.txt.");
- *     if ((e as FirebaseError)?.code === 'service/file-not-found') {
- *       console.log("Could not read file: " + e['file']);
- *     }
- *   }
- */ const ERROR_NAME = "FirebaseError";
-// Based on code from:
-// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error#Custom_Error_Types
-class FirebaseError extends Error {
-    constructor(/** The error code for this error. */ code, message, /** Custom data for this error. */ customData){
-        super(message);
-        this.code = code;
-        this.customData = customData;
-        /** The custom name for all FirebaseErrors. */ this.name = ERROR_NAME;
-        // Fix For ES5
-        // https://github.com/Microsoft/TypeScript-wiki/blob/master/Breaking-Changes.md#extending-built-ins-like-error-array-and-map-may-no-longer-work
-        Object.setPrototypeOf(this, FirebaseError.prototype);
-        // Maintains proper stack trace for where our error was thrown.
-        // Only available on V8.
-        if (Error.captureStackTrace) Error.captureStackTrace(this, ErrorFactory.prototype.create);
-    }
-}
-class ErrorFactory {
-    constructor(service, serviceName, errors){
-        this.service = service;
-        this.serviceName = serviceName;
-        this.errors = errors;
-    }
-    create(code, ...data) {
-        const customData = data[0] || {};
-        const fullCode = `${this.service}/${code}`;
-        const template = this.errors[code];
-        const message = template ? replaceTemplate(template, customData) : "Error";
-        // Service Name: Error message (service/code).
-        const fullMessage = `${this.serviceName}: ${message} (${fullCode}).`;
-        const error = new FirebaseError(fullCode, fullMessage, customData);
-        return error;
-    }
-}
-function replaceTemplate(template, data) {
-    return template.replace(PATTERN, (_, key)=>{
-        const value = data[key];
-        return value != null ? String(value) : `<${key}?>`;
-    });
-}
-const PATTERN = /\{\$([^}]+)}/g;
-/**
- * @license
- * Copyright 2017 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * Evaluates a JSON string into a javascript object.
- *
- * @param {string} str A string containing JSON.
- * @return {*} The javascript object representing the specified JSON.
- */ function jsonEval(str) {
-    return JSON.parse(str);
-}
-/**
- * Returns JSON representing a javascript object.
- * @param {*} data Javascript object to be stringified.
- * @return {string} The JSON contents of the object.
- */ function stringify(data) {
-    return JSON.stringify(data);
-}
-/**
- * @license
- * Copyright 2017 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * Decodes a Firebase auth. token into constituent parts.
- *
- * Notes:
- * - May return with invalid / incomplete claims if there's no native base64 decoding support.
- * - Doesn't check if the token is actually valid.
- */ const decode = function(token) {
-    let header = {}, claims = {}, data = {}, signature = "";
-    try {
-        const parts = token.split(".");
-        header = jsonEval(base64Decode(parts[0]) || "");
-        claims = jsonEval(base64Decode(parts[1]) || "");
-        signature = parts[2];
-        data = claims["d"] || {};
-        delete claims["d"];
-    } catch (e) {}
-    return {
-        header,
-        claims,
-        data,
-        signature
-    };
-};
-/**
- * Decodes a Firebase auth. token and checks the validity of its time-based claims. Will return true if the
- * token is within the time window authorized by the 'nbf' (not-before) and 'iat' (issued-at) claims.
- *
- * Notes:
- * - May return a false negative if there's no native base64 decoding support.
- * - Doesn't check if the token is actually valid.
- */ const isValidTimestamp = function(token) {
-    const claims = decode(token).claims;
-    const now = Math.floor(new Date().getTime() / 1000);
-    let validSince = 0, validUntil = 0;
-    if (typeof claims === "object") {
-        if (claims.hasOwnProperty("nbf")) validSince = claims["nbf"];
-        else if (claims.hasOwnProperty("iat")) validSince = claims["iat"];
-        if (claims.hasOwnProperty("exp")) validUntil = claims["exp"];
-        else // token will expire after 24h by default
-        validUntil = validSince + 86400;
-    }
-    return !!now && !!validSince && !!validUntil && now >= validSince && now <= validUntil;
-};
-/**
- * Decodes a Firebase auth. token and returns its issued at time if valid, null otherwise.
- *
- * Notes:
- * - May return null if there's no native base64 decoding support.
- * - Doesn't check if the token is actually valid.
- */ const issuedAtTime = function(token) {
-    const claims = decode(token).claims;
-    if (typeof claims === "object" && claims.hasOwnProperty("iat")) return claims["iat"];
-    return null;
-};
-/**
- * Decodes a Firebase auth. token and checks the validity of its format. Expects a valid issued-at time.
- *
- * Notes:
- * - May return a false negative if there's no native base64 decoding support.
- * - Doesn't check if the token is actually valid.
- */ const isValidFormat = function(token) {
-    const decoded = decode(token), claims = decoded.claims;
-    return !!claims && typeof claims === "object" && claims.hasOwnProperty("iat");
-};
-/**
- * Attempts to peer into an auth token and determine if it's an admin auth token by looking at the claims portion.
- *
- * Notes:
- * - May return a false negative if there's no native base64 decoding support.
- * - Doesn't check if the token is actually valid.
- */ const isAdmin = function(token) {
-    const claims = decode(token).claims;
-    return typeof claims === "object" && claims["admin"] === true;
-};
-/**
- * @license
- * Copyright 2017 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ function contains(obj, key) {
-    return Object.prototype.hasOwnProperty.call(obj, key);
-}
-function safeGet(obj, key) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) return obj[key];
-    else return undefined;
-}
-function isEmpty(obj) {
-    for(const key in obj){
-        if (Object.prototype.hasOwnProperty.call(obj, key)) return false;
-    }
-    return true;
-}
-function map(obj, fn, contextObj) {
-    const res = {};
-    for(const key in obj)if (Object.prototype.hasOwnProperty.call(obj, key)) res[key] = fn.call(contextObj, obj[key], key, obj);
-    return res;
-}
-/**
- * Deep equal two objects. Support Arrays and Objects.
- */ function deepEqual(a, b) {
-    if (a === b) return true;
-    const aKeys = Object.keys(a);
-    const bKeys = Object.keys(b);
-    for (const k of aKeys){
-        if (!bKeys.includes(k)) return false;
-        const aProp = a[k];
-        const bProp = b[k];
-        if (isObject(aProp) && isObject(bProp)) {
-            if (!deepEqual(aProp, bProp)) return false;
-        } else if (aProp !== bProp) return false;
-    }
-    for (const k of bKeys){
-        if (!aKeys.includes(k)) return false;
-    }
-    return true;
-}
-function isObject(thing) {
-    return thing !== null && typeof thing === "object";
-}
-/**
- * @license
- * Copyright 2022 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * Rejects if the given promise doesn't resolve in timeInMS milliseconds.
- * @internal
- */ function promiseWithTimeout(promise, timeInMS = 2000) {
-    const deferredPromise = new Deferred();
-    setTimeout(()=>deferredPromise.reject("timeout!"), timeInMS);
-    promise.then(deferredPromise.resolve, deferredPromise.reject);
-    return deferredPromise.promise;
-}
-/**
- * @license
- * Copyright 2017 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * Returns a querystring-formatted string (e.g. &arg=val&arg2=val2) from a
- * params object (e.g. {arg: 'val', arg2: 'val2'})
- * Note: You must prepend it with ? when adding it to a URL.
- */ function querystring(querystringParams) {
-    const params = [];
-    for (const [key, value] of Object.entries(querystringParams))if (Array.isArray(value)) value.forEach((arrayVal)=>{
-        params.push(encodeURIComponent(key) + "=" + encodeURIComponent(arrayVal));
-    });
-    else params.push(encodeURIComponent(key) + "=" + encodeURIComponent(value));
-    return params.length ? "&" + params.join("&") : "";
-}
-/**
- * Decodes a querystring (e.g. ?arg=val&arg2=val2) into a params object
- * (e.g. {arg: 'val', arg2: 'val2'})
- */ function querystringDecode(querystring) {
-    const obj = {};
-    const tokens = querystring.replace(/^\?/, "").split("&");
-    tokens.forEach((token)=>{
-        if (token) {
-            const [key, value] = token.split("=");
-            obj[decodeURIComponent(key)] = decodeURIComponent(value);
-        }
-    });
-    return obj;
-}
-/**
- * Extract the query string part of a URL, including the leading question mark (if present).
- */ function extractQuerystring(url) {
-    const queryStart = url.indexOf("?");
-    if (!queryStart) return "";
-    const fragmentStart = url.indexOf("#", queryStart);
-    return url.substring(queryStart, fragmentStart > 0 ? fragmentStart : undefined);
-}
-/**
- * @license
- * Copyright 2017 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * @fileoverview SHA-1 cryptographic hash.
- * Variable names follow the notation in FIPS PUB 180-3:
- * http://csrc.nist.gov/publications/fips/fips180-3/fips180-3_final.pdf.
- *
- * Usage:
- *   var sha1 = new sha1();
- *   sha1.update(bytes);
- *   var hash = sha1.digest();
- *
- * Performance:
- *   Chrome 23:   ~400 Mbit/s
- *   Firefox 16:  ~250 Mbit/s
- *
- */ /**
- * SHA-1 cryptographic hash constructor.
- *
- * The properties declared here are discussed in the above algorithm document.
- * @constructor
- * @final
- * @struct
- */ class Sha1 {
-    constructor(){
-        /**
-         * Holds the previous values of accumulated variables a-e in the compress_
-         * function.
-         * @private
-         */ this.chain_ = [];
-        /**
-         * A buffer holding the partially computed hash result.
-         * @private
-         */ this.buf_ = [];
-        /**
-         * An array of 80 bytes, each a part of the message to be hashed.  Referred to
-         * as the message schedule in the docs.
-         * @private
-         */ this.W_ = [];
-        /**
-         * Contains data needed to pad messages less than 64 bytes.
-         * @private
-         */ this.pad_ = [];
-        /**
-         * @private {number}
-         */ this.inbuf_ = 0;
-        /**
-         * @private {number}
-         */ this.total_ = 0;
-        this.blockSize = 64;
-        this.pad_[0] = 128;
-        for(let i = 1; i < this.blockSize; ++i)this.pad_[i] = 0;
-        this.reset();
-    }
-    reset() {
-        this.chain_[0] = 0x67452301;
-        this.chain_[1] = 0xefcdab89;
-        this.chain_[2] = 0x98badcfe;
-        this.chain_[3] = 0x10325476;
-        this.chain_[4] = 0xc3d2e1f0;
-        this.inbuf_ = 0;
-        this.total_ = 0;
-    }
-    /**
-     * Internal compress helper function.
-     * @param buf Block to compress.
-     * @param offset Offset of the block in the buffer.
-     * @private
-     */ compress_(buf, offset) {
-        if (!offset) offset = 0;
-        const W = this.W_;
-        // get 16 big endian words
-        if (typeof buf === "string") for(let i = 0; i < 16; i++){
-            // TODO(user): [bug 8140122] Recent versions of Safari for Mac OS and iOS
-            // have a bug that turns the post-increment ++ operator into pre-increment
-            // during JIT compilation.  We have code that depends heavily on SHA-1 for
-            // correctness and which is affected by this bug, so I've removed all uses
-            // of post-increment ++ in which the result value is used.  We can revert
-            // this change once the Safari bug
-            // (https://bugs.webkit.org/show_bug.cgi?id=109036) has been fixed and
-            // most clients have been updated.
-            W[i] = buf.charCodeAt(offset) << 24 | buf.charCodeAt(offset + 1) << 16 | buf.charCodeAt(offset + 2) << 8 | buf.charCodeAt(offset + 3);
-            offset += 4;
-        }
-        else for(let i = 0; i < 16; i++){
-            W[i] = buf[offset] << 24 | buf[offset + 1] << 16 | buf[offset + 2] << 8 | buf[offset + 3];
-            offset += 4;
-        }
-        // expand to 80 words
-        for(let i = 16; i < 80; i++){
-            const t = W[i - 3] ^ W[i - 8] ^ W[i - 14] ^ W[i - 16];
-            W[i] = (t << 1 | t >>> 31) & 0xffffffff;
-        }
-        let a = this.chain_[0];
-        let b = this.chain_[1];
-        let c = this.chain_[2];
-        let d = this.chain_[3];
-        let e = this.chain_[4];
-        let f, k;
-        // TODO(user): Try to unroll this loop to speed up the computation.
-        for(let i = 0; i < 80; i++){
-            if (i < 40) {
-                if (i < 20) {
-                    f = d ^ b & (c ^ d);
-                    k = 0x5a827999;
-                } else {
-                    f = b ^ c ^ d;
-                    k = 0x6ed9eba1;
-                }
-            } else if (i < 60) {
-                f = b & c | d & (b | c);
-                k = 0x8f1bbcdc;
-            } else {
-                f = b ^ c ^ d;
-                k = 0xca62c1d6;
-            }
-            const t = (a << 5 | a >>> 27) + f + e + k + W[i] & 0xffffffff;
-            e = d;
-            d = c;
-            c = (b << 30 | b >>> 2) & 0xffffffff;
-            b = a;
-            a = t;
-        }
-        this.chain_[0] = this.chain_[0] + a & 0xffffffff;
-        this.chain_[1] = this.chain_[1] + b & 0xffffffff;
-        this.chain_[2] = this.chain_[2] + c & 0xffffffff;
-        this.chain_[3] = this.chain_[3] + d & 0xffffffff;
-        this.chain_[4] = this.chain_[4] + e & 0xffffffff;
-    }
-    update(bytes, length) {
-        // TODO(johnlenz): tighten the function signature and remove this check
-        if (bytes == null) return;
-        if (length === undefined) length = bytes.length;
-        const lengthMinusBlock = length - this.blockSize;
-        let n = 0;
-        // Using local instead of member variables gives ~5% speedup on Firefox 16.
-        const buf = this.buf_;
-        let inbuf = this.inbuf_;
-        // The outer while loop should execute at most twice.
-        while(n < length){
-            // When we have no data in the block to top up, we can directly process the
-            // input buffer (assuming it contains sufficient data). This gives ~25%
-            // speedup on Chrome 23 and ~15% speedup on Firefox 16, but requires that
-            // the data is provided in large chunks (or in multiples of 64 bytes).
-            if (inbuf === 0) while(n <= lengthMinusBlock){
-                this.compress_(bytes, n);
-                n += this.blockSize;
-            }
-            if (typeof bytes === "string") while(n < length){
-                buf[inbuf] = bytes.charCodeAt(n);
-                ++inbuf;
-                ++n;
-                if (inbuf === this.blockSize) {
-                    this.compress_(buf);
-                    inbuf = 0;
-                    break;
-                }
-            }
-            else while(n < length){
-                buf[inbuf] = bytes[n];
-                ++inbuf;
-                ++n;
-                if (inbuf === this.blockSize) {
-                    this.compress_(buf);
-                    inbuf = 0;
-                    break;
-                }
-            }
-        }
-        this.inbuf_ = inbuf;
-        this.total_ += length;
-    }
-    /** @override */ digest() {
-        const digest = [];
-        let totalBits = this.total_ * 8;
-        // Add pad 0x80 0x00*.
-        if (this.inbuf_ < 56) this.update(this.pad_, 56 - this.inbuf_);
-        else this.update(this.pad_, this.blockSize - (this.inbuf_ - 56));
-        // Add # bits.
-        for(let i = this.blockSize - 1; i >= 56; i--){
-            this.buf_[i] = totalBits & 255;
-            totalBits /= 256; // Don't use bit-shifting here!
-        }
-        this.compress_(this.buf_);
-        let n = 0;
-        for(let i = 0; i < 5; i++)for(let j = 24; j >= 0; j -= 8){
-            digest[n] = this.chain_[i] >> j & 255;
-            ++n;
-        }
-        return digest;
-    }
-}
-/**
- * Helper to make a Subscribe function (just like Promise helps make a
- * Thenable).
- *
- * @param executor Function which can make calls to a single Observer
- *     as a proxy.
- * @param onNoObservers Callback when count of Observers goes to zero.
- */ function createSubscribe(executor, onNoObservers) {
-    const proxy = new ObserverProxy(executor, onNoObservers);
-    return proxy.subscribe.bind(proxy);
-}
-/**
- * Implement fan-out for any number of Observers attached via a subscribe
- * function.
- */ class ObserverProxy {
-    /**
-     * @param executor Function which can make calls to a single Observer
-     *     as a proxy.
-     * @param onNoObservers Callback when count of Observers goes to zero.
-     */ constructor(executor, onNoObservers){
-        this.observers = [];
-        this.unsubscribes = [];
-        this.observerCount = 0;
-        // Micro-task scheduling by calling task.then().
-        this.task = Promise.resolve();
-        this.finalized = false;
-        this.onNoObservers = onNoObservers;
-        // Call the executor asynchronously so subscribers that are called
-        // synchronously after the creation of the subscribe function
-        // can still receive the very first value generated in the executor.
-        this.task.then(()=>{
-            executor(this);
-        }).catch((e)=>{
-            this.error(e);
-        });
-    }
-    next(value) {
-        this.forEachObserver((observer)=>{
-            observer.next(value);
-        });
-    }
-    error(error) {
-        this.forEachObserver((observer)=>{
-            observer.error(error);
-        });
-        this.close(error);
-    }
-    complete() {
-        this.forEachObserver((observer)=>{
-            observer.complete();
-        });
-        this.close();
-    }
-    /**
-     * Subscribe function that can be used to add an Observer to the fan-out list.
-     *
-     * - We require that no event is sent to a subscriber sychronously to their
-     *   call to subscribe().
-     */ subscribe(nextOrObserver, error, complete) {
-        let observer;
-        if (nextOrObserver === undefined && error === undefined && complete === undefined) throw new Error("Missing Observer.");
-        // Assemble an Observer object when passed as callback functions.
-        if (implementsAnyMethods(nextOrObserver, [
-            "next",
-            "error",
-            "complete"
-        ])) observer = nextOrObserver;
-        else observer = {
-            next: nextOrObserver,
-            error,
-            complete
-        };
-        if (observer.next === undefined) observer.next = noop;
-        if (observer.error === undefined) observer.error = noop;
-        if (observer.complete === undefined) observer.complete = noop;
-        const unsub = this.unsubscribeOne.bind(this, this.observers.length);
-        // Attempt to subscribe to a terminated Observable - we
-        // just respond to the Observer with the final error or complete
-        // event.
-        if (this.finalized) // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        this.task.then(()=>{
-            try {
-                if (this.finalError) observer.error(this.finalError);
-                else observer.complete();
-            } catch (e) {
-            // nothing
-            }
-            return;
-        });
-        this.observers.push(observer);
-        return unsub;
-    }
-    // Unsubscribe is synchronous - we guarantee that no events are sent to
-    // any unsubscribed Observer.
-    unsubscribeOne(i) {
-        if (this.observers === undefined || this.observers[i] === undefined) return;
-        delete this.observers[i];
-        this.observerCount -= 1;
-        if (this.observerCount === 0 && this.onNoObservers !== undefined) this.onNoObservers(this);
-    }
-    forEachObserver(fn) {
-        if (this.finalized) // Already closed by previous event....just eat the additional values.
-        return;
-        // Since sendOne calls asynchronously - there is no chance that
-        // this.observers will become undefined.
-        for(let i = 0; i < this.observers.length; i++)this.sendOne(i, fn);
-    }
-    // Call the Observer via one of it's callback function. We are careful to
-    // confirm that the observe has not been unsubscribed since this asynchronous
-    // function had been queued.
-    sendOne(i, fn) {
-        // Execute the callback asynchronously
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        this.task.then(()=>{
-            if (this.observers !== undefined && this.observers[i] !== undefined) try {
-                fn(this.observers[i]);
-            } catch (e) {
-                // Ignore exceptions raised in Observers or missing methods of an
-                // Observer.
-                // Log error to console. b/31404806
-                if (typeof console !== "undefined" && console.error) console.error(e);
-            }
-        });
-    }
-    close(err) {
-        if (this.finalized) return;
-        this.finalized = true;
-        if (err !== undefined) this.finalError = err;
-        // Proxy is no longer needed - garbage collect references
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        this.task.then(()=>{
-            this.observers = undefined;
-            this.onNoObservers = undefined;
-        });
-    }
-}
-/** Turn synchronous function into one called asynchronously. */ // eslint-disable-next-line @typescript-eslint/ban-types
-function async(fn, onError) {
-    return (...args)=>{
-        Promise.resolve(true).then(()=>{
-            fn(...args);
-        }).catch((error)=>{
-            if (onError) onError(error);
-        });
-    };
-}
-/**
- * Return true if the object passed in implements any of the named methods.
- */ function implementsAnyMethods(obj, methods) {
-    if (typeof obj !== "object" || obj === null) return false;
-    for (const method of methods){
-        if (method in obj && typeof obj[method] === "function") return true;
-    }
-    return false;
-}
-function noop() {
-// do nothing
-}
-/**
- * @license
- * Copyright 2017 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * Check to make sure the appropriate number of arguments are provided for a public function.
- * Throws an error if it fails.
- *
- * @param fnName The function name
- * @param minCount The minimum number of arguments to allow for the function call
- * @param maxCount The maximum number of argument to allow for the function call
- * @param argCount The actual number of arguments provided.
- */ const validateArgCount = function(fnName, minCount, maxCount, argCount) {
-    let argError;
-    if (argCount < minCount) argError = "at least " + minCount;
-    else if (argCount > maxCount) argError = maxCount === 0 ? "none" : "no more than " + maxCount;
-    if (argError) {
-        const error = fnName + " failed: Was called with " + argCount + (argCount === 1 ? " argument." : " arguments.") + " Expects " + argError + ".";
-        throw new Error(error);
-    }
-};
-/**
- * Generates a string to prefix an error message about failed argument validation
- *
- * @param fnName The function name
- * @param argName The name of the argument
- * @return The prefix to add to the error thrown for validation.
- */ function errorPrefix(fnName, argName) {
-    return `${fnName} failed: ${argName} argument `;
-}
-/**
- * @param fnName
- * @param argumentNumber
- * @param namespace
- * @param optional
- */ function validateNamespace(fnName, namespace, optional) {
-    if (optional && !namespace) return;
-    if (typeof namespace !== "string") //TODO: I should do more validation here. We only allow certain chars in namespaces.
-    throw new Error(errorPrefix(fnName, "namespace") + "must be a valid firebase namespace.");
-}
-function validateCallback(fnName, argumentName, // eslint-disable-next-line @typescript-eslint/ban-types
-callback, optional) {
-    if (optional && !callback) return;
-    if (typeof callback !== "function") throw new Error(errorPrefix(fnName, argumentName) + "must be a valid function.");
-}
-function validateContextObject(fnName, argumentName, context, optional) {
-    if (optional && !context) return;
-    if (typeof context !== "object" || context === null) throw new Error(errorPrefix(fnName, argumentName) + "must be a valid context object.");
-}
-/**
- * @license
- * Copyright 2017 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ // Code originally came from goog.crypt.stringToUtf8ByteArray, but for some reason they
-// automatically replaced '\r\n' with '\n', and they didn't handle surrogate pairs,
-// so it's been modified.
-// Note that not all Unicode characters appear as single characters in JavaScript strings.
-// fromCharCode returns the UTF-16 encoding of a character - so some Unicode characters
-// use 2 characters in Javascript.  All 4-byte UTF-8 characters begin with a first
-// character in the range 0xD800 - 0xDBFF (the first character of a so-called surrogate
-// pair).
-// See http://www.ecma-international.org/ecma-262/5.1/#sec-15.1.3
-/**
- * @param {string} str
- * @return {Array}
- */ const stringToByteArray = function(str) {
-    const out = [];
-    let p = 0;
-    for(let i = 0; i < str.length; i++){
-        let c = str.charCodeAt(i);
-        // Is this the lead surrogate in a surrogate pair?
-        if (c >= 0xd800 && c <= 0xdbff) {
-            const high = c - 0xd800; // the high 10 bits.
-            i++;
-            assert(i < str.length, "Surrogate pair missing trail surrogate.");
-            const low = str.charCodeAt(i) - 0xdc00; // the low 10 bits.
-            c = 0x10000 + (high << 10) + low;
-        }
-        if (c < 128) out[p++] = c;
-        else if (c < 2048) {
-            out[p++] = c >> 6 | 192;
-            out[p++] = c & 63 | 128;
-        } else if (c < 65536) {
-            out[p++] = c >> 12 | 224;
-            out[p++] = c >> 6 & 63 | 128;
-            out[p++] = c & 63 | 128;
-        } else {
-            out[p++] = c >> 18 | 240;
-            out[p++] = c >> 12 & 63 | 128;
-            out[p++] = c >> 6 & 63 | 128;
-            out[p++] = c & 63 | 128;
-        }
-    }
-    return out;
-};
-/**
- * Calculate length without actually converting; useful for doing cheaper validation.
- * @param {string} str
- * @return {number}
- */ const stringLength = function(str) {
-    let p = 0;
-    for(let i = 0; i < str.length; i++){
-        const c = str.charCodeAt(i);
-        if (c < 128) p++;
-        else if (c < 2048) p += 2;
-        else if (c >= 0xd800 && c <= 0xdbff) {
-            // Lead surrogate of a surrogate pair.  The pair together will take 4 bytes to represent.
-            p += 4;
-            i++; // skip trail surrogate.
-        } else p += 3;
-    }
-    return p;
-};
-/**
- * @license
- * Copyright 2022 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * Copied from https://stackoverflow.com/a/2117523
- * Generates a new uuid.
- * @public
- */ const uuidv4 = function() {
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c)=>{
-        const r = Math.random() * 16 | 0, v = c === "x" ? r : r & 0x3 | 0x8;
-        return v.toString(16);
-    });
-};
-/**
- * @license
- * Copyright 2019 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * The amount of milliseconds to exponentially increase.
- */ const DEFAULT_INTERVAL_MILLIS = 1000;
-/**
- * The factor to backoff by.
- * Should be a number greater than 1.
- */ const DEFAULT_BACKOFF_FACTOR = 2;
-/**
- * The maximum milliseconds to increase to.
- *
- * <p>Visible for testing
- */ const MAX_VALUE_MILLIS = 14400000; // Four hours, like iOS and Android.
-/**
- * The percentage of backoff time to randomize by.
- * See
- * http://go/safe-client-behavior#step-1-determine-the-appropriate-retry-interval-to-handle-spike-traffic
- * for context.
- *
- * <p>Visible for testing
- */ const RANDOM_FACTOR = 0.5;
-/**
- * Based on the backoff method from
- * https://github.com/google/closure-library/blob/master/closure/goog/math/exponentialbackoff.js.
- * Extracted here so we don't need to pass metadata and a stateful ExponentialBackoff object around.
- */ function calculateBackoffMillis(backoffCount, intervalMillis = DEFAULT_INTERVAL_MILLIS, backoffFactor = DEFAULT_BACKOFF_FACTOR) {
-    // Calculates an exponentially increasing value.
-    // Deviation: calculates value from count and a constant interval, so we only need to save value
-    // and count to restore state.
-    const currBaseValue = intervalMillis * Math.pow(backoffFactor, backoffCount);
-    // A random "fuzz" to avoid waves of retries.
-    // Deviation: randomFactor is required.
-    const randomWait = Math.round(// A fraction of the backoff value to add/subtract.
-    // Deviation: changes multiplication order to improve readability.
-    RANDOM_FACTOR * currBaseValue * // A random float (rounded to int by Math.round above) in the range [-1, 1]. Determines
-    // if we add or subtract.
-    (Math.random() - 0.5) * 2);
-    // Limits backoff to max to avoid effectively permanent backoff.
-    return Math.min(MAX_VALUE_MILLIS, currBaseValue + randomWait);
-}
-/**
- * @license
- * Copyright 2020 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * Provide English ordinal letters after a number
- */ function ordinal(i) {
-    if (!Number.isFinite(i)) return `${i}`;
-    return i + indicator(i);
-}
-function indicator(i) {
-    i = Math.abs(i);
-    const cent = i % 100;
-    if (cent >= 10 && cent <= 20) return "th";
-    const dec = i % 10;
-    if (dec === 1) return "st";
-    if (dec === 2) return "nd";
-    if (dec === 3) return "rd";
-    return "th";
-}
-/**
- * @license
- * Copyright 2021 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ function getModularInstance(service) {
-    if (service && service._delegate) return service._delegate;
-    else return service;
-}
-
-},{"d07263985281b344":"d5jf4","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"fZmft":[function(require,module,exports) {
-/**
- * @license
- * Copyright 2017 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ /**
- * A container for all of the Logger instances
- */ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "LogLevel", ()=>LogLevel);
-parcelHelpers.export(exports, "Logger", ()=>Logger);
-parcelHelpers.export(exports, "setLogLevel", ()=>setLogLevel);
-parcelHelpers.export(exports, "setUserLogHandler", ()=>setUserLogHandler);
-const instances = [];
-/**
- * The JS SDK supports 5 log levels and also allows a user the ability to
- * silence the logs altogether.
- *
- * The order is a follows:
- * DEBUG < VERBOSE < INFO < WARN < ERROR
- *
- * All of the log types above the current log level will be captured (i.e. if
- * you set the log level to `INFO`, errors will still be logged, but `DEBUG` and
- * `VERBOSE` logs will not)
- */ var LogLevel;
-(function(LogLevel) {
-    LogLevel[LogLevel["DEBUG"] = 0] = "DEBUG";
-    LogLevel[LogLevel["VERBOSE"] = 1] = "VERBOSE";
-    LogLevel[LogLevel["INFO"] = 2] = "INFO";
-    LogLevel[LogLevel["WARN"] = 3] = "WARN";
-    LogLevel[LogLevel["ERROR"] = 4] = "ERROR";
-    LogLevel[LogLevel["SILENT"] = 5] = "SILENT";
-})(LogLevel || (LogLevel = {}));
-const levelStringToEnum = {
-    "debug": LogLevel.DEBUG,
-    "verbose": LogLevel.VERBOSE,
-    "info": LogLevel.INFO,
-    "warn": LogLevel.WARN,
-    "error": LogLevel.ERROR,
-    "silent": LogLevel.SILENT
-};
-/**
- * The default log level
- */ const defaultLogLevel = LogLevel.INFO;
-/**
- * By default, `console.debug` is not displayed in the developer console (in
- * chrome). To avoid forcing users to have to opt-in to these logs twice
- * (i.e. once for firebase, and once in the console), we are sending `DEBUG`
- * logs to the `console.log` function.
- */ const ConsoleMethod = {
-    [LogLevel.DEBUG]: "log",
-    [LogLevel.VERBOSE]: "log",
-    [LogLevel.INFO]: "info",
-    [LogLevel.WARN]: "warn",
-    [LogLevel.ERROR]: "error"
-};
-/**
- * The default log handler will forward DEBUG, VERBOSE, INFO, WARN, and ERROR
- * messages on to their corresponding console counterparts (if the log method
- * is supported by the current log level)
- */ const defaultLogHandler = (instance, logType, ...args)=>{
-    if (logType < instance.logLevel) return;
-    const now = new Date().toISOString();
-    const method = ConsoleMethod[logType];
-    if (method) console[method](`[${now}]  ${instance.name}:`, ...args);
-    else throw new Error(`Attempted to log a message with an invalid logType (value: ${logType})`);
-};
-class Logger {
-    /**
-     * Gives you an instance of a Logger to capture messages according to
-     * Firebase's logging scheme.
-     *
-     * @param name The name that the logs will be associated with
-     */ constructor(name){
-        this.name = name;
-        /**
-         * The log level of the given Logger instance.
-         */ this._logLevel = defaultLogLevel;
-        /**
-         * The main (internal) log handler for the Logger instance.
-         * Can be set to a new function in internal package code but not by user.
-         */ this._logHandler = defaultLogHandler;
-        /**
-         * The optional, additional, user-defined log handler for the Logger instance.
-         */ this._userLogHandler = null;
-        /**
-         * Capture the current instance for later use
-         */ instances.push(this);
-    }
-    get logLevel() {
-        return this._logLevel;
-    }
-    set logLevel(val) {
-        if (!(val in LogLevel)) throw new TypeError(`Invalid value "${val}" assigned to \`logLevel\``);
-        this._logLevel = val;
-    }
-    // Workaround for setter/getter having to be the same type.
-    setLogLevel(val) {
-        this._logLevel = typeof val === "string" ? levelStringToEnum[val] : val;
-    }
-    get logHandler() {
-        return this._logHandler;
-    }
-    set logHandler(val) {
-        if (typeof val !== "function") throw new TypeError("Value assigned to `logHandler` must be a function");
-        this._logHandler = val;
-    }
-    get userLogHandler() {
-        return this._userLogHandler;
-    }
-    set userLogHandler(val) {
-        this._userLogHandler = val;
-    }
-    /**
-     * The functions below are all based on the `console` interface
-     */ debug(...args) {
-        this._userLogHandler && this._userLogHandler(this, LogLevel.DEBUG, ...args);
-        this._logHandler(this, LogLevel.DEBUG, ...args);
-    }
-    log(...args) {
-        this._userLogHandler && this._userLogHandler(this, LogLevel.VERBOSE, ...args);
-        this._logHandler(this, LogLevel.VERBOSE, ...args);
-    }
-    info(...args) {
-        this._userLogHandler && this._userLogHandler(this, LogLevel.INFO, ...args);
-        this._logHandler(this, LogLevel.INFO, ...args);
-    }
-    warn(...args) {
-        this._userLogHandler && this._userLogHandler(this, LogLevel.WARN, ...args);
-        this._logHandler(this, LogLevel.WARN, ...args);
-    }
-    error(...args) {
-        this._userLogHandler && this._userLogHandler(this, LogLevel.ERROR, ...args);
-        this._logHandler(this, LogLevel.ERROR, ...args);
-    }
-}
-function setLogLevel(level) {
-    instances.forEach((inst)=>{
-        inst.setLogLevel(level);
-    });
-}
-function setUserLogHandler(logCallback, options) {
-    for (const instance of instances){
-        let customLogLevel = null;
-        if (options && options.level) customLogLevel = levelStringToEnum[options.level];
-        if (logCallback === null) instance.userLogHandler = null;
-        else instance.userLogHandler = (instance, level, ...args)=>{
-            const message = args.map((arg)=>{
-                if (arg == null) return null;
-                else if (typeof arg === "string") return arg;
-                else if (typeof arg === "number" || typeof arg === "boolean") return arg.toString();
-                else if (arg instanceof Error) return arg.message;
-                else try {
-                    return JSON.stringify(arg);
-                } catch (ignored) {
-                    return null;
-                }
-            }).filter((arg)=>arg).join(" ");
-            if (level >= (customLogLevel !== null && customLogLevel !== void 0 ? customLogLevel : instance.logLevel)) logCallback({
-                level: LogLevel[level].toLowerCase(),
-                message,
-                args,
-                type: instance.name
-            });
-        };
-    }
-}
-
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"kozAz":[function(require,module,exports) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "unwrap", ()=>(0, _wrapIdbValueJs.u));
-parcelHelpers.export(exports, "wrap", ()=>(0, _wrapIdbValueJs.w));
-parcelHelpers.export(exports, "deleteDB", ()=>deleteDB);
-parcelHelpers.export(exports, "openDB", ()=>openDB);
-var _wrapIdbValueJs = require("./wrap-idb-value.js");
-/**
- * Open a database.
- *
- * @param name Name of the database.
- * @param version Schema version.
- * @param callbacks Additional callbacks.
- */ function openDB(name, version, { blocked, upgrade, blocking, terminated } = {}) {
-    const request = indexedDB.open(name, version);
-    const openPromise = (0, _wrapIdbValueJs.w)(request);
-    if (upgrade) request.addEventListener("upgradeneeded", (event)=>{
-        upgrade((0, _wrapIdbValueJs.w)(request.result), event.oldVersion, event.newVersion, (0, _wrapIdbValueJs.w)(request.transaction), event);
-    });
-    if (blocked) request.addEventListener("blocked", (event)=>blocked(// Casting due to https://github.com/microsoft/TypeScript-DOM-lib-generator/pull/1405
-        event.oldVersion, event.newVersion, event));
-    openPromise.then((db)=>{
-        if (terminated) db.addEventListener("close", ()=>terminated());
-        if (blocking) db.addEventListener("versionchange", (event)=>blocking(event.oldVersion, event.newVersion, event));
-    }).catch(()=>{});
-    return openPromise;
-}
-/**
- * Delete a database.
- *
- * @param name Name of the database.
- */ function deleteDB(name, { blocked } = {}) {
-    const request = indexedDB.deleteDatabase(name);
-    if (blocked) request.addEventListener("blocked", (event)=>blocked(// Casting due to https://github.com/microsoft/TypeScript-DOM-lib-generator/pull/1405
-        event.oldVersion, event));
-    return (0, _wrapIdbValueJs.w)(request).then(()=>undefined);
-}
-const readMethods = [
-    "get",
-    "getKey",
-    "getAll",
-    "getAllKeys",
-    "count"
-];
-const writeMethods = [
-    "put",
-    "add",
-    "delete",
-    "clear"
-];
-const cachedMethods = new Map();
-function getMethod(target, prop) {
-    if (!(target instanceof IDBDatabase && !(prop in target) && typeof prop === "string")) return;
-    if (cachedMethods.get(prop)) return cachedMethods.get(prop);
-    const targetFuncName = prop.replace(/FromIndex$/, "");
-    const useIndex = prop !== targetFuncName;
-    const isWrite = writeMethods.includes(targetFuncName);
-    if (// Bail if the target doesn't exist on the target. Eg, getAll isn't in Edge.
-    !(targetFuncName in (useIndex ? IDBIndex : IDBObjectStore).prototype) || !(isWrite || readMethods.includes(targetFuncName))) return;
-    const method = async function(storeName, ...args) {
-        // isWrite ? 'readwrite' : undefined gzipps better, but fails in Edge :(
-        const tx = this.transaction(storeName, isWrite ? "readwrite" : "readonly");
-        let target = tx.store;
-        if (useIndex) target = target.index(args.shift());
-        // Must reject if op rejects.
-        // If it's a write operation, must reject if tx.done rejects.
-        // Must reject with op rejection first.
-        // Must resolve with op value.
-        // Must handle both promises (no unhandled rejections)
-        return (await Promise.all([
-            target[targetFuncName](...args),
-            isWrite && tx.done
-        ]))[0];
-    };
-    cachedMethods.set(prop, method);
-    return method;
-}
-(0, _wrapIdbValueJs.r)((oldTraps)=>({
-        ...oldTraps,
-        get: (target, prop, receiver)=>getMethod(target, prop) || oldTraps.get(target, prop, receiver),
-        has: (target, prop)=>!!getMethod(target, prop) || oldTraps.has(target, prop)
-    }));
-
-},{"./wrap-idb-value.js":"lS54k","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"lS54k":[function(require,module,exports) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "a", ()=>reverseTransformCache);
-parcelHelpers.export(exports, "i", ()=>instanceOfAny);
-parcelHelpers.export(exports, "r", ()=>replaceTraps);
-parcelHelpers.export(exports, "u", ()=>unwrap);
-parcelHelpers.export(exports, "w", ()=>wrap);
-const instanceOfAny = (object, constructors)=>constructors.some((c)=>object instanceof c);
-let idbProxyableTypes;
-let cursorAdvanceMethods;
-// This is a function to prevent it throwing up in node environments.
-function getIdbProxyableTypes() {
-    return idbProxyableTypes || (idbProxyableTypes = [
-        IDBDatabase,
-        IDBObjectStore,
-        IDBIndex,
-        IDBCursor,
-        IDBTransaction
-    ]);
-}
-// This is a function to prevent it throwing up in node environments.
-function getCursorAdvanceMethods() {
-    return cursorAdvanceMethods || (cursorAdvanceMethods = [
-        IDBCursor.prototype.advance,
-        IDBCursor.prototype.continue,
-        IDBCursor.prototype.continuePrimaryKey
-    ]);
-}
-const cursorRequestMap = new WeakMap();
-const transactionDoneMap = new WeakMap();
-const transactionStoreNamesMap = new WeakMap();
-const transformCache = new WeakMap();
-const reverseTransformCache = new WeakMap();
-function promisifyRequest(request) {
-    const promise = new Promise((resolve, reject)=>{
-        const unlisten = ()=>{
-            request.removeEventListener("success", success);
-            request.removeEventListener("error", error);
-        };
-        const success = ()=>{
-            resolve(wrap(request.result));
-            unlisten();
-        };
-        const error = ()=>{
-            reject(request.error);
-            unlisten();
-        };
-        request.addEventListener("success", success);
-        request.addEventListener("error", error);
-    });
-    promise.then((value)=>{
-        // Since cursoring reuses the IDBRequest (*sigh*), we cache it for later retrieval
-        // (see wrapFunction).
-        if (value instanceof IDBCursor) cursorRequestMap.set(value, request);
-    // Catching to avoid "Uncaught Promise exceptions"
-    }).catch(()=>{});
-    // This mapping exists in reverseTransformCache but doesn't doesn't exist in transformCache. This
-    // is because we create many promises from a single IDBRequest.
-    reverseTransformCache.set(promise, request);
-    return promise;
-}
-function cacheDonePromiseForTransaction(tx) {
-    // Early bail if we've already created a done promise for this transaction.
-    if (transactionDoneMap.has(tx)) return;
-    const done = new Promise((resolve, reject)=>{
-        const unlisten = ()=>{
-            tx.removeEventListener("complete", complete);
-            tx.removeEventListener("error", error);
-            tx.removeEventListener("abort", error);
-        };
-        const complete = ()=>{
-            resolve();
-            unlisten();
-        };
-        const error = ()=>{
-            reject(tx.error || new DOMException("AbortError", "AbortError"));
-            unlisten();
-        };
-        tx.addEventListener("complete", complete);
-        tx.addEventListener("error", error);
-        tx.addEventListener("abort", error);
-    });
-    // Cache it for later retrieval.
-    transactionDoneMap.set(tx, done);
-}
-let idbProxyTraps = {
-    get (target, prop, receiver) {
-        if (target instanceof IDBTransaction) {
-            // Special handling for transaction.done.
-            if (prop === "done") return transactionDoneMap.get(target);
-            // Polyfill for objectStoreNames because of Edge.
-            if (prop === "objectStoreNames") return target.objectStoreNames || transactionStoreNamesMap.get(target);
-            // Make tx.store return the only store in the transaction, or undefined if there are many.
-            if (prop === "store") return receiver.objectStoreNames[1] ? undefined : receiver.objectStore(receiver.objectStoreNames[0]);
-        }
-        // Else transform whatever we get back.
-        return wrap(target[prop]);
-    },
-    set (target, prop, value) {
-        target[prop] = value;
-        return true;
-    },
-    has (target, prop) {
-        if (target instanceof IDBTransaction && (prop === "done" || prop === "store")) return true;
-        return prop in target;
-    }
-};
-function replaceTraps(callback) {
-    idbProxyTraps = callback(idbProxyTraps);
-}
-function wrapFunction(func) {
-    // Due to expected object equality (which is enforced by the caching in `wrap`), we
-    // only create one new func per func.
-    // Edge doesn't support objectStoreNames (booo), so we polyfill it here.
-    if (func === IDBDatabase.prototype.transaction && !("objectStoreNames" in IDBTransaction.prototype)) return function(storeNames, ...args) {
-        const tx = func.call(unwrap(this), storeNames, ...args);
-        transactionStoreNamesMap.set(tx, storeNames.sort ? storeNames.sort() : [
-            storeNames
-        ]);
-        return wrap(tx);
-    };
-    // Cursor methods are special, as the behaviour is a little more different to standard IDB. In
-    // IDB, you advance the cursor and wait for a new 'success' on the IDBRequest that gave you the
-    // cursor. It's kinda like a promise that can resolve with many values. That doesn't make sense
-    // with real promises, so each advance methods returns a new promise for the cursor object, or
-    // undefined if the end of the cursor has been reached.
-    if (getCursorAdvanceMethods().includes(func)) return function(...args) {
-        // Calling the original function with the proxy as 'this' causes ILLEGAL INVOCATION, so we use
-        // the original object.
-        func.apply(unwrap(this), args);
-        return wrap(cursorRequestMap.get(this));
-    };
-    return function(...args) {
-        // Calling the original function with the proxy as 'this' causes ILLEGAL INVOCATION, so we use
-        // the original object.
-        return wrap(func.apply(unwrap(this), args));
-    };
-}
-function transformCachableValue(value) {
-    if (typeof value === "function") return wrapFunction(value);
-    // This doesn't return, it just creates a 'done' promise for the transaction,
-    // which is later returned for transaction.done (see idbObjectHandler).
-    if (value instanceof IDBTransaction) cacheDonePromiseForTransaction(value);
-    if (instanceOfAny(value, getIdbProxyableTypes())) return new Proxy(value, idbProxyTraps);
-    // Return the same value back if we're not going to transform it.
-    return value;
-}
-function wrap(value) {
-    // We sometimes generate multiple promises from a single IDBRequest (eg when cursoring), because
-    // IDB is weird and a single IDBRequest can yield many responses, so these can't be cached.
-    if (value instanceof IDBRequest) return promisifyRequest(value);
-    // If we've already transformed this value before, reuse the transformed value.
-    // This is faster, but it also provides object equality.
-    if (transformCache.has(value)) return transformCache.get(value);
-    const newValue = transformCachableValue(value);
-    // Not all types are transformed.
-    // These may be primitive types, so they can't be WeakMap keys.
-    if (newValue !== value) {
-        transformCache.set(value, newValue);
-        reverseTransformCache.set(newValue, value);
-    }
-    return newValue;
-}
-const unwrap = (value)=>reverseTransformCache.get(value);
-
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"98qAp":[function(require,module,exports) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "rtdb", ()=>rtdb);
-parcelHelpers.export(exports, "fsdb", ()=>fsdb);
-var _app = require("firebase/app");
-var _database = require("firebase/database");
-var _firestore = require("firebase/firestore");
-const firebaseConfig = {
-    apikey: "Gb114NwQJcuPTT4GsvCJCbRtJwsrmmMxQMJNgB65",
-    databaseURL: "https://imessages-d5664-default-rtdb.firebaseio.com",
-    authDomain: "imessages-d5664.firebaseapp.com",
-    projectId: "imessages-d5664"
-};
-const app = (0, _app.initializeApp)(firebaseConfig);
-const rtdb = (0, _database.getDatabase)(app);
-const fsdb = (0, _firestore.getFirestore)(app);
-
-},{"firebase/app":"aM3Fo","firebase/database":"SJ4UY","firebase/firestore":"8A4BC","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"aM3Fo":[function(require,module,exports) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-var _app = require("@firebase/app");
-parcelHelpers.exportAll(_app, exports);
-var name = "firebase";
-var version = "10.7.1";
-/**
- * @license
- * Copyright 2020 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */ (0, _app.registerVersion)(name, version, "app");
-
-},{"@firebase/app":"3AcPV","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"8A4BC":[function(require,module,exports) {
+},{"6b38617303e2f7b9":"d5jf4","@firebase/app":"3AcPV","@firebase/component":"bi1VB","@firebase/util":"ePiK6","@firebase/logger":"fZmft","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"8A4BC":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 var _firestore = require("@firebase/firestore");
@@ -40421,142 +40469,4132 @@ var isArrayLike = require("49bbd11cbf093bb1");
 }
 module.exports = createBaseEach;
 
-},{"49bbd11cbf093bb1":"gMCbp"}],"eBUGN":[function(require,module,exports) {
-var _index = require("./comps/welcome/index");
-var _index1 = require("./comps/game-room/index");
-var _index2 = require("./comps/new-game/index");
-var _index3 = require("./comps/instructions/index");
-var _index4 = require("./comps/game/index");
-var _router = require("@vaadin/router");
-const root = document.querySelector(".root");
-const router = new (0, _router.Router)(root);
-router.setRoutes([
-    {
-        path: "/",
-        component: "welc-el"
-    },
-    {
-        path: "/gameroom",
-        component: "game-room-el"
-    },
-    {
-        path: "/newgame",
-        component: "new-game-el"
-    },
-    {
-        path: "/instructions",
-        component: "inst-el"
-    },
-    {
-        path: "/game",
-        component: "game-el"
-    }
-]);
+},{"49bbd11cbf093bb1":"gMCbp"}],"3Gh8t":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "funcRoomId", ()=>funcRoomId);
+var _state = require("../../src/state");
+function funcRoomId() {
+    customElements.define("rooms-el", class Results extends HTMLElement {
+        connectedCallback() {
+            this.render();
+            this.rooms();
+            this.listeners();
+        }
+        render() {
+            this.roomIds = (0, _state.state).data.rooms;
+            const div = document.createElement("div");
+            div.innerHTML = `                
+            <div class="window__text">
+            <div class="window-title">Salas Creadas con Este Nombre</div>                
+            <div class="rooms-list"></div>                              
+            </div>                     
+            `;
+            const style = document.createElement("style");
+            style.textContent = `
+            .window {
+                backdrop-filter: blur(10px);
+                display: flex;
+                position: absolute;
+                color: red;
+                /* background-color: rgb(0, 0, 0); */
+                /* opacity: .4; */
+                    top: 5%;
+                    left: 5%;
+                    right: 5%;
+                    bottom: 5%;
+                    text-align: center;
+                    align-items: center;
+                    justify-content: center;
+                    flex-direction: column;
+                    font-family: 'Odibee Sans';
+                    font-weight:400;
+                    gap: 30px;
+                    border: solid black
+                }
+                .window-title {
+                    font-size:30px;
+                }
+                .room-button {
+                    width: 322px;height: 67px;
+                    border-radius: 10px;
+                    border: 10px solid #001997;
+                    background: #006CFC;         
+                    color: #D8FCFC;
+                    text-align: center;
+                    font-family: 'Odibee Sans';
+                    font-size: 25px;
+                    font-weight: 400;
+                    line-height: normal;
+                    letter-spacing: 2.25px;
+                }                 
+                .rooms-list {
+                    display:flex;
+                    flex-direction: column;
+                    height: 100;
+                }                
+                `;
+            div.classList.add("window");
+            this.appendChild(div);
+            this.appendChild(style);
+        }
+        rooms() {
+            this.roomIds.map((r)=>{
+                const div = document.createElement("button");
+                div.innerHTML = `${r.toString()}`;
+                div.classList.add("room-button");
+                return this.querySelector(".rooms-list").appendChild(div);
+            });
+        }
+        listeners() {
+            const butEl = this.querySelector(".rooms-list");
+            butEl.addEventListener("click", (e)=>{
+                e.preventDefault();
+                const tar = e.target;
+                (0, _state.state).data.roomId = tar.textContent;
+                (0, _state.state).accessToRoom();
+            });
+        }
+        constructor(...args){
+            super(...args);
+            this.roomIds = [];
+        }
+    });
+}
 
-},{"./comps/welcome/index":"8gRl4","./comps/game-room/index":"hbph1","./comps/new-game/index":"jbAs6","./comps/instructions/index":"dyuce","./comps/game/index":"gW4Uh","@vaadin/router":"kVZrF"}],"8gRl4":[function(require,module,exports) {
-var _router = require("@vaadin/router");
-customElements.define("welc-el", class Welcome extends HTMLElement {
-    connectedCallback() {
-        this.render();
-        this.listeners();
+},{"../../src/state":"1Yeju","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"8kdFB":[function(require,module,exports) {
+/*global window, global*/ var global = arguments[3];
+var util = require("69c2299a3979223b");
+var assert = require("ddc56b415c70169e");
+function now() {
+    return new Date().getTime();
+}
+var slice = Array.prototype.slice;
+var console;
+var times = {};
+if (typeof global !== "undefined" && global.console) console = global.console;
+else if (typeof window !== "undefined" && window.console) console = window.console;
+else console = {};
+var functions = [
+    [
+        log,
+        "log"
+    ],
+    [
+        info,
+        "info"
+    ],
+    [
+        warn,
+        "warn"
+    ],
+    [
+        error,
+        "error"
+    ],
+    [
+        time,
+        "time"
+    ],
+    [
+        timeEnd,
+        "timeEnd"
+    ],
+    [
+        trace,
+        "trace"
+    ],
+    [
+        dir,
+        "dir"
+    ],
+    [
+        consoleAssert,
+        "assert"
+    ]
+];
+for(var i = 0; i < functions.length; i++){
+    var tuple = functions[i];
+    var f = tuple[0];
+    var name = tuple[1];
+    if (!console[name]) console[name] = f;
+}
+module.exports = console;
+function log() {}
+function info() {
+    console.log.apply(console, arguments);
+}
+function warn() {
+    console.log.apply(console, arguments);
+}
+function error() {
+    console.warn.apply(console, arguments);
+}
+function time(label) {
+    times[label] = now();
+}
+function timeEnd(label) {
+    var time = times[label];
+    if (!time) throw new Error("No such label: " + label);
+    delete times[label];
+    var duration = now() - time;
+    console.log(label + ": " + duration + "ms");
+}
+function trace() {
+    var err = new Error();
+    err.name = "Trace";
+    err.message = util.format.apply(null, arguments);
+    console.error(err.stack);
+}
+function dir(object) {
+    console.log(util.inspect(object) + "\n");
+}
+function consoleAssert(expression) {
+    if (!expression) {
+        var arr = slice.call(arguments, 1);
+        assert.ok(false, util.format.apply(null, arr));
     }
-    listeners() {
-        const buttonNewGame = this.querySelector(".new-game-button");
-        buttonNewGame.addEventListener("click", (e)=>{
-            e.preventDefault();
-            (0, _router.Router).go("/newgame");
+}
+
+},{"69c2299a3979223b":"cxohQ","ddc56b415c70169e":"f3tT4"}],"cxohQ":[function(require,module,exports) {
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+var process = require("bc23a3ea4a141c0b");
+var getOwnPropertyDescriptors = Object.getOwnPropertyDescriptors || function getOwnPropertyDescriptors(obj) {
+    var keys = Object.keys(obj);
+    var descriptors = {};
+    for(var i = 0; i < keys.length; i++)descriptors[keys[i]] = Object.getOwnPropertyDescriptor(obj, keys[i]);
+    return descriptors;
+};
+var formatRegExp = /%[sdj%]/g;
+exports.format = function(f) {
+    if (!isString(f)) {
+        var objects = [];
+        for(var i = 0; i < arguments.length; i++)objects.push(inspect(arguments[i]));
+        return objects.join(" ");
+    }
+    var i = 1;
+    var args = arguments;
+    var len = args.length;
+    var str = String(f).replace(formatRegExp, function(x) {
+        if (x === "%%") return "%";
+        if (i >= len) return x;
+        switch(x){
+            case "%s":
+                return String(args[i++]);
+            case "%d":
+                return Number(args[i++]);
+            case "%j":
+                try {
+                    return JSON.stringify(args[i++]);
+                } catch (_) {
+                    return "[Circular]";
+                }
+            default:
+                return x;
+        }
+    });
+    for(var x = args[i]; i < len; x = args[++i])if (isNull(x) || !isObject(x)) str += " " + x;
+    else str += " " + inspect(x);
+    return str;
+};
+// Mark that a method should not be used.
+// Returns a modified function which warns once by default.
+// If --no-deprecation is set, then it is a no-op.
+exports.deprecate = function(fn, msg) {
+    if (typeof process !== "undefined" && process.noDeprecation === true) return fn;
+    // Allow for deprecating things in the process of starting up.
+    if (typeof process === "undefined") return function() {
+        return exports.deprecate(fn, msg).apply(this, arguments);
+    };
+    var warned = false;
+    function deprecated() {
+        if (!warned) {
+            if (process.throwDeprecation) throw new Error(msg);
+            else if (process.traceDeprecation) console.trace(msg);
+            else console.error(msg);
+            warned = true;
+        }
+        return fn.apply(this, arguments);
+    }
+    return deprecated;
+};
+var debugs = {};
+var debugEnvRegex = /^$/;
+var debugEnv;
+exports.debuglog = function(set) {
+    set = set.toUpperCase();
+    if (!debugs[set]) {
+        if (debugEnvRegex.test(set)) {
+            var pid = process.pid;
+            debugs[set] = function() {
+                var msg = exports.format.apply(exports, arguments);
+                console.error("%s %d: %s", set, pid, msg);
+            };
+        } else debugs[set] = function() {};
+    }
+    return debugs[set];
+};
+/**
+ * Echos the value of a value. Trys to print the value out
+ * in the best way possible given the different types.
+ *
+ * @param {Object} obj The object to print out.
+ * @param {Object} opts Optional options object that alters the output.
+ */ /* legacy: obj, showHidden, depth, colors*/ function inspect(obj, opts) {
+    // default options
+    var ctx = {
+        seen: [],
+        stylize: stylizeNoColor
+    };
+    // legacy...
+    if (arguments.length >= 3) ctx.depth = arguments[2];
+    if (arguments.length >= 4) ctx.colors = arguments[3];
+    if (isBoolean(opts)) // legacy...
+    ctx.showHidden = opts;
+    else if (opts) // got an "options" object
+    exports._extend(ctx, opts);
+    // set default options
+    if (isUndefined(ctx.showHidden)) ctx.showHidden = false;
+    if (isUndefined(ctx.depth)) ctx.depth = 2;
+    if (isUndefined(ctx.colors)) ctx.colors = false;
+    if (isUndefined(ctx.customInspect)) ctx.customInspect = true;
+    if (ctx.colors) ctx.stylize = stylizeWithColor;
+    return formatValue(ctx, obj, ctx.depth);
+}
+exports.inspect = inspect;
+// http://en.wikipedia.org/wiki/ANSI_escape_code#graphics
+inspect.colors = {
+    "bold": [
+        1,
+        22
+    ],
+    "italic": [
+        3,
+        23
+    ],
+    "underline": [
+        4,
+        24
+    ],
+    "inverse": [
+        7,
+        27
+    ],
+    "white": [
+        37,
+        39
+    ],
+    "grey": [
+        90,
+        39
+    ],
+    "black": [
+        30,
+        39
+    ],
+    "blue": [
+        34,
+        39
+    ],
+    "cyan": [
+        36,
+        39
+    ],
+    "green": [
+        32,
+        39
+    ],
+    "magenta": [
+        35,
+        39
+    ],
+    "red": [
+        31,
+        39
+    ],
+    "yellow": [
+        33,
+        39
+    ]
+};
+// Don't use 'blue' not visible on cmd.exe
+inspect.styles = {
+    "special": "cyan",
+    "number": "yellow",
+    "boolean": "yellow",
+    "undefined": "grey",
+    "null": "bold",
+    "string": "green",
+    "date": "magenta",
+    // "name": intentionally not styling
+    "regexp": "red"
+};
+function stylizeWithColor(str, styleType) {
+    var style = inspect.styles[styleType];
+    if (style) return "\x1b[" + inspect.colors[style][0] + "m" + str + "\x1b[" + inspect.colors[style][1] + "m";
+    else return str;
+}
+function stylizeNoColor(str, styleType) {
+    return str;
+}
+function arrayToHash(array) {
+    var hash = {};
+    array.forEach(function(val, idx) {
+        hash[val] = true;
+    });
+    return hash;
+}
+function formatValue(ctx, value, recurseTimes) {
+    // Provide a hook for user-specified inspect functions.
+    // Check that value is an object with an inspect function on it
+    if (ctx.customInspect && value && isFunction(value.inspect) && // Filter out the util module, it's inspect function is special
+    value.inspect !== exports.inspect && // Also filter out any prototype objects using the circular check.
+    !(value.constructor && value.constructor.prototype === value)) {
+        var ret = value.inspect(recurseTimes, ctx);
+        if (!isString(ret)) ret = formatValue(ctx, ret, recurseTimes);
+        return ret;
+    }
+    // Primitive types cannot have properties
+    var primitive = formatPrimitive(ctx, value);
+    if (primitive) return primitive;
+    // Look up the keys of the object.
+    var keys = Object.keys(value);
+    var visibleKeys = arrayToHash(keys);
+    if (ctx.showHidden) keys = Object.getOwnPropertyNames(value);
+    // IE doesn't make error fields non-enumerable
+    // http://msdn.microsoft.com/en-us/library/ie/dww52sbt(v=vs.94).aspx
+    if (isError(value) && (keys.indexOf("message") >= 0 || keys.indexOf("description") >= 0)) return formatError(value);
+    // Some type of object without properties can be shortcutted.
+    if (keys.length === 0) {
+        if (isFunction(value)) {
+            var name = value.name ? ": " + value.name : "";
+            return ctx.stylize("[Function" + name + "]", "special");
+        }
+        if (isRegExp(value)) return ctx.stylize(RegExp.prototype.toString.call(value), "regexp");
+        if (isDate(value)) return ctx.stylize(Date.prototype.toString.call(value), "date");
+        if (isError(value)) return formatError(value);
+    }
+    var base = "", array = false, braces = [
+        "{",
+        "}"
+    ];
+    // Make Array say that they are Array
+    if (isArray(value)) {
+        array = true;
+        braces = [
+            "[",
+            "]"
+        ];
+    }
+    // Make functions say that they are functions
+    if (isFunction(value)) {
+        var n = value.name ? ": " + value.name : "";
+        base = " [Function" + n + "]";
+    }
+    // Make RegExps say that they are RegExps
+    if (isRegExp(value)) base = " " + RegExp.prototype.toString.call(value);
+    // Make dates with properties first say the date
+    if (isDate(value)) base = " " + Date.prototype.toUTCString.call(value);
+    // Make error with message first say the error
+    if (isError(value)) base = " " + formatError(value);
+    if (keys.length === 0 && (!array || value.length == 0)) return braces[0] + base + braces[1];
+    if (recurseTimes < 0) {
+        if (isRegExp(value)) return ctx.stylize(RegExp.prototype.toString.call(value), "regexp");
+        else return ctx.stylize("[Object]", "special");
+    }
+    ctx.seen.push(value);
+    var output;
+    if (array) output = formatArray(ctx, value, recurseTimes, visibleKeys, keys);
+    else output = keys.map(function(key) {
+        return formatProperty(ctx, value, recurseTimes, visibleKeys, key, array);
+    });
+    ctx.seen.pop();
+    return reduceToSingleString(output, base, braces);
+}
+function formatPrimitive(ctx, value) {
+    if (isUndefined(value)) return ctx.stylize("undefined", "undefined");
+    if (isString(value)) {
+        var simple = "'" + JSON.stringify(value).replace(/^"|"$/g, "").replace(/'/g, "\\'").replace(/\\"/g, '"') + "'";
+        return ctx.stylize(simple, "string");
+    }
+    if (isNumber(value)) return ctx.stylize("" + value, "number");
+    if (isBoolean(value)) return ctx.stylize("" + value, "boolean");
+    // For some reason typeof null is "object", so special case here.
+    if (isNull(value)) return ctx.stylize("null", "null");
+}
+function formatError(value) {
+    return "[" + Error.prototype.toString.call(value) + "]";
+}
+function formatArray(ctx, value, recurseTimes, visibleKeys, keys) {
+    var output = [];
+    for(var i = 0, l = value.length; i < l; ++i)if (hasOwnProperty(value, String(i))) output.push(formatProperty(ctx, value, recurseTimes, visibleKeys, String(i), true));
+    else output.push("");
+    keys.forEach(function(key) {
+        if (!key.match(/^\d+$/)) output.push(formatProperty(ctx, value, recurseTimes, visibleKeys, key, true));
+    });
+    return output;
+}
+function formatProperty(ctx, value, recurseTimes, visibleKeys, key, array) {
+    var name, str, desc;
+    desc = Object.getOwnPropertyDescriptor(value, key) || {
+        value: value[key]
+    };
+    if (desc.get) {
+        if (desc.set) str = ctx.stylize("[Getter/Setter]", "special");
+        else str = ctx.stylize("[Getter]", "special");
+    } else if (desc.set) str = ctx.stylize("[Setter]", "special");
+    if (!hasOwnProperty(visibleKeys, key)) name = "[" + key + "]";
+    if (!str) {
+        if (ctx.seen.indexOf(desc.value) < 0) {
+            if (isNull(recurseTimes)) str = formatValue(ctx, desc.value, null);
+            else str = formatValue(ctx, desc.value, recurseTimes - 1);
+            if (str.indexOf("\n") > -1) {
+                if (array) str = str.split("\n").map(function(line) {
+                    return "  " + line;
+                }).join("\n").slice(2);
+                else str = "\n" + str.split("\n").map(function(line) {
+                    return "   " + line;
+                }).join("\n");
+            }
+        } else str = ctx.stylize("[Circular]", "special");
+    }
+    if (isUndefined(name)) {
+        if (array && key.match(/^\d+$/)) return str;
+        name = JSON.stringify("" + key);
+        if (name.match(/^"([a-zA-Z_][a-zA-Z_0-9]*)"$/)) {
+            name = name.slice(1, -1);
+            name = ctx.stylize(name, "name");
+        } else {
+            name = name.replace(/'/g, "\\'").replace(/\\"/g, '"').replace(/(^"|"$)/g, "'");
+            name = ctx.stylize(name, "string");
+        }
+    }
+    return name + ": " + str;
+}
+function reduceToSingleString(output, base, braces) {
+    var numLinesEst = 0;
+    var length = output.reduce(function(prev, cur) {
+        numLinesEst++;
+        if (cur.indexOf("\n") >= 0) numLinesEst++;
+        return prev + cur.replace(/\u001b\[\d\d?m/g, "").length + 1;
+    }, 0);
+    if (length > 60) return braces[0] + (base === "" ? "" : base + "\n ") + " " + output.join(",\n  ") + " " + braces[1];
+    return braces[0] + base + " " + output.join(", ") + " " + braces[1];
+}
+// NOTE: These type checking functions intentionally don't use `instanceof`
+// because it is fragile and can be easily faked with `Object.create()`.
+exports.types = require("6a1c15bae847a134");
+function isArray(ar) {
+    return Array.isArray(ar);
+}
+exports.isArray = isArray;
+function isBoolean(arg) {
+    return typeof arg === "boolean";
+}
+exports.isBoolean = isBoolean;
+function isNull(arg) {
+    return arg === null;
+}
+exports.isNull = isNull;
+function isNullOrUndefined(arg) {
+    return arg == null;
+}
+exports.isNullOrUndefined = isNullOrUndefined;
+function isNumber(arg) {
+    return typeof arg === "number";
+}
+exports.isNumber = isNumber;
+function isString(arg) {
+    return typeof arg === "string";
+}
+exports.isString = isString;
+function isSymbol(arg) {
+    return typeof arg === "symbol";
+}
+exports.isSymbol = isSymbol;
+function isUndefined(arg) {
+    return arg === void 0;
+}
+exports.isUndefined = isUndefined;
+function isRegExp(re) {
+    return isObject(re) && objectToString(re) === "[object RegExp]";
+}
+exports.isRegExp = isRegExp;
+exports.types.isRegExp = isRegExp;
+function isObject(arg) {
+    return typeof arg === "object" && arg !== null;
+}
+exports.isObject = isObject;
+function isDate(d) {
+    return isObject(d) && objectToString(d) === "[object Date]";
+}
+exports.isDate = isDate;
+exports.types.isDate = isDate;
+function isError(e) {
+    return isObject(e) && (objectToString(e) === "[object Error]" || e instanceof Error);
+}
+exports.isError = isError;
+exports.types.isNativeError = isError;
+function isFunction(arg) {
+    return typeof arg === "function";
+}
+exports.isFunction = isFunction;
+function isPrimitive(arg) {
+    return arg === null || typeof arg === "boolean" || typeof arg === "number" || typeof arg === "string" || typeof arg === "symbol" || // ES6 symbol
+    typeof arg === "undefined";
+}
+exports.isPrimitive = isPrimitive;
+exports.isBuffer = require("a42137cd7fc8700d");
+function objectToString(o) {
+    return Object.prototype.toString.call(o);
+}
+function pad(n) {
+    return n < 10 ? "0" + n.toString(10) : n.toString(10);
+}
+var months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+];
+// 26 Feb 16:19:34
+function timestamp() {
+    var d = new Date();
+    var time = [
+        pad(d.getHours()),
+        pad(d.getMinutes()),
+        pad(d.getSeconds())
+    ].join(":");
+    return [
+        d.getDate(),
+        months[d.getMonth()],
+        time
+    ].join(" ");
+}
+// log is just a thin wrapper to console.log that prepends a timestamp
+exports.log = function() {
+    console.log("%s - %s", timestamp(), exports.format.apply(exports, arguments));
+};
+/**
+ * Inherit the prototype methods from one constructor into another.
+ *
+ * The Function.prototype.inherits from lang.js rewritten as a standalone
+ * function (not on Function.prototype). NOTE: If this file is to be loaded
+ * during bootstrapping this function needs to be rewritten using some native
+ * functions as prototype setup using normal JavaScript does not work as
+ * expected during bootstrapping (see mirror.js in r114903).
+ *
+ * @param {function} ctor Constructor function which needs to inherit the
+ *     prototype.
+ * @param {function} superCtor Constructor function to inherit prototype from.
+ */ exports.inherits = require("a792e8e3e2aa1973");
+exports._extend = function(origin, add) {
+    // Don't do anything if add isn't an object
+    if (!add || !isObject(add)) return origin;
+    var keys = Object.keys(add);
+    var i = keys.length;
+    while(i--)origin[keys[i]] = add[keys[i]];
+    return origin;
+};
+function hasOwnProperty(obj, prop) {
+    return Object.prototype.hasOwnProperty.call(obj, prop);
+}
+var kCustomPromisifiedSymbol = typeof Symbol !== "undefined" ? Symbol("util.promisify.custom") : undefined;
+exports.promisify = function promisify(original) {
+    if (typeof original !== "function") throw new TypeError('The "original" argument must be of type Function');
+    if (kCustomPromisifiedSymbol && original[kCustomPromisifiedSymbol]) {
+        var fn = original[kCustomPromisifiedSymbol];
+        if (typeof fn !== "function") throw new TypeError('The "util.promisify.custom" argument must be of type Function');
+        Object.defineProperty(fn, kCustomPromisifiedSymbol, {
+            value: fn,
+            enumerable: false,
+            writable: false,
+            configurable: true
         });
-        const buttonNewRoom = this.querySelector(".new-room-button");
-        buttonNewRoom.addEventListener("click", (e)=>{
-            e.preventDefault();
-            (0, _router.Router).go("/gameroom");
+        return fn;
+    }
+    function fn() {
+        var promiseResolve, promiseReject;
+        var promise = new Promise(function(resolve, reject) {
+            promiseResolve = resolve;
+            promiseReject = reject;
+        });
+        var args = [];
+        for(var i = 0; i < arguments.length; i++)args.push(arguments[i]);
+        args.push(function(err, value) {
+            if (err) promiseReject(err);
+            else promiseResolve(value);
+        });
+        try {
+            original.apply(this, args);
+        } catch (err) {
+            promiseReject(err);
+        }
+        return promise;
+    }
+    Object.setPrototypeOf(fn, Object.getPrototypeOf(original));
+    if (kCustomPromisifiedSymbol) Object.defineProperty(fn, kCustomPromisifiedSymbol, {
+        value: fn,
+        enumerable: false,
+        writable: false,
+        configurable: true
+    });
+    return Object.defineProperties(fn, getOwnPropertyDescriptors(original));
+};
+exports.promisify.custom = kCustomPromisifiedSymbol;
+function callbackifyOnRejected(reason, cb) {
+    // `!reason` guard inspired by bluebird (Ref: https://goo.gl/t5IS6M).
+    // Because `null` is a special error value in callbacks which means "no error
+    // occurred", we error-wrap so the callback consumer can distinguish between
+    // "the promise rejected with null" or "the promise fulfilled with undefined".
+    if (!reason) {
+        var newReason = new Error("Promise was rejected with a falsy value");
+        newReason.reason = reason;
+        reason = newReason;
+    }
+    return cb(reason);
+}
+function callbackify(original) {
+    if (typeof original !== "function") throw new TypeError('The "original" argument must be of type Function');
+    // We DO NOT return the promise as it gives the user a false sense that
+    // the promise is actually somehow related to the callback's execution
+    // and that the callback throwing will reject the promise.
+    function callbackified() {
+        var args = [];
+        for(var i = 0; i < arguments.length; i++)args.push(arguments[i]);
+        var maybeCb = args.pop();
+        if (typeof maybeCb !== "function") throw new TypeError("The last argument must be of type Function");
+        var self = this;
+        var cb = function() {
+            return maybeCb.apply(self, arguments);
+        };
+        // In true node style we process the callback on `nextTick` with all the
+        // implications (stack, `uncaughtException`, `async_hooks`)
+        original.apply(this, args).then(function(ret) {
+            process.nextTick(cb.bind(null, null, ret));
+        }, function(rej) {
+            process.nextTick(callbackifyOnRejected.bind(null, rej, cb));
         });
     }
-    render() {
-        const stonePicURL = require("76ce363eb5737da7");
-        const paperPicURL = require("21804f82075535f8");
-        const scissorsPicURL = require("c756706ec2b355e1");
-        const backgroundURL = require("da7d49f620c18671");
-        // -----------------------------------------------------
-        const div = document.createElement("div");
-        div.innerHTML = `
-      <h1 class="title">Piedra Papel \xf3 Tijera</h1>
-      <button type="button" class="new-game-button">Nuevo Juego</button>
-      <button type="button" class="new-room-button">Igresar a una Sala</button>
-      <div class="hands">
-          <img src=${stonePicURL} class="img">
-          <img src=${paperPicURL} class="img">
-          <img src=${scissorsPicURL} class="img">
-      </div>
-      `;
-        // -------------------------------------------------------
-        const style = document.createElement("style");
-        style.textContent = `
-      *{
-        box-sizing: border box;
-      }
-      body{
-        margin: 0;
-      }
-        .inner-root {
-            background-image: url(${backgroundURL});
-            min-width: 375px;
-            height: 667px;
-            display: flex;
-            align-items: center;
-            flex-direction: column;
-          justify-content: space-between;
-      }      
-      .title {
-          text-align: center;
-          margin-top: 70px;
-          color: #009048;
-          font-family: 'Courier Prime', monospace;
-          font-size: 70px;
-          font-style: normal;
-          font-weight: 1000;
-        }      
-      .new-game-button, .new-room-button{
-          width: 322px;
-          height: 87px;
-          border-radius: 10px;
-          border: 10px solid #001997;
-          background: #006CFC;
-          color: aliceblue;
-          
-          color: #D8FCFC;
-          text-align: center;
-          font-family: 'Odibee Sans';
-          font-size: 45px;
-          font-style: normal;
-          font-weight: 400;
-          line-height: normal;
-          letter-spacing: 2.25px;
-        }        
-      .hands {
-        min-width: 70vw;
-        display: flex;
-        justify-content: space-between;
-      }      
-      .button:hover {
-          background: #00449d;
-        }      
-      .button:active {
-          background: #009048;
-      }
-      `;
-        // ----------------------------------------------------------       
-        div.classList.add("inner-root");
-        this.appendChild(div);
-        this.appendChild(style);
-        const boton = this.querySelector(".welcome-button");
-        boton?.addEventListener("click", function() {
-            (0, _router.Router).go("/instructions");
-        });
+    Object.setPrototypeOf(callbackified, Object.getPrototypeOf(original));
+    Object.defineProperties(callbackified, getOwnPropertyDescriptors(original));
+    return callbackified;
+}
+exports.callbackify = callbackify;
+
+},{"bc23a3ea4a141c0b":"d5jf4","6a1c15bae847a134":"bnQvf","a42137cd7fc8700d":"inNNy","a792e8e3e2aa1973":"bRL3M"}],"bnQvf":[function(require,module,exports) {
+// Currently in sync with Node.js lib/internal/util/types.js
+// https://github.com/nodejs/node/commit/112cc7c27551254aa2b17098fb774867f05ed0d9
+"use strict";
+var isArgumentsObject = require("6b5f9ae3e436d527");
+var isGeneratorFunction = require("285c2b8081bf4b68");
+var whichTypedArray = require("e95b88ccd80e1671");
+var isTypedArray = require("7db151546a22c2a8");
+function uncurryThis(f) {
+    return f.call.bind(f);
+}
+var BigIntSupported = typeof BigInt !== "undefined";
+var SymbolSupported = typeof Symbol !== "undefined";
+var ObjectToString = uncurryThis(Object.prototype.toString);
+var numberValue = uncurryThis(Number.prototype.valueOf);
+var stringValue = uncurryThis(String.prototype.valueOf);
+var booleanValue = uncurryThis(Boolean.prototype.valueOf);
+if (BigIntSupported) var bigIntValue = uncurryThis(BigInt.prototype.valueOf);
+if (SymbolSupported) var symbolValue = uncurryThis(Symbol.prototype.valueOf);
+function checkBoxedPrimitive(value, prototypeValueOf) {
+    if (typeof value !== "object") return false;
+    try {
+        prototypeValueOf(value);
+        return true;
+    } catch (e) {
+        return false;
     }
+}
+exports.isArgumentsObject = isArgumentsObject;
+exports.isGeneratorFunction = isGeneratorFunction;
+exports.isTypedArray = isTypedArray;
+// Taken from here and modified for better browser support
+// https://github.com/sindresorhus/p-is-promise/blob/cda35a513bda03f977ad5cde3a079d237e82d7ef/index.js
+function isPromise(input) {
+    return typeof Promise !== "undefined" && input instanceof Promise || input !== null && typeof input === "object" && typeof input.then === "function" && typeof input.catch === "function";
+}
+exports.isPromise = isPromise;
+function isArrayBufferView(value) {
+    if (typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView) return ArrayBuffer.isView(value);
+    return isTypedArray(value) || isDataView(value);
+}
+exports.isArrayBufferView = isArrayBufferView;
+function isUint8Array(value) {
+    return whichTypedArray(value) === "Uint8Array";
+}
+exports.isUint8Array = isUint8Array;
+function isUint8ClampedArray(value) {
+    return whichTypedArray(value) === "Uint8ClampedArray";
+}
+exports.isUint8ClampedArray = isUint8ClampedArray;
+function isUint16Array(value) {
+    return whichTypedArray(value) === "Uint16Array";
+}
+exports.isUint16Array = isUint16Array;
+function isUint32Array(value) {
+    return whichTypedArray(value) === "Uint32Array";
+}
+exports.isUint32Array = isUint32Array;
+function isInt8Array(value) {
+    return whichTypedArray(value) === "Int8Array";
+}
+exports.isInt8Array = isInt8Array;
+function isInt16Array(value) {
+    return whichTypedArray(value) === "Int16Array";
+}
+exports.isInt16Array = isInt16Array;
+function isInt32Array(value) {
+    return whichTypedArray(value) === "Int32Array";
+}
+exports.isInt32Array = isInt32Array;
+function isFloat32Array(value) {
+    return whichTypedArray(value) === "Float32Array";
+}
+exports.isFloat32Array = isFloat32Array;
+function isFloat64Array(value) {
+    return whichTypedArray(value) === "Float64Array";
+}
+exports.isFloat64Array = isFloat64Array;
+function isBigInt64Array(value) {
+    return whichTypedArray(value) === "BigInt64Array";
+}
+exports.isBigInt64Array = isBigInt64Array;
+function isBigUint64Array(value) {
+    return whichTypedArray(value) === "BigUint64Array";
+}
+exports.isBigUint64Array = isBigUint64Array;
+function isMapToString(value) {
+    return ObjectToString(value) === "[object Map]";
+}
+isMapToString.working = typeof Map !== "undefined" && isMapToString(new Map());
+function isMap(value) {
+    if (typeof Map === "undefined") return false;
+    return isMapToString.working ? isMapToString(value) : value instanceof Map;
+}
+exports.isMap = isMap;
+function isSetToString(value) {
+    return ObjectToString(value) === "[object Set]";
+}
+isSetToString.working = typeof Set !== "undefined" && isSetToString(new Set());
+function isSet(value) {
+    if (typeof Set === "undefined") return false;
+    return isSetToString.working ? isSetToString(value) : value instanceof Set;
+}
+exports.isSet = isSet;
+function isWeakMapToString(value) {
+    return ObjectToString(value) === "[object WeakMap]";
+}
+isWeakMapToString.working = typeof WeakMap !== "undefined" && isWeakMapToString(new WeakMap());
+function isWeakMap(value) {
+    if (typeof WeakMap === "undefined") return false;
+    return isWeakMapToString.working ? isWeakMapToString(value) : value instanceof WeakMap;
+}
+exports.isWeakMap = isWeakMap;
+function isWeakSetToString(value) {
+    return ObjectToString(value) === "[object WeakSet]";
+}
+isWeakSetToString.working = typeof WeakSet !== "undefined" && isWeakSetToString(new WeakSet());
+function isWeakSet(value) {
+    return isWeakSetToString(value);
+}
+exports.isWeakSet = isWeakSet;
+function isArrayBufferToString(value) {
+    return ObjectToString(value) === "[object ArrayBuffer]";
+}
+isArrayBufferToString.working = typeof ArrayBuffer !== "undefined" && isArrayBufferToString(new ArrayBuffer());
+function isArrayBuffer(value) {
+    if (typeof ArrayBuffer === "undefined") return false;
+    return isArrayBufferToString.working ? isArrayBufferToString(value) : value instanceof ArrayBuffer;
+}
+exports.isArrayBuffer = isArrayBuffer;
+function isDataViewToString(value) {
+    return ObjectToString(value) === "[object DataView]";
+}
+isDataViewToString.working = typeof ArrayBuffer !== "undefined" && typeof DataView !== "undefined" && isDataViewToString(new DataView(new ArrayBuffer(1), 0, 1));
+function isDataView(value) {
+    if (typeof DataView === "undefined") return false;
+    return isDataViewToString.working ? isDataViewToString(value) : value instanceof DataView;
+}
+exports.isDataView = isDataView;
+// Store a copy of SharedArrayBuffer in case it's deleted elsewhere
+var SharedArrayBufferCopy = typeof SharedArrayBuffer !== "undefined" ? SharedArrayBuffer : undefined;
+function isSharedArrayBufferToString(value) {
+    return ObjectToString(value) === "[object SharedArrayBuffer]";
+}
+function isSharedArrayBuffer(value) {
+    if (typeof SharedArrayBufferCopy === "undefined") return false;
+    if (typeof isSharedArrayBufferToString.working === "undefined") isSharedArrayBufferToString.working = isSharedArrayBufferToString(new SharedArrayBufferCopy());
+    return isSharedArrayBufferToString.working ? isSharedArrayBufferToString(value) : value instanceof SharedArrayBufferCopy;
+}
+exports.isSharedArrayBuffer = isSharedArrayBuffer;
+function isAsyncFunction(value) {
+    return ObjectToString(value) === "[object AsyncFunction]";
+}
+exports.isAsyncFunction = isAsyncFunction;
+function isMapIterator(value) {
+    return ObjectToString(value) === "[object Map Iterator]";
+}
+exports.isMapIterator = isMapIterator;
+function isSetIterator(value) {
+    return ObjectToString(value) === "[object Set Iterator]";
+}
+exports.isSetIterator = isSetIterator;
+function isGeneratorObject(value) {
+    return ObjectToString(value) === "[object Generator]";
+}
+exports.isGeneratorObject = isGeneratorObject;
+function isWebAssemblyCompiledModule(value) {
+    return ObjectToString(value) === "[object WebAssembly.Module]";
+}
+exports.isWebAssemblyCompiledModule = isWebAssemblyCompiledModule;
+function isNumberObject(value) {
+    return checkBoxedPrimitive(value, numberValue);
+}
+exports.isNumberObject = isNumberObject;
+function isStringObject(value) {
+    return checkBoxedPrimitive(value, stringValue);
+}
+exports.isStringObject = isStringObject;
+function isBooleanObject(value) {
+    return checkBoxedPrimitive(value, booleanValue);
+}
+exports.isBooleanObject = isBooleanObject;
+function isBigIntObject(value) {
+    return BigIntSupported && checkBoxedPrimitive(value, bigIntValue);
+}
+exports.isBigIntObject = isBigIntObject;
+function isSymbolObject(value) {
+    return SymbolSupported && checkBoxedPrimitive(value, symbolValue);
+}
+exports.isSymbolObject = isSymbolObject;
+function isBoxedPrimitive(value) {
+    return isNumberObject(value) || isStringObject(value) || isBooleanObject(value) || isBigIntObject(value) || isSymbolObject(value);
+}
+exports.isBoxedPrimitive = isBoxedPrimitive;
+function isAnyArrayBuffer(value) {
+    return typeof Uint8Array !== "undefined" && (isArrayBuffer(value) || isSharedArrayBuffer(value));
+}
+exports.isAnyArrayBuffer = isAnyArrayBuffer;
+[
+    "isProxy",
+    "isExternal",
+    "isModuleNamespaceObject"
+].forEach(function(method) {
+    Object.defineProperty(exports, method, {
+        enumerable: false,
+        value: function() {
+            throw new Error(method + " is not supported in userland");
+        }
+    });
 });
 
-},{"@vaadin/router":"kVZrF","76ce363eb5737da7":"2zoGe","21804f82075535f8":"dZ6rN","c756706ec2b355e1":"2NxtY","da7d49f620c18671":"7RiZ9"}],"kVZrF":[function(require,module,exports) {
+},{"6b5f9ae3e436d527":"czr4n","285c2b8081bf4b68":"2XUdn","e95b88ccd80e1671":"lVUO7","7db151546a22c2a8":"1ihkG"}],"czr4n":[function(require,module,exports) {
+"use strict";
+var hasToStringTag = require("e2b01ce809f132fb")();
+var callBound = require("649cbf9949986a39");
+var $toString = callBound("Object.prototype.toString");
+var isStandardArguments = function isArguments(value) {
+    if (hasToStringTag && value && typeof value === "object" && Symbol.toStringTag in value) return false;
+    return $toString(value) === "[object Arguments]";
+};
+var isLegacyArguments = function isArguments(value) {
+    if (isStandardArguments(value)) return true;
+    return value !== null && typeof value === "object" && typeof value.length === "number" && value.length >= 0 && $toString(value) !== "[object Array]" && $toString(value.callee) === "[object Function]";
+};
+var supportsStandardArguments = function() {
+    return isStandardArguments(arguments);
+}();
+isStandardArguments.isLegacyArguments = isLegacyArguments; // for tests
+module.exports = supportsStandardArguments ? isStandardArguments : isLegacyArguments;
+
+},{"e2b01ce809f132fb":"9LdQ9","649cbf9949986a39":"5yYiF"}],"9LdQ9":[function(require,module,exports) {
+"use strict";
+var hasSymbols = require("2ef89576d4959bff");
+module.exports = function hasToStringTagShams() {
+    return hasSymbols() && !!Symbol.toStringTag;
+};
+
+},{"2ef89576d4959bff":"euYk7"}],"euYk7":[function(require,module,exports) {
+"use strict";
+/* eslint complexity: [2, 18], max-statements: [2, 33] */ module.exports = function hasSymbols() {
+    if (typeof Symbol !== "function" || typeof Object.getOwnPropertySymbols !== "function") return false;
+    if (typeof Symbol.iterator === "symbol") return true;
+    var obj = {};
+    var sym = Symbol("test");
+    var symObj = Object(sym);
+    if (typeof sym === "string") return false;
+    if (Object.prototype.toString.call(sym) !== "[object Symbol]") return false;
+    if (Object.prototype.toString.call(symObj) !== "[object Symbol]") return false;
+    // temp disabled per https://github.com/ljharb/object.assign/issues/17
+    // if (sym instanceof Symbol) { return false; }
+    // temp disabled per https://github.com/WebReflection/get-own-property-symbols/issues/4
+    // if (!(symObj instanceof Symbol)) { return false; }
+    // if (typeof Symbol.prototype.toString !== 'function') { return false; }
+    // if (String(sym) !== Symbol.prototype.toString.call(sym)) { return false; }
+    var symVal = 42;
+    obj[sym] = symVal;
+    for(sym in obj)return false;
+     // eslint-disable-line no-restricted-syntax, no-unreachable-loop
+    if (typeof Object.keys === "function" && Object.keys(obj).length !== 0) return false;
+    if (typeof Object.getOwnPropertyNames === "function" && Object.getOwnPropertyNames(obj).length !== 0) return false;
+    var syms = Object.getOwnPropertySymbols(obj);
+    if (syms.length !== 1 || syms[0] !== sym) return false;
+    if (!Object.prototype.propertyIsEnumerable.call(obj, sym)) return false;
+    if (typeof Object.getOwnPropertyDescriptor === "function") {
+        var descriptor = Object.getOwnPropertyDescriptor(obj, sym);
+        if (descriptor.value !== symVal || descriptor.enumerable !== true) return false;
+    }
+    return true;
+};
+
+},{}],"5yYiF":[function(require,module,exports) {
+"use strict";
+var GetIntrinsic = require("8b08ecb81cf4de17");
+var callBind = require("266fc50410cfc4a");
+var $indexOf = callBind(GetIntrinsic("String.prototype.indexOf"));
+module.exports = function callBoundIntrinsic(name, allowMissing) {
+    var intrinsic = GetIntrinsic(name, !!allowMissing);
+    if (typeof intrinsic === "function" && $indexOf(name, ".prototype.") > -1) return callBind(intrinsic);
+    return intrinsic;
+};
+
+},{"8b08ecb81cf4de17":"dZb05","266fc50410cfc4a":"bfo8D"}],"dZb05":[function(require,module,exports) {
+"use strict";
+var undefined1;
+var $SyntaxError = SyntaxError;
+var $Function = Function;
+var $TypeError = TypeError;
+// eslint-disable-next-line consistent-return
+var getEvalledConstructor = function(expressionSyntax) {
+    try {
+        return $Function('"use strict"; return (' + expressionSyntax + ").constructor;")();
+    } catch (e) {}
+};
+var $gOPD = Object.getOwnPropertyDescriptor;
+if ($gOPD) try {
+    $gOPD({}, "");
+} catch (e) {
+    $gOPD = null; // this is IE 8, which has a broken gOPD
+}
+var throwTypeError = function() {
+    throw new $TypeError();
+};
+var ThrowTypeError = $gOPD ? function() {
+    try {
+        // eslint-disable-next-line no-unused-expressions, no-caller, no-restricted-properties
+        arguments.callee; // IE 8 does not throw here
+        return throwTypeError;
+    } catch (calleeThrows) {
+        try {
+            // IE 8 throws on Object.getOwnPropertyDescriptor(arguments, '')
+            return $gOPD(arguments, "callee").get;
+        } catch (gOPDthrows) {
+            return throwTypeError;
+        }
+    }
+}() : throwTypeError;
+var hasSymbols = require("1f00f712d594ccf")();
+var hasProto = require("23730654306aa64c")();
+var getProto = Object.getPrototypeOf || (hasProto ? function(x) {
+    return x.__proto__;
+} // eslint-disable-line no-proto
+ : null);
+var needsEval = {};
+var TypedArray = typeof Uint8Array === "undefined" || !getProto ? undefined : getProto(Uint8Array);
+var INTRINSICS = {
+    "%AggregateError%": typeof AggregateError === "undefined" ? undefined : AggregateError,
+    "%Array%": Array,
+    "%ArrayBuffer%": typeof ArrayBuffer === "undefined" ? undefined : ArrayBuffer,
+    "%ArrayIteratorPrototype%": hasSymbols && getProto ? getProto([][Symbol.iterator]()) : undefined,
+    "%AsyncFromSyncIteratorPrototype%": undefined,
+    "%AsyncFunction%": needsEval,
+    "%AsyncGenerator%": needsEval,
+    "%AsyncGeneratorFunction%": needsEval,
+    "%AsyncIteratorPrototype%": needsEval,
+    "%Atomics%": typeof Atomics === "undefined" ? undefined : Atomics,
+    "%BigInt%": typeof BigInt === "undefined" ? undefined : BigInt,
+    "%BigInt64Array%": typeof BigInt64Array === "undefined" ? undefined : BigInt64Array,
+    "%BigUint64Array%": typeof BigUint64Array === "undefined" ? undefined : BigUint64Array,
+    "%Boolean%": Boolean,
+    "%DataView%": typeof DataView === "undefined" ? undefined : DataView,
+    "%Date%": Date,
+    "%decodeURI%": decodeURI,
+    "%decodeURIComponent%": decodeURIComponent,
+    "%encodeURI%": encodeURI,
+    "%encodeURIComponent%": encodeURIComponent,
+    "%Error%": Error,
+    "%eval%": eval,
+    "%EvalError%": EvalError,
+    "%Float32Array%": typeof Float32Array === "undefined" ? undefined : Float32Array,
+    "%Float64Array%": typeof Float64Array === "undefined" ? undefined : Float64Array,
+    "%FinalizationRegistry%": typeof FinalizationRegistry === "undefined" ? undefined : FinalizationRegistry,
+    "%Function%": $Function,
+    "%GeneratorFunction%": needsEval,
+    "%Int8Array%": typeof Int8Array === "undefined" ? undefined : Int8Array,
+    "%Int16Array%": typeof Int16Array === "undefined" ? undefined : Int16Array,
+    "%Int32Array%": typeof Int32Array === "undefined" ? undefined : Int32Array,
+    "%isFinite%": isFinite,
+    "%isNaN%": isNaN,
+    "%IteratorPrototype%": hasSymbols && getProto ? getProto(getProto([][Symbol.iterator]())) : undefined,
+    "%JSON%": typeof JSON === "object" ? JSON : undefined,
+    "%Map%": typeof Map === "undefined" ? undefined : Map,
+    "%MapIteratorPrototype%": typeof Map === "undefined" || !hasSymbols || !getProto ? undefined : getProto(new Map()[Symbol.iterator]()),
+    "%Math%": Math,
+    "%Number%": Number,
+    "%Object%": Object,
+    "%parseFloat%": parseFloat,
+    "%parseInt%": parseInt,
+    "%Promise%": typeof Promise === "undefined" ? undefined : Promise,
+    "%Proxy%": typeof Proxy === "undefined" ? undefined : Proxy,
+    "%RangeError%": RangeError,
+    "%ReferenceError%": ReferenceError,
+    "%Reflect%": typeof Reflect === "undefined" ? undefined : Reflect,
+    "%RegExp%": RegExp,
+    "%Set%": typeof Set === "undefined" ? undefined : Set,
+    "%SetIteratorPrototype%": typeof Set === "undefined" || !hasSymbols || !getProto ? undefined : getProto(new Set()[Symbol.iterator]()),
+    "%SharedArrayBuffer%": typeof SharedArrayBuffer === "undefined" ? undefined : SharedArrayBuffer,
+    "%String%": String,
+    "%StringIteratorPrototype%": hasSymbols && getProto ? getProto(""[Symbol.iterator]()) : undefined,
+    "%Symbol%": hasSymbols ? Symbol : undefined,
+    "%SyntaxError%": $SyntaxError,
+    "%ThrowTypeError%": ThrowTypeError,
+    "%TypedArray%": TypedArray,
+    "%TypeError%": $TypeError,
+    "%Uint8Array%": typeof Uint8Array === "undefined" ? undefined : Uint8Array,
+    "%Uint8ClampedArray%": typeof Uint8ClampedArray === "undefined" ? undefined : Uint8ClampedArray,
+    "%Uint16Array%": typeof Uint16Array === "undefined" ? undefined : Uint16Array,
+    "%Uint32Array%": typeof Uint32Array === "undefined" ? undefined : Uint32Array,
+    "%URIError%": URIError,
+    "%WeakMap%": typeof WeakMap === "undefined" ? undefined : WeakMap,
+    "%WeakRef%": typeof WeakRef === "undefined" ? undefined : WeakRef,
+    "%WeakSet%": typeof WeakSet === "undefined" ? undefined : WeakSet
+};
+if (getProto) try {
+    null.error; // eslint-disable-line no-unused-expressions
+} catch (e) {
+    // https://github.com/tc39/proposal-shadowrealm/pull/384#issuecomment-1364264229
+    var errorProto = getProto(getProto(e));
+    INTRINSICS["%Error.prototype%"] = errorProto;
+}
+var doEval = function doEval(name) {
+    var value;
+    if (name === "%AsyncFunction%") value = getEvalledConstructor("async function () {}");
+    else if (name === "%GeneratorFunction%") value = getEvalledConstructor("function* () {}");
+    else if (name === "%AsyncGeneratorFunction%") value = getEvalledConstructor("async function* () {}");
+    else if (name === "%AsyncGenerator%") {
+        var fn = doEval("%AsyncGeneratorFunction%");
+        if (fn) value = fn.prototype;
+    } else if (name === "%AsyncIteratorPrototype%") {
+        var gen = doEval("%AsyncGenerator%");
+        if (gen && getProto) value = getProto(gen.prototype);
+    }
+    INTRINSICS[name] = value;
+    return value;
+};
+var LEGACY_ALIASES = {
+    "%ArrayBufferPrototype%": [
+        "ArrayBuffer",
+        "prototype"
+    ],
+    "%ArrayPrototype%": [
+        "Array",
+        "prototype"
+    ],
+    "%ArrayProto_entries%": [
+        "Array",
+        "prototype",
+        "entries"
+    ],
+    "%ArrayProto_forEach%": [
+        "Array",
+        "prototype",
+        "forEach"
+    ],
+    "%ArrayProto_keys%": [
+        "Array",
+        "prototype",
+        "keys"
+    ],
+    "%ArrayProto_values%": [
+        "Array",
+        "prototype",
+        "values"
+    ],
+    "%AsyncFunctionPrototype%": [
+        "AsyncFunction",
+        "prototype"
+    ],
+    "%AsyncGenerator%": [
+        "AsyncGeneratorFunction",
+        "prototype"
+    ],
+    "%AsyncGeneratorPrototype%": [
+        "AsyncGeneratorFunction",
+        "prototype",
+        "prototype"
+    ],
+    "%BooleanPrototype%": [
+        "Boolean",
+        "prototype"
+    ],
+    "%DataViewPrototype%": [
+        "DataView",
+        "prototype"
+    ],
+    "%DatePrototype%": [
+        "Date",
+        "prototype"
+    ],
+    "%ErrorPrototype%": [
+        "Error",
+        "prototype"
+    ],
+    "%EvalErrorPrototype%": [
+        "EvalError",
+        "prototype"
+    ],
+    "%Float32ArrayPrototype%": [
+        "Float32Array",
+        "prototype"
+    ],
+    "%Float64ArrayPrototype%": [
+        "Float64Array",
+        "prototype"
+    ],
+    "%FunctionPrototype%": [
+        "Function",
+        "prototype"
+    ],
+    "%Generator%": [
+        "GeneratorFunction",
+        "prototype"
+    ],
+    "%GeneratorPrototype%": [
+        "GeneratorFunction",
+        "prototype",
+        "prototype"
+    ],
+    "%Int8ArrayPrototype%": [
+        "Int8Array",
+        "prototype"
+    ],
+    "%Int16ArrayPrototype%": [
+        "Int16Array",
+        "prototype"
+    ],
+    "%Int32ArrayPrototype%": [
+        "Int32Array",
+        "prototype"
+    ],
+    "%JSONParse%": [
+        "JSON",
+        "parse"
+    ],
+    "%JSONStringify%": [
+        "JSON",
+        "stringify"
+    ],
+    "%MapPrototype%": [
+        "Map",
+        "prototype"
+    ],
+    "%NumberPrototype%": [
+        "Number",
+        "prototype"
+    ],
+    "%ObjectPrototype%": [
+        "Object",
+        "prototype"
+    ],
+    "%ObjProto_toString%": [
+        "Object",
+        "prototype",
+        "toString"
+    ],
+    "%ObjProto_valueOf%": [
+        "Object",
+        "prototype",
+        "valueOf"
+    ],
+    "%PromisePrototype%": [
+        "Promise",
+        "prototype"
+    ],
+    "%PromiseProto_then%": [
+        "Promise",
+        "prototype",
+        "then"
+    ],
+    "%Promise_all%": [
+        "Promise",
+        "all"
+    ],
+    "%Promise_reject%": [
+        "Promise",
+        "reject"
+    ],
+    "%Promise_resolve%": [
+        "Promise",
+        "resolve"
+    ],
+    "%RangeErrorPrototype%": [
+        "RangeError",
+        "prototype"
+    ],
+    "%ReferenceErrorPrototype%": [
+        "ReferenceError",
+        "prototype"
+    ],
+    "%RegExpPrototype%": [
+        "RegExp",
+        "prototype"
+    ],
+    "%SetPrototype%": [
+        "Set",
+        "prototype"
+    ],
+    "%SharedArrayBufferPrototype%": [
+        "SharedArrayBuffer",
+        "prototype"
+    ],
+    "%StringPrototype%": [
+        "String",
+        "prototype"
+    ],
+    "%SymbolPrototype%": [
+        "Symbol",
+        "prototype"
+    ],
+    "%SyntaxErrorPrototype%": [
+        "SyntaxError",
+        "prototype"
+    ],
+    "%TypedArrayPrototype%": [
+        "TypedArray",
+        "prototype"
+    ],
+    "%TypeErrorPrototype%": [
+        "TypeError",
+        "prototype"
+    ],
+    "%Uint8ArrayPrototype%": [
+        "Uint8Array",
+        "prototype"
+    ],
+    "%Uint8ClampedArrayPrototype%": [
+        "Uint8ClampedArray",
+        "prototype"
+    ],
+    "%Uint16ArrayPrototype%": [
+        "Uint16Array",
+        "prototype"
+    ],
+    "%Uint32ArrayPrototype%": [
+        "Uint32Array",
+        "prototype"
+    ],
+    "%URIErrorPrototype%": [
+        "URIError",
+        "prototype"
+    ],
+    "%WeakMapPrototype%": [
+        "WeakMap",
+        "prototype"
+    ],
+    "%WeakSetPrototype%": [
+        "WeakSet",
+        "prototype"
+    ]
+};
+var bind = require("7c5e688e48cd07b0");
+var hasOwn = require("af36d49b4b8c6c7c");
+var $concat = bind.call(Function.call, Array.prototype.concat);
+var $spliceApply = bind.call(Function.apply, Array.prototype.splice);
+var $replace = bind.call(Function.call, String.prototype.replace);
+var $strSlice = bind.call(Function.call, String.prototype.slice);
+var $exec = bind.call(Function.call, RegExp.prototype.exec);
+/* adapted from https://github.com/lodash/lodash/blob/4.17.15/dist/lodash.js#L6735-L6744 */ var rePropName = /[^%.[\]]+|\[(?:(-?\d+(?:\.\d+)?)|(["'])((?:(?!\2)[^\\]|\\.)*?)\2)\]|(?=(?:\.|\[\])(?:\.|\[\]|%$))/g;
+var reEscapeChar = /\\(\\)?/g; /** Used to match backslashes in property paths. */ 
+var stringToPath = function stringToPath(string) {
+    var first = $strSlice(string, 0, 1);
+    var last = $strSlice(string, -1);
+    if (first === "%" && last !== "%") throw new $SyntaxError("invalid intrinsic syntax, expected closing `%`");
+    else if (last === "%" && first !== "%") throw new $SyntaxError("invalid intrinsic syntax, expected opening `%`");
+    var result = [];
+    $replace(string, rePropName, function(match, number, quote, subString) {
+        result[result.length] = quote ? $replace(subString, reEscapeChar, "$1") : number || match;
+    });
+    return result;
+};
+/* end adaptation */ var getBaseIntrinsic = function getBaseIntrinsic(name, allowMissing) {
+    var intrinsicName = name;
+    var alias;
+    if (hasOwn(LEGACY_ALIASES, intrinsicName)) {
+        alias = LEGACY_ALIASES[intrinsicName];
+        intrinsicName = "%" + alias[0] + "%";
+    }
+    if (hasOwn(INTRINSICS, intrinsicName)) {
+        var value = INTRINSICS[intrinsicName];
+        if (value === needsEval) value = doEval(intrinsicName);
+        if (typeof value === "undefined" && !allowMissing) throw new $TypeError("intrinsic " + name + " exists, but is not available. Please file an issue!");
+        return {
+            alias: alias,
+            name: intrinsicName,
+            value: value
+        };
+    }
+    throw new $SyntaxError("intrinsic " + name + " does not exist!");
+};
+module.exports = function GetIntrinsic(name, allowMissing) {
+    if (typeof name !== "string" || name.length === 0) throw new $TypeError("intrinsic name must be a non-empty string");
+    if (arguments.length > 1 && typeof allowMissing !== "boolean") throw new $TypeError('"allowMissing" argument must be a boolean');
+    if ($exec(/^%?[^%]*%?$/, name) === null) throw new $SyntaxError("`%` may not be present anywhere but at the beginning and end of the intrinsic name");
+    var parts = stringToPath(name);
+    var intrinsicBaseName = parts.length > 0 ? parts[0] : "";
+    var intrinsic = getBaseIntrinsic("%" + intrinsicBaseName + "%", allowMissing);
+    var intrinsicRealName = intrinsic.name;
+    var value = intrinsic.value;
+    var skipFurtherCaching = false;
+    var alias = intrinsic.alias;
+    if (alias) {
+        intrinsicBaseName = alias[0];
+        $spliceApply(parts, $concat([
+            0,
+            1
+        ], alias));
+    }
+    for(var i = 1, isOwn = true; i < parts.length; i += 1){
+        var part = parts[i];
+        var first = $strSlice(part, 0, 1);
+        var last = $strSlice(part, -1);
+        if ((first === '"' || first === "'" || first === "`" || last === '"' || last === "'" || last === "`") && first !== last) throw new $SyntaxError("property names with quotes must have matching quotes");
+        if (part === "constructor" || !isOwn) skipFurtherCaching = true;
+        intrinsicBaseName += "." + part;
+        intrinsicRealName = "%" + intrinsicBaseName + "%";
+        if (hasOwn(INTRINSICS, intrinsicRealName)) value = INTRINSICS[intrinsicRealName];
+        else if (value != null) {
+            if (!(part in value)) {
+                if (!allowMissing) throw new $TypeError("base intrinsic for " + name + " exists, but the property is not available.");
+                return void 0;
+            }
+            if ($gOPD && i + 1 >= parts.length) {
+                var desc = $gOPD(value, part);
+                isOwn = !!desc;
+                // By convention, when a data property is converted to an accessor
+                // property to emulate a data property that does not suffer from
+                // the override mistake, that accessor's getter is marked with
+                // an `originalValue` property. Here, when we detect this, we
+                // uphold the illusion by pretending to see that original data
+                // property, i.e., returning the value rather than the getter
+                // itself.
+                if (isOwn && "get" in desc && !("originalValue" in desc.get)) value = desc.get;
+                else value = value[part];
+            } else {
+                isOwn = hasOwn(value, part);
+                value = value[part];
+            }
+            if (isOwn && !skipFurtherCaching) INTRINSICS[intrinsicRealName] = value;
+        }
+    }
+    return value;
+};
+
+},{"1f00f712d594ccf":"3dK91","23730654306aa64c":"6eZiF","7c5e688e48cd07b0":"6J4ob","af36d49b4b8c6c7c":"9Wb6f"}],"3dK91":[function(require,module,exports) {
+"use strict";
+var origSymbol = typeof Symbol !== "undefined" && Symbol;
+var hasSymbolSham = require("3fb25678c62d2fce");
+module.exports = function hasNativeSymbols() {
+    if (typeof origSymbol !== "function") return false;
+    if (typeof Symbol !== "function") return false;
+    if (typeof origSymbol("foo") !== "symbol") return false;
+    if (typeof Symbol("bar") !== "symbol") return false;
+    return hasSymbolSham();
+};
+
+},{"3fb25678c62d2fce":"euYk7"}],"6eZiF":[function(require,module,exports) {
+"use strict";
+var test = {
+    foo: {}
+};
+var $Object = Object;
+module.exports = function hasProto() {
+    return ({
+        __proto__: test
+    }).foo === test.foo && !(({
+        __proto__: null
+    }) instanceof $Object);
+};
+
+},{}],"6J4ob":[function(require,module,exports) {
+"use strict";
+var implementation = require("12e173b4dbaee960");
+module.exports = Function.prototype.bind || implementation;
+
+},{"12e173b4dbaee960":"jwaxQ"}],"jwaxQ":[function(require,module,exports) {
+"use strict";
+/* eslint no-invalid-this: 1 */ var ERROR_MESSAGE = "Function.prototype.bind called on incompatible ";
+var toStr = Object.prototype.toString;
+var max = Math.max;
+var funcType = "[object Function]";
+var concatty = function concatty(a, b) {
+    var arr = [];
+    for(var i = 0; i < a.length; i += 1)arr[i] = a[i];
+    for(var j = 0; j < b.length; j += 1)arr[j + a.length] = b[j];
+    return arr;
+};
+var slicy = function slicy(arrLike, offset) {
+    var arr = [];
+    for(var i = offset || 0, j = 0; i < arrLike.length; i += 1, j += 1)arr[j] = arrLike[i];
+    return arr;
+};
+var joiny = function(arr, joiner) {
+    var str = "";
+    for(var i = 0; i < arr.length; i += 1){
+        str += arr[i];
+        if (i + 1 < arr.length) str += joiner;
+    }
+    return str;
+};
+module.exports = function bind(that) {
+    var target = this;
+    if (typeof target !== "function" || toStr.apply(target) !== funcType) throw new TypeError(ERROR_MESSAGE + target);
+    var args = slicy(arguments, 1);
+    var bound;
+    var binder = function() {
+        if (this instanceof bound) {
+            var result = target.apply(this, concatty(args, arguments));
+            if (Object(result) === result) return result;
+            return this;
+        }
+        return target.apply(that, concatty(args, arguments));
+    };
+    var boundLength = max(0, target.length - args.length);
+    var boundArgs = [];
+    for(var i = 0; i < boundLength; i++)boundArgs[i] = "$" + i;
+    bound = Function("binder", "return function (" + joiny(boundArgs, ",") + "){ return binder.apply(this,arguments); }")(binder);
+    if (target.prototype) {
+        var Empty = function Empty() {};
+        Empty.prototype = target.prototype;
+        bound.prototype = new Empty();
+        Empty.prototype = null;
+    }
+    return bound;
+};
+
+},{}],"9Wb6f":[function(require,module,exports) {
+"use strict";
+var call = Function.prototype.call;
+var $hasOwn = Object.prototype.hasOwnProperty;
+var bind = require("126cb75e62f8e17b");
+/** @type {(o: {}, p: PropertyKey) => p is keyof o} */ module.exports = bind.call(call, $hasOwn);
+
+},{"126cb75e62f8e17b":"6J4ob"}],"bfo8D":[function(require,module,exports) {
+"use strict";
+var bind = require("4f9d84d5de4909bc");
+var GetIntrinsic = require("68d2ad3775278f43");
+var setFunctionLength = require("f4b53071c102d4e");
+var $TypeError = GetIntrinsic("%TypeError%");
+var $apply = GetIntrinsic("%Function.prototype.apply%");
+var $call = GetIntrinsic("%Function.prototype.call%");
+var $reflectApply = GetIntrinsic("%Reflect.apply%", true) || bind.call($call, $apply);
+var $defineProperty = GetIntrinsic("%Object.defineProperty%", true);
+var $max = GetIntrinsic("%Math.max%");
+if ($defineProperty) try {
+    $defineProperty({}, "a", {
+        value: 1
+    });
+} catch (e) {
+    // IE 8 has a broken defineProperty
+    $defineProperty = null;
+}
+module.exports = function callBind(originalFunction) {
+    if (typeof originalFunction !== "function") throw new $TypeError("a function is required");
+    var func = $reflectApply(bind, $call, arguments);
+    return setFunctionLength(func, 1 + $max(0, originalFunction.length - (arguments.length - 1)), true);
+};
+var applyBind = function applyBind() {
+    return $reflectApply(bind, $apply, arguments);
+};
+if ($defineProperty) $defineProperty(module.exports, "apply", {
+    value: applyBind
+});
+else module.exports.apply = applyBind;
+
+},{"4f9d84d5de4909bc":"6J4ob","68d2ad3775278f43":"dZb05","f4b53071c102d4e":"9IKoX"}],"9IKoX":[function(require,module,exports) {
+"use strict";
+var GetIntrinsic = require("8b1c9107ef1524f2");
+var define = require("37dd1486f0f556ef");
+var hasDescriptors = require("6a9d2b46085df706")();
+var gOPD = require("2d412b0f532d1834");
+var $TypeError = GetIntrinsic("%TypeError%");
+var $floor = GetIntrinsic("%Math.floor%");
+module.exports = function setFunctionLength(fn, length) {
+    if (typeof fn !== "function") throw new $TypeError("`fn` is not a function");
+    if (typeof length !== "number" || length < 0 || length > 0xFFFFFFFF || $floor(length) !== length) throw new $TypeError("`length` must be a positive 32-bit integer");
+    var loose = arguments.length > 2 && !!arguments[2];
+    var functionLengthIsConfigurable = true;
+    var functionLengthIsWritable = true;
+    if ("length" in fn && gOPD) {
+        var desc = gOPD(fn, "length");
+        if (desc && !desc.configurable) functionLengthIsConfigurable = false;
+        if (desc && !desc.writable) functionLengthIsWritable = false;
+    }
+    if (functionLengthIsConfigurable || functionLengthIsWritable || !loose) {
+        if (hasDescriptors) define(fn, "length", length, true, true);
+        else define(fn, "length", length);
+    }
+    return fn;
+};
+
+},{"8b1c9107ef1524f2":"dZb05","37dd1486f0f556ef":"6cEff","6a9d2b46085df706":"esBLZ","2d412b0f532d1834":"eOTQB"}],"6cEff":[function(require,module,exports) {
+"use strict";
+var hasPropertyDescriptors = require("1ed580143eb408b3")();
+var GetIntrinsic = require("971d0ad91a472750");
+var $defineProperty = hasPropertyDescriptors && GetIntrinsic("%Object.defineProperty%", true);
+if ($defineProperty) try {
+    $defineProperty({}, "a", {
+        value: 1
+    });
+} catch (e) {
+    // IE 8 has a broken defineProperty
+    $defineProperty = false;
+}
+var $SyntaxError = GetIntrinsic("%SyntaxError%");
+var $TypeError = GetIntrinsic("%TypeError%");
+var gopd = require("3f9bd39335781ec7");
+/** @type {(obj: Record<PropertyKey, unknown>, property: PropertyKey, value: unknown, nonEnumerable?: boolean | null, nonWritable?: boolean | null, nonConfigurable?: boolean | null, loose?: boolean) => void} */ module.exports = function defineDataProperty(obj, property, value) {
+    if (!obj || typeof obj !== "object" && typeof obj !== "function") throw new $TypeError("`obj` must be an object or a function`");
+    if (typeof property !== "string" && typeof property !== "symbol") throw new $TypeError("`property` must be a string or a symbol`");
+    if (arguments.length > 3 && typeof arguments[3] !== "boolean" && arguments[3] !== null) throw new $TypeError("`nonEnumerable`, if provided, must be a boolean or null");
+    if (arguments.length > 4 && typeof arguments[4] !== "boolean" && arguments[4] !== null) throw new $TypeError("`nonWritable`, if provided, must be a boolean or null");
+    if (arguments.length > 5 && typeof arguments[5] !== "boolean" && arguments[5] !== null) throw new $TypeError("`nonConfigurable`, if provided, must be a boolean or null");
+    if (arguments.length > 6 && typeof arguments[6] !== "boolean") throw new $TypeError("`loose`, if provided, must be a boolean");
+    var nonEnumerable = arguments.length > 3 ? arguments[3] : null;
+    var nonWritable = arguments.length > 4 ? arguments[4] : null;
+    var nonConfigurable = arguments.length > 5 ? arguments[5] : null;
+    var loose = arguments.length > 6 ? arguments[6] : false;
+    /* @type {false | TypedPropertyDescriptor<unknown>} */ var desc = !!gopd && gopd(obj, property);
+    if ($defineProperty) $defineProperty(obj, property, {
+        configurable: nonConfigurable === null && desc ? desc.configurable : !nonConfigurable,
+        enumerable: nonEnumerable === null && desc ? desc.enumerable : !nonEnumerable,
+        value: value,
+        writable: nonWritable === null && desc ? desc.writable : !nonWritable
+    });
+    else if (loose || !nonEnumerable && !nonWritable && !nonConfigurable) // must fall back to [[Set]], and was not explicitly asked to make non-enumerable, non-writable, or non-configurable
+    obj[property] = value; // eslint-disable-line no-param-reassign
+    else throw new $SyntaxError("This environment does not support defining a property as non-configurable, non-writable, or non-enumerable.");
+};
+
+},{"1ed580143eb408b3":"esBLZ","971d0ad91a472750":"dZb05","3f9bd39335781ec7":"eOTQB"}],"esBLZ":[function(require,module,exports) {
+"use strict";
+var GetIntrinsic = require("b0bf8b8435d3abc");
+var $defineProperty = GetIntrinsic("%Object.defineProperty%", true);
+var hasPropertyDescriptors = function hasPropertyDescriptors() {
+    if ($defineProperty) try {
+        $defineProperty({}, "a", {
+            value: 1
+        });
+        return true;
+    } catch (e) {
+        // IE 8 has a broken defineProperty
+        return false;
+    }
+    return false;
+};
+hasPropertyDescriptors.hasArrayLengthDefineBug = function hasArrayLengthDefineBug() {
+    // node v0.6 has a bug where array lengths can be Set but not Defined
+    if (!hasPropertyDescriptors()) return null;
+    try {
+        return $defineProperty([], "length", {
+            value: 1
+        }).length !== 1;
+    } catch (e) {
+        // In Firefox 4-22, defining length on an array throws an exception.
+        return true;
+    }
+};
+module.exports = hasPropertyDescriptors;
+
+},{"b0bf8b8435d3abc":"dZb05"}],"eOTQB":[function(require,module,exports) {
+"use strict";
+var GetIntrinsic = require("693e651525841e04");
+var $gOPD = GetIntrinsic("%Object.getOwnPropertyDescriptor%", true);
+if ($gOPD) try {
+    $gOPD([], "length");
+} catch (e) {
+    // IE 8 has a broken gOPD
+    $gOPD = null;
+}
+module.exports = $gOPD;
+
+},{"693e651525841e04":"dZb05"}],"2XUdn":[function(require,module,exports) {
+"use strict";
+var toStr = Object.prototype.toString;
+var fnToStr = Function.prototype.toString;
+var isFnRegex = /^\s*(?:function)?\*/;
+var hasToStringTag = require("b42ab74c25dbb155")();
+var getProto = Object.getPrototypeOf;
+var getGeneratorFunc = function() {
+    if (!hasToStringTag) return false;
+    try {
+        return Function("return function*() {}")();
+    } catch (e) {}
+};
+var GeneratorFunction;
+module.exports = function isGeneratorFunction(fn) {
+    if (typeof fn !== "function") return false;
+    if (isFnRegex.test(fnToStr.call(fn))) return true;
+    if (!hasToStringTag) {
+        var str = toStr.call(fn);
+        return str === "[object GeneratorFunction]";
+    }
+    if (!getProto) return false;
+    if (typeof GeneratorFunction === "undefined") {
+        var generatorFunc = getGeneratorFunc();
+        GeneratorFunction = generatorFunc ? getProto(generatorFunc) : false;
+    }
+    return getProto(fn) === GeneratorFunction;
+};
+
+},{"b42ab74c25dbb155":"9LdQ9"}],"lVUO7":[function(require,module,exports) {
+var global = arguments[3];
+"use strict";
+var forEach = require("2941d48f36957e3c");
+var availableTypedArrays = require("beaf5502a5823cce");
+var callBind = require("e5d203a1b4c809f9");
+var callBound = require("83f633f9b335db8f");
+var gOPD = require("ce6b45c571ba4e3e");
+var $toString = callBound("Object.prototype.toString");
+var hasToStringTag = require("9e7ef6c88184c56")();
+var g = typeof globalThis === "undefined" ? global : globalThis;
+var typedArrays = availableTypedArrays();
+var $slice = callBound("String.prototype.slice");
+var getPrototypeOf = Object.getPrototypeOf; // require('getprototypeof');
+var $indexOf = callBound("Array.prototype.indexOf", true) || function indexOf(array, value) {
+    for(var i = 0; i < array.length; i += 1){
+        if (array[i] === value) return i;
+    }
+    return -1;
+};
+var cache = {
+    __proto__: null
+};
+if (hasToStringTag && gOPD && getPrototypeOf) forEach(typedArrays, function(typedArray) {
+    var arr = new g[typedArray]();
+    if (Symbol.toStringTag in arr) {
+        var proto = getPrototypeOf(arr);
+        var descriptor = gOPD(proto, Symbol.toStringTag);
+        if (!descriptor) {
+            var superProto = getPrototypeOf(proto);
+            descriptor = gOPD(superProto, Symbol.toStringTag);
+        }
+        cache["$" + typedArray] = callBind(descriptor.get);
+    }
+});
+else forEach(typedArrays, function(typedArray) {
+    var arr = new g[typedArray]();
+    var fn = arr.slice || arr.set;
+    if (fn) cache["$" + typedArray] = callBind(fn);
+});
+var tryTypedArrays = function tryAllTypedArrays(value) {
+    var found = false;
+    forEach(cache, function(getter, typedArray) {
+        if (!found) try {
+            if ("$" + getter(value) === typedArray) found = $slice(typedArray, 1);
+        } catch (e) {}
+    });
+    return found;
+};
+var trySlices = function tryAllSlices(value) {
+    var found = false;
+    forEach(cache, function(getter, name) {
+        if (!found) try {
+            getter(value);
+            found = $slice(name, 1);
+        } catch (e) {}
+    });
+    return found;
+};
+module.exports = function whichTypedArray(value) {
+    if (!value || typeof value !== "object") return false;
+    if (!hasToStringTag) {
+        var tag = $slice($toString(value), 8, -1);
+        if ($indexOf(typedArrays, tag) > -1) return tag;
+        if (tag !== "Object") return false;
+        // node < 0.6 hits here on real Typed Arrays
+        return trySlices(value);
+    }
+    if (!gOPD) return null;
+     // unknown engine
+    return tryTypedArrays(value);
+};
+
+},{"2941d48f36957e3c":"1Sol9","beaf5502a5823cce":"kfela","e5d203a1b4c809f9":"bfo8D","83f633f9b335db8f":"5yYiF","ce6b45c571ba4e3e":"eOTQB","9e7ef6c88184c56":"9LdQ9"}],"1Sol9":[function(require,module,exports) {
+"use strict";
+var isCallable = require("e50ebc24bbb25feb");
+var toStr = Object.prototype.toString;
+var hasOwnProperty = Object.prototype.hasOwnProperty;
+var forEachArray = function forEachArray(array, iterator, receiver) {
+    for(var i = 0, len = array.length; i < len; i++)if (hasOwnProperty.call(array, i)) {
+        if (receiver == null) iterator(array[i], i, array);
+        else iterator.call(receiver, array[i], i, array);
+    }
+};
+var forEachString = function forEachString(string, iterator, receiver) {
+    for(var i = 0, len = string.length; i < len; i++)// no such thing as a sparse string.
+    if (receiver == null) iterator(string.charAt(i), i, string);
+    else iterator.call(receiver, string.charAt(i), i, string);
+};
+var forEachObject = function forEachObject(object, iterator, receiver) {
+    for(var k in object)if (hasOwnProperty.call(object, k)) {
+        if (receiver == null) iterator(object[k], k, object);
+        else iterator.call(receiver, object[k], k, object);
+    }
+};
+var forEach = function forEach(list, iterator, thisArg) {
+    if (!isCallable(iterator)) throw new TypeError("iterator must be a function");
+    var receiver;
+    if (arguments.length >= 3) receiver = thisArg;
+    if (toStr.call(list) === "[object Array]") forEachArray(list, iterator, receiver);
+    else if (typeof list === "string") forEachString(list, iterator, receiver);
+    else forEachObject(list, iterator, receiver);
+};
+module.exports = forEach;
+
+},{"e50ebc24bbb25feb":"9ocyk"}],"9ocyk":[function(require,module,exports) {
+"use strict";
+var fnToStr = Function.prototype.toString;
+var reflectApply = typeof Reflect === "object" && Reflect !== null && Reflect.apply;
+var badArrayLike;
+var isCallableMarker;
+if (typeof reflectApply === "function" && typeof Object.defineProperty === "function") try {
+    badArrayLike = Object.defineProperty({}, "length", {
+        get: function() {
+            throw isCallableMarker;
+        }
+    });
+    isCallableMarker = {};
+    // eslint-disable-next-line no-throw-literal
+    reflectApply(function() {
+        throw 42;
+    }, null, badArrayLike);
+} catch (_) {
+    if (_ !== isCallableMarker) reflectApply = null;
+}
+else reflectApply = null;
+var constructorRegex = /^\s*class\b/;
+var isES6ClassFn = function isES6ClassFunction(value) {
+    try {
+        var fnStr = fnToStr.call(value);
+        return constructorRegex.test(fnStr);
+    } catch (e) {
+        return false; // not a function
+    }
+};
+var tryFunctionObject = function tryFunctionToStr(value) {
+    try {
+        if (isES6ClassFn(value)) return false;
+        fnToStr.call(value);
+        return true;
+    } catch (e) {
+        return false;
+    }
+};
+var toStr = Object.prototype.toString;
+var objectClass = "[object Object]";
+var fnClass = "[object Function]";
+var genClass = "[object GeneratorFunction]";
+var ddaClass = "[object HTMLAllCollection]"; // IE 11
+var ddaClass2 = "[object HTML document.all class]";
+var ddaClass3 = "[object HTMLCollection]"; // IE 9-10
+var hasToStringTag = typeof Symbol === "function" && !!Symbol.toStringTag; // better: use `has-tostringtag`
+var isIE68 = !(0 in [
+    , 
+]); // eslint-disable-line no-sparse-arrays, comma-spacing
+var isDDA = function isDocumentDotAll() {
+    return false;
+};
+if (typeof document === "object") {
+    // Firefox 3 canonicalizes DDA to undefined when it's not accessed directly
+    var all = document.all;
+    if (toStr.call(all) === toStr.call(document.all)) isDDA = function isDocumentDotAll(value) {
+        /* globals document: false */ // in IE 6-8, typeof document.all is "object" and it's truthy
+        if ((isIE68 || !value) && (typeof value === "undefined" || typeof value === "object")) try {
+            var str = toStr.call(value);
+            return (str === ddaClass || str === ddaClass2 || str === ddaClass3 // opera 12.16
+             || str === objectClass // IE 6-8
+            ) && value("") == null; // eslint-disable-line eqeqeq
+        } catch (e) {}
+        return false;
+    };
+}
+module.exports = reflectApply ? function isCallable(value) {
+    if (isDDA(value)) return true;
+    if (!value) return false;
+    if (typeof value !== "function" && typeof value !== "object") return false;
+    try {
+        reflectApply(value, null, badArrayLike);
+    } catch (e) {
+        if (e !== isCallableMarker) return false;
+    }
+    return !isES6ClassFn(value) && tryFunctionObject(value);
+} : function isCallable(value) {
+    if (isDDA(value)) return true;
+    if (!value) return false;
+    if (typeof value !== "function" && typeof value !== "object") return false;
+    if (hasToStringTag) return tryFunctionObject(value);
+    if (isES6ClassFn(value)) return false;
+    var strClass = toStr.call(value);
+    if (strClass !== fnClass && strClass !== genClass && !/^\[object HTML/.test(strClass)) return false;
+    return tryFunctionObject(value);
+};
+
+},{}],"kfela":[function(require,module,exports) {
+var global = arguments[3];
+"use strict";
+var possibleNames = [
+    "BigInt64Array",
+    "BigUint64Array",
+    "Float32Array",
+    "Float64Array",
+    "Int16Array",
+    "Int32Array",
+    "Int8Array",
+    "Uint16Array",
+    "Uint32Array",
+    "Uint8Array",
+    "Uint8ClampedArray"
+];
+var g = typeof globalThis === "undefined" ? global : globalThis;
+module.exports = function availableTypedArrays() {
+    var out = [];
+    for(var i = 0; i < possibleNames.length; i++)if (typeof g[possibleNames[i]] === "function") out[out.length] = possibleNames[i];
+    return out;
+};
+
+},{}],"1ihkG":[function(require,module,exports) {
+"use strict";
+var whichTypedArray = require("ccf73e5f240c2b8");
+module.exports = function isTypedArray(value) {
+    return !!whichTypedArray(value);
+};
+
+},{"ccf73e5f240c2b8":"lVUO7"}],"inNNy":[function(require,module,exports) {
+module.exports = function isBuffer(arg) {
+    return arg && typeof arg === "object" && typeof arg.copy === "function" && typeof arg.fill === "function" && typeof arg.readUInt8 === "function";
+};
+
+},{}],"bRL3M":[function(require,module,exports) {
+if (typeof Object.create === "function") // implementation from standard node.js 'util' module
+module.exports = function inherits(ctor, superCtor) {
+    if (superCtor) {
+        ctor.super_ = superCtor;
+        ctor.prototype = Object.create(superCtor.prototype, {
+            constructor: {
+                value: ctor,
+                enumerable: false,
+                writable: true,
+                configurable: true
+            }
+        });
+    }
+};
+else // old school shim for old browsers
+module.exports = function inherits(ctor, superCtor) {
+    if (superCtor) {
+        ctor.super_ = superCtor;
+        var TempCtor = function() {};
+        TempCtor.prototype = superCtor.prototype;
+        ctor.prototype = new TempCtor();
+        ctor.prototype.constructor = ctor;
+    }
+};
+
+},{}],"f3tT4":[function(require,module,exports) {
+// Currently in sync with Node.js lib/assert.js
+// https://github.com/nodejs/node/commit/2a51ae424a513ec9a6aa3466baa0cc1d55dd4f3b
+// Originally from narwhal.js (http://narwhaljs.org)
+// Copyright (c) 2009 Thomas Robinson <280north.com>
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the 'Software'), to
+// deal in the Software without restriction, including without limitation the
+// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+// sell copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+// ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+var process = require("17530e9a8e9dd8de");
+"use strict";
+function _typeof(o) {
+    "@babel/helpers - typeof";
+    return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o) {
+        return typeof o;
+    } : function(o) {
+        return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o;
+    }, _typeof(o);
+}
+function _defineProperties(target, props) {
+    for(var i = 0; i < props.length; i++){
+        var descriptor = props[i];
+        descriptor.enumerable = descriptor.enumerable || false;
+        descriptor.configurable = true;
+        if ("value" in descriptor) descriptor.writable = true;
+        Object.defineProperty(target, _toPropertyKey(descriptor.key), descriptor);
+    }
+}
+function _createClass(Constructor, protoProps, staticProps) {
+    if (protoProps) _defineProperties(Constructor.prototype, protoProps);
+    if (staticProps) _defineProperties(Constructor, staticProps);
+    Object.defineProperty(Constructor, "prototype", {
+        writable: false
+    });
+    return Constructor;
+}
+function _toPropertyKey(arg) {
+    var key = _toPrimitive(arg, "string");
+    return _typeof(key) === "symbol" ? key : String(key);
+}
+function _toPrimitive(input, hint) {
+    if (_typeof(input) !== "object" || input === null) return input;
+    var prim = input[Symbol.toPrimitive];
+    if (prim !== undefined) {
+        var res = prim.call(input, hint || "default");
+        if (_typeof(res) !== "object") return res;
+        throw new TypeError("@@toPrimitive must return a primitive value.");
+    }
+    return (hint === "string" ? String : Number)(input);
+}
+function _classCallCheck(instance, Constructor) {
+    if (!(instance instanceof Constructor)) throw new TypeError("Cannot call a class as a function");
+}
+var _require = require("67930e3bebc18ea9"), _require$codes = _require.codes, ERR_AMBIGUOUS_ARGUMENT = _require$codes.ERR_AMBIGUOUS_ARGUMENT, ERR_INVALID_ARG_TYPE = _require$codes.ERR_INVALID_ARG_TYPE, ERR_INVALID_ARG_VALUE = _require$codes.ERR_INVALID_ARG_VALUE, ERR_INVALID_RETURN_VALUE = _require$codes.ERR_INVALID_RETURN_VALUE, ERR_MISSING_ARGS = _require$codes.ERR_MISSING_ARGS;
+var AssertionError = require("11bdd262fb706a54");
+var _require2 = require("d61a3396666721b6"), inspect = _require2.inspect;
+var _require$types = require("d61a3396666721b6").types, isPromise = _require$types.isPromise, isRegExp = _require$types.isRegExp;
+var objectAssign = require("fe81af847d362e93")();
+var objectIs = require("4ad4507c8e372c71")();
+var RegExpPrototypeTest = require("11f208d8f2e10b17")("RegExp.prototype.test");
+var errorCache = new Map();
+var isDeepEqual;
+var isDeepStrictEqual;
+var parseExpressionAt;
+var findNodeAround;
+var decoder;
+function lazyLoadComparison() {
+    var comparison = require("131e25d2408617a4");
+    isDeepEqual = comparison.isDeepEqual;
+    isDeepStrictEqual = comparison.isDeepStrictEqual;
+}
+// Escape control characters but not \n and \t to keep the line breaks and
+// indentation intact.
+// eslint-disable-next-line no-control-regex
+var escapeSequencesRegExp = /[\x00-\x08\x0b\x0c\x0e-\x1f]/g;
+var meta = [
+    "\\u0000",
+    "\\u0001",
+    "\\u0002",
+    "\\u0003",
+    "\\u0004",
+    "\\u0005",
+    "\\u0006",
+    "\\u0007",
+    "\\b",
+    "",
+    "",
+    "\\u000b",
+    "\\f",
+    "",
+    "\\u000e",
+    "\\u000f",
+    "\\u0010",
+    "\\u0011",
+    "\\u0012",
+    "\\u0013",
+    "\\u0014",
+    "\\u0015",
+    "\\u0016",
+    "\\u0017",
+    "\\u0018",
+    "\\u0019",
+    "\\u001a",
+    "\\u001b",
+    "\\u001c",
+    "\\u001d",
+    "\\u001e",
+    "\\u001f"
+];
+var escapeFn = function escapeFn(str) {
+    return meta[str.charCodeAt(0)];
+};
+var warned = false;
+// The assert module provides functions that throw
+// AssertionError's when particular conditions are not met. The
+// assert module must conform to the following interface.
+var assert = module.exports = ok;
+var NO_EXCEPTION_SENTINEL = {};
+// All of the following functions must throw an AssertionError
+// when a corresponding condition is not met, with a message that
+// may be undefined if not provided. All assertion methods provide
+// both the actual and expected values to the assertion error for
+// display purposes.
+function innerFail(obj) {
+    if (obj.message instanceof Error) throw obj.message;
+    throw new AssertionError(obj);
+}
+function fail(actual, expected, message, operator, stackStartFn) {
+    var argsLen = arguments.length;
+    var internalMessage;
+    if (argsLen === 0) internalMessage = "Failed";
+    else if (argsLen === 1) {
+        message = actual;
+        actual = undefined;
+    } else {
+        if (warned === false) {
+            warned = true;
+            var warn = process.emitWarning ? process.emitWarning : console.warn.bind(console);
+            warn("assert.fail() with more than one argument is deprecated. Please use assert.strictEqual() instead or only pass a message.", "DeprecationWarning", "DEP0094");
+        }
+        if (argsLen === 2) operator = "!=";
+    }
+    if (message instanceof Error) throw message;
+    var errArgs = {
+        actual: actual,
+        expected: expected,
+        operator: operator === undefined ? "fail" : operator,
+        stackStartFn: stackStartFn || fail
+    };
+    if (message !== undefined) errArgs.message = message;
+    var err = new AssertionError(errArgs);
+    if (internalMessage) {
+        err.message = internalMessage;
+        err.generatedMessage = true;
+    }
+    throw err;
+}
+assert.fail = fail;
+// The AssertionError is defined in internal/error.
+assert.AssertionError = AssertionError;
+function innerOk(fn, argLen, value, message) {
+    if (!value) {
+        var generatedMessage = false;
+        if (argLen === 0) {
+            generatedMessage = true;
+            message = "No value argument passed to `assert.ok()`";
+        } else if (message instanceof Error) throw message;
+        var err = new AssertionError({
+            actual: value,
+            expected: true,
+            message: message,
+            operator: "==",
+            stackStartFn: fn
+        });
+        err.generatedMessage = generatedMessage;
+        throw err;
+    }
+}
+// Pure assertion tests whether a value is truthy, as determined
+// by !!value.
+function ok() {
+    for(var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++)args[_key] = arguments[_key];
+    innerOk.apply(void 0, [
+        ok,
+        args.length
+    ].concat(args));
+}
+assert.ok = ok;
+// The equality assertion tests shallow, coercive equality with ==.
+/* eslint-disable no-restricted-properties */ assert.equal = function equal(actual, expected, message) {
+    if (arguments.length < 2) throw new ERR_MISSING_ARGS("actual", "expected");
+    // eslint-disable-next-line eqeqeq
+    if (actual != expected) innerFail({
+        actual: actual,
+        expected: expected,
+        message: message,
+        operator: "==",
+        stackStartFn: equal
+    });
+};
+// The non-equality assertion tests for whether two objects are not
+// equal with !=.
+assert.notEqual = function notEqual(actual, expected, message) {
+    if (arguments.length < 2) throw new ERR_MISSING_ARGS("actual", "expected");
+    // eslint-disable-next-line eqeqeq
+    if (actual == expected) innerFail({
+        actual: actual,
+        expected: expected,
+        message: message,
+        operator: "!=",
+        stackStartFn: notEqual
+    });
+};
+// The equivalence assertion tests a deep equality relation.
+assert.deepEqual = function deepEqual(actual, expected, message) {
+    if (arguments.length < 2) throw new ERR_MISSING_ARGS("actual", "expected");
+    if (isDeepEqual === undefined) lazyLoadComparison();
+    if (!isDeepEqual(actual, expected)) innerFail({
+        actual: actual,
+        expected: expected,
+        message: message,
+        operator: "deepEqual",
+        stackStartFn: deepEqual
+    });
+};
+// The non-equivalence assertion tests for any deep inequality.
+assert.notDeepEqual = function notDeepEqual(actual, expected, message) {
+    if (arguments.length < 2) throw new ERR_MISSING_ARGS("actual", "expected");
+    if (isDeepEqual === undefined) lazyLoadComparison();
+    if (isDeepEqual(actual, expected)) innerFail({
+        actual: actual,
+        expected: expected,
+        message: message,
+        operator: "notDeepEqual",
+        stackStartFn: notDeepEqual
+    });
+};
+/* eslint-enable */ assert.deepStrictEqual = function deepStrictEqual(actual, expected, message) {
+    if (arguments.length < 2) throw new ERR_MISSING_ARGS("actual", "expected");
+    if (isDeepEqual === undefined) lazyLoadComparison();
+    if (!isDeepStrictEqual(actual, expected)) innerFail({
+        actual: actual,
+        expected: expected,
+        message: message,
+        operator: "deepStrictEqual",
+        stackStartFn: deepStrictEqual
+    });
+};
+assert.notDeepStrictEqual = notDeepStrictEqual;
+function notDeepStrictEqual(actual, expected, message) {
+    if (arguments.length < 2) throw new ERR_MISSING_ARGS("actual", "expected");
+    if (isDeepEqual === undefined) lazyLoadComparison();
+    if (isDeepStrictEqual(actual, expected)) innerFail({
+        actual: actual,
+        expected: expected,
+        message: message,
+        operator: "notDeepStrictEqual",
+        stackStartFn: notDeepStrictEqual
+    });
+}
+assert.strictEqual = function strictEqual(actual, expected, message) {
+    if (arguments.length < 2) throw new ERR_MISSING_ARGS("actual", "expected");
+    if (!objectIs(actual, expected)) innerFail({
+        actual: actual,
+        expected: expected,
+        message: message,
+        operator: "strictEqual",
+        stackStartFn: strictEqual
+    });
+};
+assert.notStrictEqual = function notStrictEqual(actual, expected, message) {
+    if (arguments.length < 2) throw new ERR_MISSING_ARGS("actual", "expected");
+    if (objectIs(actual, expected)) innerFail({
+        actual: actual,
+        expected: expected,
+        message: message,
+        operator: "notStrictEqual",
+        stackStartFn: notStrictEqual
+    });
+};
+var Comparison = /*#__PURE__*/ _createClass(function Comparison(obj, keys, actual) {
+    var _this = this;
+    _classCallCheck(this, Comparison);
+    keys.forEach(function(key) {
+        if (key in obj) {
+            if (actual !== undefined && typeof actual[key] === "string" && isRegExp(obj[key]) && RegExpPrototypeTest(obj[key], actual[key])) _this[key] = actual[key];
+            else _this[key] = obj[key];
+        }
+    });
+});
+function compareExceptionKey(actual, expected, key, message, keys, fn) {
+    if (!(key in actual) || !isDeepStrictEqual(actual[key], expected[key])) {
+        if (!message) {
+            // Create placeholder objects to create a nice output.
+            var a = new Comparison(actual, keys);
+            var b = new Comparison(expected, keys, actual);
+            var err = new AssertionError({
+                actual: a,
+                expected: b,
+                operator: "deepStrictEqual",
+                stackStartFn: fn
+            });
+            err.actual = actual;
+            err.expected = expected;
+            err.operator = fn.name;
+            throw err;
+        }
+        innerFail({
+            actual: actual,
+            expected: expected,
+            message: message,
+            operator: fn.name,
+            stackStartFn: fn
+        });
+    }
+}
+function expectedException(actual, expected, msg, fn) {
+    if (typeof expected !== "function") {
+        if (isRegExp(expected)) return RegExpPrototypeTest(expected, actual);
+        // assert.doesNotThrow does not accept objects.
+        if (arguments.length === 2) throw new ERR_INVALID_ARG_TYPE("expected", [
+            "Function",
+            "RegExp"
+        ], expected);
+        // Handle primitives properly.
+        if (_typeof(actual) !== "object" || actual === null) {
+            var err = new AssertionError({
+                actual: actual,
+                expected: expected,
+                message: msg,
+                operator: "deepStrictEqual",
+                stackStartFn: fn
+            });
+            err.operator = fn.name;
+            throw err;
+        }
+        var keys = Object.keys(expected);
+        // Special handle errors to make sure the name and the message are compared
+        // as well.
+        if (expected instanceof Error) keys.push("name", "message");
+        else if (keys.length === 0) throw new ERR_INVALID_ARG_VALUE("error", expected, "may not be an empty object");
+        if (isDeepEqual === undefined) lazyLoadComparison();
+        keys.forEach(function(key) {
+            if (typeof actual[key] === "string" && isRegExp(expected[key]) && RegExpPrototypeTest(expected[key], actual[key])) return;
+            compareExceptionKey(actual, expected, key, msg, keys, fn);
+        });
+        return true;
+    }
+    // Guard instanceof against arrow functions as they don't have a prototype.
+    if (expected.prototype !== undefined && actual instanceof expected) return true;
+    if (Error.isPrototypeOf(expected)) return false;
+    return expected.call({}, actual) === true;
+}
+function getActual(fn) {
+    if (typeof fn !== "function") throw new ERR_INVALID_ARG_TYPE("fn", "Function", fn);
+    try {
+        fn();
+    } catch (e) {
+        return e;
+    }
+    return NO_EXCEPTION_SENTINEL;
+}
+function checkIsPromise(obj) {
+    // Accept native ES6 promises and promises that are implemented in a similar
+    // way. Do not accept thenables that use a function as `obj` and that have no
+    // `catch` handler.
+    // TODO: thenables are checked up until they have the correct methods,
+    // but according to documentation, the `then` method should receive
+    // the `fulfill` and `reject` arguments as well or it may be never resolved.
+    return isPromise(obj) || obj !== null && _typeof(obj) === "object" && typeof obj.then === "function" && typeof obj.catch === "function";
+}
+function waitForActual(promiseFn) {
+    return Promise.resolve().then(function() {
+        var resultPromise;
+        if (typeof promiseFn === "function") {
+            // Return a rejected promise if `promiseFn` throws synchronously.
+            resultPromise = promiseFn();
+            // Fail in case no promise is returned.
+            if (!checkIsPromise(resultPromise)) throw new ERR_INVALID_RETURN_VALUE("instance of Promise", "promiseFn", resultPromise);
+        } else if (checkIsPromise(promiseFn)) resultPromise = promiseFn;
+        else throw new ERR_INVALID_ARG_TYPE("promiseFn", [
+            "Function",
+            "Promise"
+        ], promiseFn);
+        return Promise.resolve().then(function() {
+            return resultPromise;
+        }).then(function() {
+            return NO_EXCEPTION_SENTINEL;
+        }).catch(function(e) {
+            return e;
+        });
+    });
+}
+function expectsError(stackStartFn, actual, error, message) {
+    if (typeof error === "string") {
+        if (arguments.length === 4) throw new ERR_INVALID_ARG_TYPE("error", [
+            "Object",
+            "Error",
+            "Function",
+            "RegExp"
+        ], error);
+        if (_typeof(actual) === "object" && actual !== null) {
+            if (actual.message === error) throw new ERR_AMBIGUOUS_ARGUMENT("error/message", 'The error message "'.concat(actual.message, '" is identical to the message.'));
+        } else if (actual === error) throw new ERR_AMBIGUOUS_ARGUMENT("error/message", 'The error "'.concat(actual, '" is identical to the message.'));
+        message = error;
+        error = undefined;
+    } else if (error != null && _typeof(error) !== "object" && typeof error !== "function") throw new ERR_INVALID_ARG_TYPE("error", [
+        "Object",
+        "Error",
+        "Function",
+        "RegExp"
+    ], error);
+    if (actual === NO_EXCEPTION_SENTINEL) {
+        var details = "";
+        if (error && error.name) details += " (".concat(error.name, ")");
+        details += message ? ": ".concat(message) : ".";
+        var fnType = stackStartFn.name === "rejects" ? "rejection" : "exception";
+        innerFail({
+            actual: undefined,
+            expected: error,
+            operator: stackStartFn.name,
+            message: "Missing expected ".concat(fnType).concat(details),
+            stackStartFn: stackStartFn
+        });
+    }
+    if (error && !expectedException(actual, error, message, stackStartFn)) throw actual;
+}
+function expectsNoError(stackStartFn, actual, error, message) {
+    if (actual === NO_EXCEPTION_SENTINEL) return;
+    if (typeof error === "string") {
+        message = error;
+        error = undefined;
+    }
+    if (!error || expectedException(actual, error)) {
+        var details = message ? ": ".concat(message) : ".";
+        var fnType = stackStartFn.name === "doesNotReject" ? "rejection" : "exception";
+        innerFail({
+            actual: actual,
+            expected: error,
+            operator: stackStartFn.name,
+            message: "Got unwanted ".concat(fnType).concat(details, "\n") + 'Actual message: "'.concat(actual && actual.message, '"'),
+            stackStartFn: stackStartFn
+        });
+    }
+    throw actual;
+}
+assert.throws = function throws(promiseFn) {
+    for(var _len2 = arguments.length, args = new Array(_len2 > 1 ? _len2 - 1 : 0), _key2 = 1; _key2 < _len2; _key2++)args[_key2 - 1] = arguments[_key2];
+    expectsError.apply(void 0, [
+        throws,
+        getActual(promiseFn)
+    ].concat(args));
+};
+assert.rejects = function rejects(promiseFn) {
+    for(var _len3 = arguments.length, args = new Array(_len3 > 1 ? _len3 - 1 : 0), _key3 = 1; _key3 < _len3; _key3++)args[_key3 - 1] = arguments[_key3];
+    return waitForActual(promiseFn).then(function(result) {
+        return expectsError.apply(void 0, [
+            rejects,
+            result
+        ].concat(args));
+    });
+};
+assert.doesNotThrow = function doesNotThrow(fn) {
+    for(var _len4 = arguments.length, args = new Array(_len4 > 1 ? _len4 - 1 : 0), _key4 = 1; _key4 < _len4; _key4++)args[_key4 - 1] = arguments[_key4];
+    expectsNoError.apply(void 0, [
+        doesNotThrow,
+        getActual(fn)
+    ].concat(args));
+};
+assert.doesNotReject = function doesNotReject(fn) {
+    for(var _len5 = arguments.length, args = new Array(_len5 > 1 ? _len5 - 1 : 0), _key5 = 1; _key5 < _len5; _key5++)args[_key5 - 1] = arguments[_key5];
+    return waitForActual(fn).then(function(result) {
+        return expectsNoError.apply(void 0, [
+            doesNotReject,
+            result
+        ].concat(args));
+    });
+};
+assert.ifError = function ifError(err) {
+    if (err !== null && err !== undefined) {
+        var message = "ifError got unwanted exception: ";
+        if (_typeof(err) === "object" && typeof err.message === "string") {
+            if (err.message.length === 0 && err.constructor) message += err.constructor.name;
+            else message += err.message;
+        } else message += inspect(err);
+        var newErr = new AssertionError({
+            actual: err,
+            expected: null,
+            operator: "ifError",
+            message: message,
+            stackStartFn: ifError
+        });
+        // Make sure we actually have a stack trace!
+        var origStack = err.stack;
+        if (typeof origStack === "string") {
+            // This will remove any duplicated frames from the error frames taken
+            // from within `ifError` and add the original error frames to the newly
+            // created ones.
+            var tmp2 = origStack.split("\n");
+            tmp2.shift();
+            // Filter all frames existing in err.stack.
+            var tmp1 = newErr.stack.split("\n");
+            for(var i = 0; i < tmp2.length; i++){
+                // Find the first occurrence of the frame.
+                var pos = tmp1.indexOf(tmp2[i]);
+                if (pos !== -1) {
+                    // Only keep new frames.
+                    tmp1 = tmp1.slice(0, pos);
+                    break;
+                }
+            }
+            newErr.stack = "".concat(tmp1.join("\n"), "\n").concat(tmp2.join("\n"));
+        }
+        throw newErr;
+    }
+};
+// Currently in sync with Node.js lib/assert.js
+// https://github.com/nodejs/node/commit/2a871df3dfb8ea663ef5e1f8f62701ec51384ecb
+function internalMatch(string, regexp, message, fn, fnName) {
+    if (!isRegExp(regexp)) throw new ERR_INVALID_ARG_TYPE("regexp", "RegExp", regexp);
+    var match = fnName === "match";
+    if (typeof string !== "string" || RegExpPrototypeTest(regexp, string) !== match) {
+        if (message instanceof Error) throw message;
+        var generatedMessage = !message;
+        // 'The input was expected to not match the regular expression ' +
+        message = message || (typeof string !== "string" ? 'The "string" argument must be of type string. Received type ' + "".concat(_typeof(string), " (").concat(inspect(string), ")") : (match ? "The input did not match the regular expression " : "The input was expected to not match the regular expression ") + "".concat(inspect(regexp), ". Input:\n\n").concat(inspect(string), "\n"));
+        var err = new AssertionError({
+            actual: string,
+            expected: regexp,
+            message: message,
+            operator: fnName,
+            stackStartFn: fn
+        });
+        err.generatedMessage = generatedMessage;
+        throw err;
+    }
+}
+assert.match = function match(string, regexp, message) {
+    internalMatch(string, regexp, message, match, "match");
+};
+assert.doesNotMatch = function doesNotMatch(string, regexp, message) {
+    internalMatch(string, regexp, message, doesNotMatch, "doesNotMatch");
+};
+// Expose a strict only variant of assert
+function strict() {
+    for(var _len6 = arguments.length, args = new Array(_len6), _key6 = 0; _key6 < _len6; _key6++)args[_key6] = arguments[_key6];
+    innerOk.apply(void 0, [
+        strict,
+        args.length
+    ].concat(args));
+}
+assert.strict = objectAssign(strict, assert, {
+    equal: assert.strictEqual,
+    deepEqual: assert.deepStrictEqual,
+    notEqual: assert.notStrictEqual,
+    notDeepEqual: assert.notDeepStrictEqual
+});
+assert.strict.strict = assert.strict;
+
+},{"17530e9a8e9dd8de":"d5jf4","67930e3bebc18ea9":"cwQVR","11bdd262fb706a54":"lQlQt","d61a3396666721b6":"cxohQ","fe81af847d362e93":"ajEZo","4ad4507c8e372c71":"ezjA5","11f208d8f2e10b17":"5yYiF","131e25d2408617a4":"d5TM9"}],"cwQVR":[function(require,module,exports) {
+// Currently in sync with Node.js lib/internal/errors.js
+// https://github.com/nodejs/node/commit/3b044962c48fe313905877a96b5d0894a5404f6f
+/* eslint node-core/documented-errors: "error" */ /* eslint node-core/alphabetize-errors: "error" */ /* eslint node-core/prefer-util-format-errors: "error" */ "use strict";
+// The whole point behind this internal module is to allow Node.js to no
+// longer be forced to treat every error message change as a semver-major
+// change. The NodeError classes here all expose a `code` property whose
+// value statically and permanently identifies the error. While the error
+// message may change, the code should not.
+function _typeof(o) {
+    "@babel/helpers - typeof";
+    return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o) {
+        return typeof o;
+    } : function(o) {
+        return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o;
+    }, _typeof(o);
+}
+function _defineProperties(target, props) {
+    for(var i = 0; i < props.length; i++){
+        var descriptor = props[i];
+        descriptor.enumerable = descriptor.enumerable || false;
+        descriptor.configurable = true;
+        if ("value" in descriptor) descriptor.writable = true;
+        Object.defineProperty(target, _toPropertyKey(descriptor.key), descriptor);
+    }
+}
+function _createClass(Constructor, protoProps, staticProps) {
+    if (protoProps) _defineProperties(Constructor.prototype, protoProps);
+    if (staticProps) _defineProperties(Constructor, staticProps);
+    Object.defineProperty(Constructor, "prototype", {
+        writable: false
+    });
+    return Constructor;
+}
+function _toPropertyKey(arg) {
+    var key = _toPrimitive(arg, "string");
+    return _typeof(key) === "symbol" ? key : String(key);
+}
+function _toPrimitive(input, hint) {
+    if (_typeof(input) !== "object" || input === null) return input;
+    var prim = input[Symbol.toPrimitive];
+    if (prim !== undefined) {
+        var res = prim.call(input, hint || "default");
+        if (_typeof(res) !== "object") return res;
+        throw new TypeError("@@toPrimitive must return a primitive value.");
+    }
+    return (hint === "string" ? String : Number)(input);
+}
+function _classCallCheck(instance, Constructor) {
+    if (!(instance instanceof Constructor)) throw new TypeError("Cannot call a class as a function");
+}
+function _inherits(subClass, superClass) {
+    if (typeof superClass !== "function" && superClass !== null) throw new TypeError("Super expression must either be null or a function");
+    subClass.prototype = Object.create(superClass && superClass.prototype, {
+        constructor: {
+            value: subClass,
+            writable: true,
+            configurable: true
+        }
+    });
+    Object.defineProperty(subClass, "prototype", {
+        writable: false
+    });
+    if (superClass) _setPrototypeOf(subClass, superClass);
+}
+function _setPrototypeOf(o, p) {
+    _setPrototypeOf = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function _setPrototypeOf(o, p) {
+        o.__proto__ = p;
+        return o;
+    };
+    return _setPrototypeOf(o, p);
+}
+function _createSuper(Derived) {
+    var hasNativeReflectConstruct = _isNativeReflectConstruct();
+    return function _createSuperInternal() {
+        var Super = _getPrototypeOf(Derived), result;
+        if (hasNativeReflectConstruct) {
+            var NewTarget = _getPrototypeOf(this).constructor;
+            result = Reflect.construct(Super, arguments, NewTarget);
+        } else result = Super.apply(this, arguments);
+        return _possibleConstructorReturn(this, result);
+    };
+}
+function _possibleConstructorReturn(self, call) {
+    if (call && (_typeof(call) === "object" || typeof call === "function")) return call;
+    else if (call !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
+    return _assertThisInitialized(self);
+}
+function _assertThisInitialized(self) {
+    if (self === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
+    return self;
+}
+function _isNativeReflectConstruct() {
+    if (typeof Reflect === "undefined" || !Reflect.construct) return false;
+    if (Reflect.construct.sham) return false;
+    if (typeof Proxy === "function") return true;
+    try {
+        Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {}));
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+function _getPrototypeOf(o) {
+    _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function _getPrototypeOf(o) {
+        return o.__proto__ || Object.getPrototypeOf(o);
+    };
+    return _getPrototypeOf(o);
+}
+var codes = {};
+// Lazy loaded
+var assert;
+var util;
+function createErrorType(code, message, Base) {
+    if (!Base) Base = Error;
+    function getMessage(arg1, arg2, arg3) {
+        if (typeof message === "string") return message;
+        else return message(arg1, arg2, arg3);
+    }
+    var NodeError = /*#__PURE__*/ function(_Base) {
+        _inherits(NodeError, _Base);
+        var _super = _createSuper(NodeError);
+        function NodeError(arg1, arg2, arg3) {
+            var _this;
+            _classCallCheck(this, NodeError);
+            _this = _super.call(this, getMessage(arg1, arg2, arg3));
+            _this.code = code;
+            return _this;
+        }
+        return _createClass(NodeError);
+    }(Base);
+    codes[code] = NodeError;
+}
+// https://github.com/nodejs/node/blob/v10.8.0/lib/internal/errors.js
+function oneOf(expected, thing) {
+    if (Array.isArray(expected)) {
+        var len = expected.length;
+        expected = expected.map(function(i) {
+            return String(i);
+        });
+        if (len > 2) return "one of ".concat(thing, " ").concat(expected.slice(0, len - 1).join(", "), ", or ") + expected[len - 1];
+        else if (len === 2) return "one of ".concat(thing, " ").concat(expected[0], " or ").concat(expected[1]);
+        else return "of ".concat(thing, " ").concat(expected[0]);
+    } else return "of ".concat(thing, " ").concat(String(expected));
+}
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/startsWith
+function startsWith(str, search, pos) {
+    return str.substr(!pos || pos < 0 ? 0 : +pos, search.length) === search;
+}
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/endsWith
+function endsWith(str, search, this_len) {
+    if (this_len === undefined || this_len > str.length) this_len = str.length;
+    return str.substring(this_len - search.length, this_len) === search;
+}
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/includes
+function includes(str, search, start) {
+    if (typeof start !== "number") start = 0;
+    if (start + search.length > str.length) return false;
+    else return str.indexOf(search, start) !== -1;
+}
+createErrorType("ERR_AMBIGUOUS_ARGUMENT", 'The "%s" argument is ambiguous. %s', TypeError);
+createErrorType("ERR_INVALID_ARG_TYPE", function(name, expected, actual) {
+    if (assert === undefined) assert = require("f73a3052b95b9ed");
+    assert(typeof name === "string", "'name' must be a string");
+    // determiner: 'must be' or 'must not be'
+    var determiner;
+    if (typeof expected === "string" && startsWith(expected, "not ")) {
+        determiner = "must not be";
+        expected = expected.replace(/^not /, "");
+    } else determiner = "must be";
+    var msg;
+    if (endsWith(name, " argument")) // For cases like 'first argument'
+    msg = "The ".concat(name, " ").concat(determiner, " ").concat(oneOf(expected, "type"));
+    else {
+        var type = includes(name, ".") ? "property" : "argument";
+        msg = 'The "'.concat(name, '" ').concat(type, " ").concat(determiner, " ").concat(oneOf(expected, "type"));
+    }
+    // TODO(BridgeAR): Improve the output by showing `null` and similar.
+    msg += ". Received type ".concat(_typeof(actual));
+    return msg;
+}, TypeError);
+createErrorType("ERR_INVALID_ARG_VALUE", function(name, value) {
+    var reason = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : "is invalid";
+    if (util === undefined) util = require("1fd472100fa8826f");
+    var inspected = util.inspect(value);
+    if (inspected.length > 128) inspected = "".concat(inspected.slice(0, 128), "...");
+    return "The argument '".concat(name, "' ").concat(reason, ". Received ").concat(inspected);
+}, TypeError, RangeError);
+createErrorType("ERR_INVALID_RETURN_VALUE", function(input, name, value) {
+    var type;
+    if (value && value.constructor && value.constructor.name) type = "instance of ".concat(value.constructor.name);
+    else type = "type ".concat(_typeof(value));
+    return "Expected ".concat(input, ' to be returned from the "').concat(name, '"') + " function but got ".concat(type, ".");
+}, TypeError);
+createErrorType("ERR_MISSING_ARGS", function() {
+    for(var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++)args[_key] = arguments[_key];
+    if (assert === undefined) assert = require("f73a3052b95b9ed");
+    assert(args.length > 0, "At least one arg needs to be specified");
+    var msg = "The ";
+    var len = args.length;
+    args = args.map(function(a) {
+        return '"'.concat(a, '"');
+    });
+    switch(len){
+        case 1:
+            msg += "".concat(args[0], " argument");
+            break;
+        case 2:
+            msg += "".concat(args[0], " and ").concat(args[1], " arguments");
+            break;
+        default:
+            msg += args.slice(0, len - 1).join(", ");
+            msg += ", and ".concat(args[len - 1], " arguments");
+            break;
+    }
+    return "".concat(msg, " must be specified");
+}, TypeError);
+module.exports.codes = codes;
+
+},{"f73a3052b95b9ed":"f3tT4","1fd472100fa8826f":"cxohQ"}],"lQlQt":[function(require,module,exports) {
+// Currently in sync with Node.js lib/internal/assert/assertion_error.js
+// https://github.com/nodejs/node/commit/0817840f775032169ddd70c85ac059f18ffcc81c
+var process = require("228da2c254a5e871");
+"use strict";
+function ownKeys(e, r) {
+    var t = Object.keys(e);
+    if (Object.getOwnPropertySymbols) {
+        var o = Object.getOwnPropertySymbols(e);
+        r && (o = o.filter(function(r) {
+            return Object.getOwnPropertyDescriptor(e, r).enumerable;
+        })), t.push.apply(t, o);
+    }
+    return t;
+}
+function _objectSpread(e) {
+    for(var r = 1; r < arguments.length; r++){
+        var t = null != arguments[r] ? arguments[r] : {};
+        r % 2 ? ownKeys(Object(t), !0).forEach(function(r) {
+            _defineProperty(e, r, t[r]);
+        }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function(r) {
+            Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r));
+        });
+    }
+    return e;
+}
+function _defineProperty(obj, key, value) {
+    key = _toPropertyKey(key);
+    if (key in obj) Object.defineProperty(obj, key, {
+        value: value,
+        enumerable: true,
+        configurable: true,
+        writable: true
+    });
+    else obj[key] = value;
+    return obj;
+}
+function _classCallCheck(instance, Constructor) {
+    if (!(instance instanceof Constructor)) throw new TypeError("Cannot call a class as a function");
+}
+function _defineProperties(target, props) {
+    for(var i = 0; i < props.length; i++){
+        var descriptor = props[i];
+        descriptor.enumerable = descriptor.enumerable || false;
+        descriptor.configurable = true;
+        if ("value" in descriptor) descriptor.writable = true;
+        Object.defineProperty(target, _toPropertyKey(descriptor.key), descriptor);
+    }
+}
+function _createClass(Constructor, protoProps, staticProps) {
+    if (protoProps) _defineProperties(Constructor.prototype, protoProps);
+    if (staticProps) _defineProperties(Constructor, staticProps);
+    Object.defineProperty(Constructor, "prototype", {
+        writable: false
+    });
+    return Constructor;
+}
+function _toPropertyKey(arg) {
+    var key = _toPrimitive(arg, "string");
+    return _typeof(key) === "symbol" ? key : String(key);
+}
+function _toPrimitive(input, hint) {
+    if (_typeof(input) !== "object" || input === null) return input;
+    var prim = input[Symbol.toPrimitive];
+    if (prim !== undefined) {
+        var res = prim.call(input, hint || "default");
+        if (_typeof(res) !== "object") return res;
+        throw new TypeError("@@toPrimitive must return a primitive value.");
+    }
+    return (hint === "string" ? String : Number)(input);
+}
+function _inherits(subClass, superClass) {
+    if (typeof superClass !== "function" && superClass !== null) throw new TypeError("Super expression must either be null or a function");
+    subClass.prototype = Object.create(superClass && superClass.prototype, {
+        constructor: {
+            value: subClass,
+            writable: true,
+            configurable: true
+        }
+    });
+    Object.defineProperty(subClass, "prototype", {
+        writable: false
+    });
+    if (superClass) _setPrototypeOf(subClass, superClass);
+}
+function _createSuper(Derived) {
+    var hasNativeReflectConstruct = _isNativeReflectConstruct();
+    return function _createSuperInternal() {
+        var Super = _getPrototypeOf(Derived), result;
+        if (hasNativeReflectConstruct) {
+            var NewTarget = _getPrototypeOf(this).constructor;
+            result = Reflect.construct(Super, arguments, NewTarget);
+        } else result = Super.apply(this, arguments);
+        return _possibleConstructorReturn(this, result);
+    };
+}
+function _possibleConstructorReturn(self, call) {
+    if (call && (_typeof(call) === "object" || typeof call === "function")) return call;
+    else if (call !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
+    return _assertThisInitialized(self);
+}
+function _assertThisInitialized(self) {
+    if (self === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
+    return self;
+}
+function _wrapNativeSuper(Class) {
+    var _cache = typeof Map === "function" ? new Map() : undefined;
+    _wrapNativeSuper = function _wrapNativeSuper(Class) {
+        if (Class === null || !_isNativeFunction(Class)) return Class;
+        if (typeof Class !== "function") throw new TypeError("Super expression must either be null or a function");
+        if (typeof _cache !== "undefined") {
+            if (_cache.has(Class)) return _cache.get(Class);
+            _cache.set(Class, Wrapper);
+        }
+        function Wrapper() {
+            return _construct(Class, arguments, _getPrototypeOf(this).constructor);
+        }
+        Wrapper.prototype = Object.create(Class.prototype, {
+            constructor: {
+                value: Wrapper,
+                enumerable: false,
+                writable: true,
+                configurable: true
+            }
+        });
+        return _setPrototypeOf(Wrapper, Class);
+    };
+    return _wrapNativeSuper(Class);
+}
+function _construct(Parent, args, Class) {
+    if (_isNativeReflectConstruct()) _construct = Reflect.construct.bind();
+    else _construct = function _construct(Parent, args, Class) {
+        var a = [
+            null
+        ];
+        a.push.apply(a, args);
+        var Constructor = Function.bind.apply(Parent, a);
+        var instance = new Constructor();
+        if (Class) _setPrototypeOf(instance, Class.prototype);
+        return instance;
+    };
+    return _construct.apply(null, arguments);
+}
+function _isNativeReflectConstruct() {
+    if (typeof Reflect === "undefined" || !Reflect.construct) return false;
+    if (Reflect.construct.sham) return false;
+    if (typeof Proxy === "function") return true;
+    try {
+        Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {}));
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+function _isNativeFunction(fn) {
+    return Function.toString.call(fn).indexOf("[native code]") !== -1;
+}
+function _setPrototypeOf(o, p) {
+    _setPrototypeOf = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function _setPrototypeOf(o, p) {
+        o.__proto__ = p;
+        return o;
+    };
+    return _setPrototypeOf(o, p);
+}
+function _getPrototypeOf(o) {
+    _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function _getPrototypeOf(o) {
+        return o.__proto__ || Object.getPrototypeOf(o);
+    };
+    return _getPrototypeOf(o);
+}
+function _typeof(o) {
+    "@babel/helpers - typeof";
+    return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o) {
+        return typeof o;
+    } : function(o) {
+        return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o;
+    }, _typeof(o);
+}
+var _require = require("9984e91d63ed614c"), inspect = _require.inspect;
+var _require2 = require("1670766d7c5cef96"), ERR_INVALID_ARG_TYPE = _require2.codes.ERR_INVALID_ARG_TYPE;
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/endsWith
+function endsWith(str, search, this_len) {
+    if (this_len === undefined || this_len > str.length) this_len = str.length;
+    return str.substring(this_len - search.length, this_len) === search;
+}
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/repeat
+function repeat(str, count) {
+    count = Math.floor(count);
+    if (str.length == 0 || count == 0) return "";
+    var maxCount = str.length * count;
+    count = Math.floor(Math.log(count) / Math.log(2));
+    while(count){
+        str += str;
+        count--;
+    }
+    str += str.substring(0, maxCount - str.length);
+    return str;
+}
+var blue = "";
+var green = "";
+var red = "";
+var white = "";
+var kReadableOperator = {
+    deepStrictEqual: "Expected values to be strictly deep-equal:",
+    strictEqual: "Expected values to be strictly equal:",
+    strictEqualObject: 'Expected "actual" to be reference-equal to "expected":',
+    deepEqual: "Expected values to be loosely deep-equal:",
+    equal: "Expected values to be loosely equal:",
+    notDeepStrictEqual: 'Expected "actual" not to be strictly deep-equal to:',
+    notStrictEqual: 'Expected "actual" to be strictly unequal to:',
+    notStrictEqualObject: 'Expected "actual" not to be reference-equal to "expected":',
+    notDeepEqual: 'Expected "actual" not to be loosely deep-equal to:',
+    notEqual: 'Expected "actual" to be loosely unequal to:',
+    notIdentical: "Values identical but not reference-equal:"
+};
+// Comparing short primitives should just show === / !== instead of using the
+// diff.
+var kMaxShortLength = 10;
+function copyError(source) {
+    var keys = Object.keys(source);
+    var target = Object.create(Object.getPrototypeOf(source));
+    keys.forEach(function(key) {
+        target[key] = source[key];
+    });
+    Object.defineProperty(target, "message", {
+        value: source.message
+    });
+    return target;
+}
+function inspectValue(val) {
+    // The util.inspect default values could be changed. This makes sure the
+    // error messages contain the necessary information nevertheless.
+    return inspect(val, {
+        compact: false,
+        customInspect: false,
+        depth: 1000,
+        maxArrayLength: Infinity,
+        // Assert compares only enumerable properties (with a few exceptions).
+        showHidden: false,
+        // Having a long line as error is better than wrapping the line for
+        // comparison for now.
+        // TODO(BridgeAR): `breakLength` should be limited as soon as soon as we
+        // have meta information about the inspected properties (i.e., know where
+        // in what line the property starts and ends).
+        breakLength: Infinity,
+        // Assert does not detect proxies currently.
+        showProxy: false,
+        sorted: true,
+        // Inspect getters as we also check them when comparing entries.
+        getters: true
+    });
+}
+function createErrDiff(actual, expected, operator) {
+    var other = "";
+    var res = "";
+    var lastPos = 0;
+    var end = "";
+    var skipped = false;
+    var actualInspected = inspectValue(actual);
+    var actualLines = actualInspected.split("\n");
+    var expectedLines = inspectValue(expected).split("\n");
+    var i = 0;
+    var indicator = "";
+    // In case both values are objects explicitly mark them as not reference equal
+    // for the `strictEqual` operator.
+    if (operator === "strictEqual" && _typeof(actual) === "object" && _typeof(expected) === "object" && actual !== null && expected !== null) operator = "strictEqualObject";
+    // If "actual" and "expected" fit on a single line and they are not strictly
+    // equal, check further special handling.
+    if (actualLines.length === 1 && expectedLines.length === 1 && actualLines[0] !== expectedLines[0]) {
+        var inputLength = actualLines[0].length + expectedLines[0].length;
+        // If the character length of "actual" and "expected" together is less than
+        // kMaxShortLength and if neither is an object and at least one of them is
+        // not `zero`, use the strict equal comparison to visualize the output.
+        if (inputLength <= kMaxShortLength) {
+            if ((_typeof(actual) !== "object" || actual === null) && (_typeof(expected) !== "object" || expected === null) && (actual !== 0 || expected !== 0)) // -0 === +0
+            return "".concat(kReadableOperator[operator], "\n\n") + "".concat(actualLines[0], " !== ").concat(expectedLines[0], "\n");
+        } else if (operator !== "strictEqualObject") {
+            // If the stderr is a tty and the input length is lower than the current
+            // columns per line, add a mismatch indicator below the output. If it is
+            // not a tty, use a default value of 80 characters.
+            var maxLength = process.stderr && process.stderr.isTTY ? process.stderr.columns : 80;
+            if (inputLength < maxLength) {
+                while(actualLines[0][i] === expectedLines[0][i])i++;
+                // Ignore the first characters.
+                if (i > 2) {
+                    // Add position indicator for the first mismatch in case it is a
+                    // single line and the input length is less than the column length.
+                    indicator = "\n  ".concat(repeat(" ", i), "^");
+                    i = 0;
+                }
+            }
+        }
+    }
+    // Remove all ending lines that match (this optimizes the output for
+    // readability by reducing the number of total changed lines).
+    var a = actualLines[actualLines.length - 1];
+    var b = expectedLines[expectedLines.length - 1];
+    while(a === b){
+        if (i++ < 2) end = "\n  ".concat(a).concat(end);
+        else other = a;
+        actualLines.pop();
+        expectedLines.pop();
+        if (actualLines.length === 0 || expectedLines.length === 0) break;
+        a = actualLines[actualLines.length - 1];
+        b = expectedLines[expectedLines.length - 1];
+    }
+    var maxLines = Math.max(actualLines.length, expectedLines.length);
+    // Strict equal with identical objects that are not identical by reference.
+    // E.g., assert.deepStrictEqual({ a: Symbol() }, { a: Symbol() })
+    if (maxLines === 0) {
+        // We have to get the result again. The lines were all removed before.
+        var _actualLines = actualInspected.split("\n");
+        // Only remove lines in case it makes sense to collapse those.
+        // TODO: Accept env to always show the full error.
+        if (_actualLines.length > 30) {
+            _actualLines[26] = "".concat(blue, "...").concat(white);
+            while(_actualLines.length > 27)_actualLines.pop();
+        }
+        return "".concat(kReadableOperator.notIdentical, "\n\n").concat(_actualLines.join("\n"), "\n");
+    }
+    if (i > 3) {
+        end = "\n".concat(blue, "...").concat(white).concat(end);
+        skipped = true;
+    }
+    if (other !== "") {
+        end = "\n  ".concat(other).concat(end);
+        other = "";
+    }
+    var printedLines = 0;
+    var msg = kReadableOperator[operator] + "\n".concat(green, "+ actual").concat(white, " ").concat(red, "- expected").concat(white);
+    var skippedMsg = " ".concat(blue, "...").concat(white, " Lines skipped");
+    for(i = 0; i < maxLines; i++){
+        // Only extra expected lines exist
+        var cur = i - lastPos;
+        if (actualLines.length < i + 1) {
+            // If the last diverging line is more than one line above and the
+            // current line is at least line three, add some of the former lines and
+            // also add dots to indicate skipped entries.
+            if (cur > 1 && i > 2) {
+                if (cur > 4) {
+                    res += "\n".concat(blue, "...").concat(white);
+                    skipped = true;
+                } else if (cur > 3) {
+                    res += "\n  ".concat(expectedLines[i - 2]);
+                    printedLines++;
+                }
+                res += "\n  ".concat(expectedLines[i - 1]);
+                printedLines++;
+            }
+            // Mark the current line as the last diverging one.
+            lastPos = i;
+            // Add the expected line to the cache.
+            other += "\n".concat(red, "-").concat(white, " ").concat(expectedLines[i]);
+            printedLines++;
+        // Only extra actual lines exist
+        } else if (expectedLines.length < i + 1) {
+            // If the last diverging line is more than one line above and the
+            // current line is at least line three, add some of the former lines and
+            // also add dots to indicate skipped entries.
+            if (cur > 1 && i > 2) {
+                if (cur > 4) {
+                    res += "\n".concat(blue, "...").concat(white);
+                    skipped = true;
+                } else if (cur > 3) {
+                    res += "\n  ".concat(actualLines[i - 2]);
+                    printedLines++;
+                }
+                res += "\n  ".concat(actualLines[i - 1]);
+                printedLines++;
+            }
+            // Mark the current line as the last diverging one.
+            lastPos = i;
+            // Add the actual line to the result.
+            res += "\n".concat(green, "+").concat(white, " ").concat(actualLines[i]);
+            printedLines++;
+        // Lines diverge
+        } else {
+            var expectedLine = expectedLines[i];
+            var actualLine = actualLines[i];
+            // If the lines diverge, specifically check for lines that only diverge by
+            // a trailing comma. In that case it is actually identical and we should
+            // mark it as such.
+            var divergingLines = actualLine !== expectedLine && (!endsWith(actualLine, ",") || actualLine.slice(0, -1) !== expectedLine);
+            // If the expected line has a trailing comma but is otherwise identical,
+            // add a comma at the end of the actual line. Otherwise the output could
+            // look weird as in:
+            //
+            //   [
+            //     1         // No comma at the end!
+            // +   2
+            //   ]
+            //
+            if (divergingLines && endsWith(expectedLine, ",") && expectedLine.slice(0, -1) === actualLine) {
+                divergingLines = false;
+                actualLine += ",";
+            }
+            if (divergingLines) {
+                // If the last diverging line is more than one line above and the
+                // current line is at least line three, add some of the former lines and
+                // also add dots to indicate skipped entries.
+                if (cur > 1 && i > 2) {
+                    if (cur > 4) {
+                        res += "\n".concat(blue, "...").concat(white);
+                        skipped = true;
+                    } else if (cur > 3) {
+                        res += "\n  ".concat(actualLines[i - 2]);
+                        printedLines++;
+                    }
+                    res += "\n  ".concat(actualLines[i - 1]);
+                    printedLines++;
+                }
+                // Mark the current line as the last diverging one.
+                lastPos = i;
+                // Add the actual line to the result and cache the expected diverging
+                // line so consecutive diverging lines show up as +++--- and not +-+-+-.
+                res += "\n".concat(green, "+").concat(white, " ").concat(actualLine);
+                other += "\n".concat(red, "-").concat(white, " ").concat(expectedLine);
+                printedLines += 2;
+            // Lines are identical
+            } else {
+                // Add all cached information to the result before adding other things
+                // and reset the cache.
+                res += other;
+                other = "";
+                // If the last diverging line is exactly one line above or if it is the
+                // very first line, add the line to the result.
+                if (cur === 1 || i === 0) {
+                    res += "\n  ".concat(actualLine);
+                    printedLines++;
+                }
+            }
+        }
+        // Inspected object to big (Show ~20 rows max)
+        if (printedLines > 20 && i < maxLines - 2) return "".concat(msg).concat(skippedMsg, "\n").concat(res, "\n").concat(blue, "...").concat(white).concat(other, "\n") + "".concat(blue, "...").concat(white);
+    }
+    return "".concat(msg).concat(skipped ? skippedMsg : "", "\n").concat(res).concat(other).concat(end).concat(indicator);
+}
+var AssertionError = /*#__PURE__*/ function(_Error, _inspect$custom) {
+    _inherits(AssertionError, _Error);
+    var _super = _createSuper(AssertionError);
+    function AssertionError(options) {
+        var _this;
+        _classCallCheck(this, AssertionError);
+        if (_typeof(options) !== "object" || options === null) throw new ERR_INVALID_ARG_TYPE("options", "Object", options);
+        var message = options.message, operator = options.operator, stackStartFn = options.stackStartFn;
+        var actual = options.actual, expected = options.expected;
+        var limit = Error.stackTraceLimit;
+        Error.stackTraceLimit = 0;
+        if (message != null) _this = _super.call(this, String(message));
+        else {
+            if (process.stderr && process.stderr.isTTY) {
+                // Reset on each call to make sure we handle dynamically set environment
+                // variables correct.
+                if (process.stderr && process.stderr.getColorDepth && process.stderr.getColorDepth() !== 1) {
+                    blue = "\x1b[34m";
+                    green = "\x1b[32m";
+                    white = "\x1b[39m";
+                    red = "\x1b[31m";
+                } else {
+                    blue = "";
+                    green = "";
+                    white = "";
+                    red = "";
+                }
+            }
+            // Prevent the error stack from being visible by duplicating the error
+            // in a very close way to the original in case both sides are actually
+            // instances of Error.
+            if (_typeof(actual) === "object" && actual !== null && _typeof(expected) === "object" && expected !== null && "stack" in actual && actual instanceof Error && "stack" in expected && expected instanceof Error) {
+                actual = copyError(actual);
+                expected = copyError(expected);
+            }
+            if (operator === "deepStrictEqual" || operator === "strictEqual") _this = _super.call(this, createErrDiff(actual, expected, operator));
+            else if (operator === "notDeepStrictEqual" || operator === "notStrictEqual") {
+                // In case the objects are equal but the operator requires unequal, show
+                // the first object and say A equals B
+                var base = kReadableOperator[operator];
+                var res = inspectValue(actual).split("\n");
+                // In case "actual" is an object, it should not be reference equal.
+                if (operator === "notStrictEqual" && _typeof(actual) === "object" && actual !== null) base = kReadableOperator.notStrictEqualObject;
+                // Only remove lines in case it makes sense to collapse those.
+                // TODO: Accept env to always show the full error.
+                if (res.length > 30) {
+                    res[26] = "".concat(blue, "...").concat(white);
+                    while(res.length > 27)res.pop();
+                }
+                // Only print a single input.
+                if (res.length === 1) _this = _super.call(this, "".concat(base, " ").concat(res[0]));
+                else _this = _super.call(this, "".concat(base, "\n\n").concat(res.join("\n"), "\n"));
+            } else {
+                var _res = inspectValue(actual);
+                var other = "";
+                var knownOperators = kReadableOperator[operator];
+                if (operator === "notDeepEqual" || operator === "notEqual") {
+                    _res = "".concat(kReadableOperator[operator], "\n\n").concat(_res);
+                    if (_res.length > 1024) _res = "".concat(_res.slice(0, 1021), "...");
+                } else {
+                    other = "".concat(inspectValue(expected));
+                    if (_res.length > 512) _res = "".concat(_res.slice(0, 509), "...");
+                    if (other.length > 512) other = "".concat(other.slice(0, 509), "...");
+                    if (operator === "deepEqual" || operator === "equal") _res = "".concat(knownOperators, "\n\n").concat(_res, "\n\nshould equal\n\n");
+                    else other = " ".concat(operator, " ").concat(other);
+                }
+                _this = _super.call(this, "".concat(_res).concat(other));
+            }
+        }
+        Error.stackTraceLimit = limit;
+        _this.generatedMessage = !message;
+        Object.defineProperty(_assertThisInitialized(_this), "name", {
+            value: "AssertionError [ERR_ASSERTION]",
+            enumerable: false,
+            writable: true,
+            configurable: true
+        });
+        _this.code = "ERR_ASSERTION";
+        _this.actual = actual;
+        _this.expected = expected;
+        _this.operator = operator;
+        if (Error.captureStackTrace) // eslint-disable-next-line no-restricted-syntax
+        Error.captureStackTrace(_assertThisInitialized(_this), stackStartFn);
+        // Create error message including the error code in the name.
+        _this.stack;
+        // Reset the name.
+        _this.name = "AssertionError";
+        return _possibleConstructorReturn(_this);
+    }
+    _createClass(AssertionError, [
+        {
+            key: "toString",
+            value: function toString() {
+                return "".concat(this.name, " [").concat(this.code, "]: ").concat(this.message);
+            }
+        },
+        {
+            key: _inspect$custom,
+            value: function value(recurseTimes, ctx) {
+                // This limits the `actual` and `expected` property default inspection to
+                // the minimum depth. Otherwise those values would be too verbose compared
+                // to the actual error message which contains a combined view of these two
+                // input values.
+                return inspect(this, _objectSpread(_objectSpread({}, ctx), {}, {
+                    customInspect: false,
+                    depth: 0
+                }));
+            }
+        }
+    ]);
+    return AssertionError;
+}(/*#__PURE__*/ _wrapNativeSuper(Error), inspect.custom);
+module.exports = AssertionError;
+
+},{"228da2c254a5e871":"d5jf4","9984e91d63ed614c":"cxohQ","1670766d7c5cef96":"cwQVR"}],"ajEZo":[function(require,module,exports) {
+"use strict";
+var implementation = require("b7e83063a8ec29e5");
+var lacksProperEnumerationOrder = function() {
+    if (!Object.assign) return false;
+    /*
+	 * v8, specifically in node 4.x, has a bug with incorrect property enumeration order
+	 * note: this does not detect the bug unless there's 20 characters
+	 */ var str = "abcdefghijklmnopqrst";
+    var letters = str.split("");
+    var map = {};
+    for(var i = 0; i < letters.length; ++i)map[letters[i]] = letters[i];
+    var obj = Object.assign({}, map);
+    var actual = "";
+    for(var k in obj)actual += k;
+    return str !== actual;
+};
+var assignHasPendingExceptions = function() {
+    if (!Object.assign || !Object.preventExtensions) return false;
+    /*
+	 * Firefox 37 still has "pending exception" logic in its Object.assign implementation,
+	 * which is 72% slower than our shim, and Firefox 40's native implementation.
+	 */ var thrower = Object.preventExtensions({
+        1: 2
+    });
+    try {
+        Object.assign(thrower, "xy");
+    } catch (e) {
+        return thrower[1] === "y";
+    }
+    return false;
+};
+module.exports = function getPolyfill() {
+    if (!Object.assign) return implementation;
+    if (lacksProperEnumerationOrder()) return implementation;
+    if (assignHasPendingExceptions()) return implementation;
+    return Object.assign;
+};
+
+},{"b7e83063a8ec29e5":"jttW1"}],"jttW1":[function(require,module,exports) {
+"use strict";
+// modified from https://github.com/es-shims/es6-shim
+var objectKeys = require("334c0bea01e613e6");
+var hasSymbols = require("1964e25feb5e87a1")();
+var callBound = require("6fb85b5b56dcab21");
+var toObject = Object;
+var $push = callBound("Array.prototype.push");
+var $propIsEnumerable = callBound("Object.prototype.propertyIsEnumerable");
+var originalGetSymbols = hasSymbols ? Object.getOwnPropertySymbols : null;
+// eslint-disable-next-line no-unused-vars
+module.exports = function assign(target, source1) {
+    if (target == null) throw new TypeError("target must be an object");
+    var to = toObject(target); // step 1
+    if (arguments.length === 1) return to; // step 2
+    for(var s = 1; s < arguments.length; ++s){
+        var from = toObject(arguments[s]); // step 3.a.i
+        // step 3.a.ii:
+        var keys = objectKeys(from);
+        var getSymbols = hasSymbols && (Object.getOwnPropertySymbols || originalGetSymbols);
+        if (getSymbols) {
+            var syms = getSymbols(from);
+            for(var j = 0; j < syms.length; ++j){
+                var key = syms[j];
+                if ($propIsEnumerable(from, key)) $push(keys, key);
+            }
+        }
+        // step 3.a.iii:
+        for(var i = 0; i < keys.length; ++i){
+            var nextKey = keys[i];
+            if ($propIsEnumerable(from, nextKey)) {
+                var propValue = from[nextKey]; // step 3.a.iii.2.a
+                to[nextKey] = propValue; // step 3.a.iii.2.b
+            }
+        }
+    }
+    return to; // step 4
+};
+
+},{"334c0bea01e613e6":"eNyf4","1964e25feb5e87a1":"euYk7","6fb85b5b56dcab21":"5yYiF"}],"eNyf4":[function(require,module,exports) {
+"use strict";
+var slice = Array.prototype.slice;
+var isArgs = require("93e8460f624c96f4");
+var origKeys = Object.keys;
+var keysShim = origKeys ? function keys(o) {
+    return origKeys(o);
+} : require("344bb0d7b2568e03");
+var originalKeys = Object.keys;
+keysShim.shim = function shimObjectKeys() {
+    if (Object.keys) {
+        var keysWorksWithArguments = function() {
+            // Safari 5.0 bug
+            var args = Object.keys(arguments);
+            return args && args.length === arguments.length;
+        }(1, 2);
+        if (!keysWorksWithArguments) Object.keys = function keys(object) {
+            if (isArgs(object)) return originalKeys(slice.call(object));
+            return originalKeys(object);
+        };
+    } else Object.keys = keysShim;
+    return Object.keys || keysShim;
+};
+module.exports = keysShim;
+
+},{"93e8460f624c96f4":"1HhOq","344bb0d7b2568e03":"aV01q"}],"1HhOq":[function(require,module,exports) {
+"use strict";
+var toStr = Object.prototype.toString;
+module.exports = function isArguments(value) {
+    var str = toStr.call(value);
+    var isArgs = str === "[object Arguments]";
+    if (!isArgs) isArgs = str !== "[object Array]" && value !== null && typeof value === "object" && typeof value.length === "number" && value.length >= 0 && toStr.call(value.callee) === "[object Function]";
+    return isArgs;
+};
+
+},{}],"aV01q":[function(require,module,exports) {
+"use strict";
+var keysShim;
+if (!Object.keys) {
+    // modified from https://github.com/es-shims/es5-shim
+    var has = Object.prototype.hasOwnProperty;
+    var toStr = Object.prototype.toString;
+    var isArgs = require("b0d8c8b84be91ffd"); // eslint-disable-line global-require
+    var isEnumerable = Object.prototype.propertyIsEnumerable;
+    var hasDontEnumBug = !isEnumerable.call({
+        toString: null
+    }, "toString");
+    var hasProtoEnumBug = isEnumerable.call(function() {}, "prototype");
+    var dontEnums = [
+        "toString",
+        "toLocaleString",
+        "valueOf",
+        "hasOwnProperty",
+        "isPrototypeOf",
+        "propertyIsEnumerable",
+        "constructor"
+    ];
+    var equalsConstructorPrototype = function(o) {
+        var ctor = o.constructor;
+        return ctor && ctor.prototype === o;
+    };
+    var excludedKeys = {
+        $applicationCache: true,
+        $console: true,
+        $external: true,
+        $frame: true,
+        $frameElement: true,
+        $frames: true,
+        $innerHeight: true,
+        $innerWidth: true,
+        $onmozfullscreenchange: true,
+        $onmozfullscreenerror: true,
+        $outerHeight: true,
+        $outerWidth: true,
+        $pageXOffset: true,
+        $pageYOffset: true,
+        $parent: true,
+        $scrollLeft: true,
+        $scrollTop: true,
+        $scrollX: true,
+        $scrollY: true,
+        $self: true,
+        $webkitIndexedDB: true,
+        $webkitStorageInfo: true,
+        $window: true
+    };
+    var hasAutomationEqualityBug = function() {
+        /* global window */ if (typeof window === "undefined") return false;
+        for(var k in window)try {
+            if (!excludedKeys["$" + k] && has.call(window, k) && window[k] !== null && typeof window[k] === "object") try {
+                equalsConstructorPrototype(window[k]);
+            } catch (e) {
+                return true;
+            }
+        } catch (e) {
+            return true;
+        }
+        return false;
+    }();
+    var equalsConstructorPrototypeIfNotBuggy = function(o) {
+        /* global window */ if (typeof window === "undefined" || !hasAutomationEqualityBug) return equalsConstructorPrototype(o);
+        try {
+            return equalsConstructorPrototype(o);
+        } catch (e) {
+            return false;
+        }
+    };
+    keysShim = function keys(object) {
+        var isObject = object !== null && typeof object === "object";
+        var isFunction = toStr.call(object) === "[object Function]";
+        var isArguments = isArgs(object);
+        var isString = isObject && toStr.call(object) === "[object String]";
+        var theKeys = [];
+        if (!isObject && !isFunction && !isArguments) throw new TypeError("Object.keys called on a non-object");
+        var skipProto = hasProtoEnumBug && isFunction;
+        if (isString && object.length > 0 && !has.call(object, 0)) for(var i = 0; i < object.length; ++i)theKeys.push(String(i));
+        if (isArguments && object.length > 0) for(var j = 0; j < object.length; ++j)theKeys.push(String(j));
+        else {
+            for(var name in object)if (!(skipProto && name === "prototype") && has.call(object, name)) theKeys.push(String(name));
+        }
+        if (hasDontEnumBug) {
+            var skipConstructor = equalsConstructorPrototypeIfNotBuggy(object);
+            for(var k = 0; k < dontEnums.length; ++k)if (!(skipConstructor && dontEnums[k] === "constructor") && has.call(object, dontEnums[k])) theKeys.push(dontEnums[k]);
+        }
+        return theKeys;
+    };
+}
+module.exports = keysShim;
+
+},{"b0d8c8b84be91ffd":"1HhOq"}],"ezjA5":[function(require,module,exports) {
+"use strict";
+var implementation = require("ff80ab827617d6fd");
+module.exports = function getPolyfill() {
+    return typeof Object.is === "function" ? Object.is : implementation;
+};
+
+},{"ff80ab827617d6fd":"WLxcH"}],"WLxcH":[function(require,module,exports) {
+"use strict";
+var numberIsNaN = function(value) {
+    return value !== value;
+};
+module.exports = function is(a, b) {
+    if (a === 0 && b === 0) return 1 / a === 1 / b;
+    if (a === b) return true;
+    if (numberIsNaN(a) && numberIsNaN(b)) return true;
+    return false;
+};
+
+},{}],"d5TM9":[function(require,module,exports) {
+// Currently in sync with Node.js lib/internal/util/comparisons.js
+// https://github.com/nodejs/node/commit/112cc7c27551254aa2b17098fb774867f05ed0d9
+"use strict";
+function _slicedToArray(arr, i) {
+    return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest();
+}
+function _nonIterableRest() {
+    throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+}
+function _unsupportedIterableToArray(o, minLen) {
+    if (!o) return;
+    if (typeof o === "string") return _arrayLikeToArray(o, minLen);
+    var n = Object.prototype.toString.call(o).slice(8, -1);
+    if (n === "Object" && o.constructor) n = o.constructor.name;
+    if (n === "Map" || n === "Set") return Array.from(o);
+    if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen);
+}
+function _arrayLikeToArray(arr, len) {
+    if (len == null || len > arr.length) len = arr.length;
+    for(var i = 0, arr2 = new Array(len); i < len; i++)arr2[i] = arr[i];
+    return arr2;
+}
+function _iterableToArrayLimit(r, l) {
+    var t = null == r ? null : "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"];
+    if (null != t) {
+        var e, n, i, u, a = [], f = !0, o = !1;
+        try {
+            if (i = (t = t.call(r)).next, 0 === l) {
+                if (Object(t) !== t) return;
+                f = !1;
+            } else for(; !(f = (e = i.call(t)).done) && (a.push(e.value), a.length !== l); f = !0);
+        } catch (r) {
+            o = !0, n = r;
+        } finally{
+            try {
+                if (!f && null != t.return && (u = t.return(), Object(u) !== u)) return;
+            } finally{
+                if (o) throw n;
+            }
+        }
+        return a;
+    }
+}
+function _arrayWithHoles(arr) {
+    if (Array.isArray(arr)) return arr;
+}
+function _typeof(o) {
+    "@babel/helpers - typeof";
+    return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o) {
+        return typeof o;
+    } : function(o) {
+        return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o;
+    }, _typeof(o);
+}
+var regexFlagsSupported = /a/g.flags !== undefined;
+var arrayFromSet = function arrayFromSet(set) {
+    var array = [];
+    set.forEach(function(value) {
+        return array.push(value);
+    });
+    return array;
+};
+var arrayFromMap = function arrayFromMap(map) {
+    var array = [];
+    map.forEach(function(value, key) {
+        return array.push([
+            key,
+            value
+        ]);
+    });
+    return array;
+};
+var objectIs = Object.is ? Object.is : require("3addb16fbdd05c1c");
+var objectGetOwnPropertySymbols = Object.getOwnPropertySymbols ? Object.getOwnPropertySymbols : function() {
+    return [];
+};
+var numberIsNaN = Number.isNaN ? Number.isNaN : require("a27e57a3fd2e2e23");
+function uncurryThis(f) {
+    return f.call.bind(f);
+}
+var hasOwnProperty = uncurryThis(Object.prototype.hasOwnProperty);
+var propertyIsEnumerable = uncurryThis(Object.prototype.propertyIsEnumerable);
+var objectToString = uncurryThis(Object.prototype.toString);
+var _require$types = require("4940125679601087").types, isAnyArrayBuffer = _require$types.isAnyArrayBuffer, isArrayBufferView = _require$types.isArrayBufferView, isDate = _require$types.isDate, isMap = _require$types.isMap, isRegExp = _require$types.isRegExp, isSet = _require$types.isSet, isNativeError = _require$types.isNativeError, isBoxedPrimitive = _require$types.isBoxedPrimitive, isNumberObject = _require$types.isNumberObject, isStringObject = _require$types.isStringObject, isBooleanObject = _require$types.isBooleanObject, isBigIntObject = _require$types.isBigIntObject, isSymbolObject = _require$types.isSymbolObject, isFloat32Array = _require$types.isFloat32Array, isFloat64Array = _require$types.isFloat64Array;
+function isNonIndex(key) {
+    if (key.length === 0 || key.length > 10) return true;
+    for(var i = 0; i < key.length; i++){
+        var code = key.charCodeAt(i);
+        if (code < 48 || code > 57) return true;
+    }
+    // The maximum size for an array is 2 ** 32 -1.
+    return key.length === 10 && key >= Math.pow(2, 32);
+}
+function getOwnNonIndexProperties(value) {
+    return Object.keys(value).filter(isNonIndex).concat(objectGetOwnPropertySymbols(value).filter(Object.prototype.propertyIsEnumerable.bind(value)));
+}
+// Taken from https://github.com/feross/buffer/blob/680e9e5e488f22aac27599a57dc844a6315928dd/index.js
+// original notice:
+/*!
+ * The buffer module from node.js, for the browser.
+ *
+ * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
+ * @license  MIT
+ */ function compare(a, b) {
+    if (a === b) return 0;
+    var x = a.length;
+    var y = b.length;
+    for(var i = 0, len = Math.min(x, y); i < len; ++i)if (a[i] !== b[i]) {
+        x = a[i];
+        y = b[i];
+        break;
+    }
+    if (x < y) return -1;
+    if (y < x) return 1;
+    return 0;
+}
+var ONLY_ENUMERABLE = undefined;
+var kStrict = true;
+var kLoose = false;
+var kNoIterator = 0;
+var kIsArray = 1;
+var kIsSet = 2;
+var kIsMap = 3;
+// Check if they have the same source and flags
+function areSimilarRegExps(a, b) {
+    return regexFlagsSupported ? a.source === b.source && a.flags === b.flags : RegExp.prototype.toString.call(a) === RegExp.prototype.toString.call(b);
+}
+function areSimilarFloatArrays(a, b) {
+    if (a.byteLength !== b.byteLength) return false;
+    for(var offset = 0; offset < a.byteLength; offset++){
+        if (a[offset] !== b[offset]) return false;
+    }
+    return true;
+}
+function areSimilarTypedArrays(a, b) {
+    if (a.byteLength !== b.byteLength) return false;
+    return compare(new Uint8Array(a.buffer, a.byteOffset, a.byteLength), new Uint8Array(b.buffer, b.byteOffset, b.byteLength)) === 0;
+}
+function areEqualArrayBuffers(buf1, buf2) {
+    return buf1.byteLength === buf2.byteLength && compare(new Uint8Array(buf1), new Uint8Array(buf2)) === 0;
+}
+function isEqualBoxedPrimitive(val1, val2) {
+    if (isNumberObject(val1)) return isNumberObject(val2) && objectIs(Number.prototype.valueOf.call(val1), Number.prototype.valueOf.call(val2));
+    if (isStringObject(val1)) return isStringObject(val2) && String.prototype.valueOf.call(val1) === String.prototype.valueOf.call(val2);
+    if (isBooleanObject(val1)) return isBooleanObject(val2) && Boolean.prototype.valueOf.call(val1) === Boolean.prototype.valueOf.call(val2);
+    if (isBigIntObject(val1)) return isBigIntObject(val2) && BigInt.prototype.valueOf.call(val1) === BigInt.prototype.valueOf.call(val2);
+    return isSymbolObject(val2) && Symbol.prototype.valueOf.call(val1) === Symbol.prototype.valueOf.call(val2);
+}
+// Notes: Type tags are historical [[Class]] properties that can be set by
+// FunctionTemplate::SetClassName() in C++ or Symbol.toStringTag in JS
+// and retrieved using Object.prototype.toString.call(obj) in JS
+// See https://tc39.github.io/ecma262/#sec-object.prototype.tostring
+// for a list of tags pre-defined in the spec.
+// There are some unspecified tags in the wild too (e.g. typed array tags).
+// Since tags can be altered, they only serve fast failures
+//
+// Typed arrays and buffers are checked by comparing the content in their
+// underlying ArrayBuffer. This optimization requires that it's
+// reasonable to interpret their underlying memory in the same way,
+// which is checked by comparing their type tags.
+// (e.g. a Uint8Array and a Uint16Array with the same memory content
+// could still be different because they will be interpreted differently).
+//
+// For strict comparison, objects should have
+// a) The same built-in type tags
+// b) The same prototypes.
+function innerDeepEqual(val1, val2, strict, memos) {
+    // All identical values are equivalent, as determined by ===.
+    if (val1 === val2) {
+        if (val1 !== 0) return true;
+        return strict ? objectIs(val1, val2) : true;
+    }
+    // Check more closely if val1 and val2 are equal.
+    if (strict) {
+        if (_typeof(val1) !== "object") return typeof val1 === "number" && numberIsNaN(val1) && numberIsNaN(val2);
+        if (_typeof(val2) !== "object" || val1 === null || val2 === null) return false;
+        if (Object.getPrototypeOf(val1) !== Object.getPrototypeOf(val2)) return false;
+    } else {
+        if (val1 === null || _typeof(val1) !== "object") {
+            if (val2 === null || _typeof(val2) !== "object") // eslint-disable-next-line eqeqeq
+            return val1 == val2;
+            return false;
+        }
+        if (val2 === null || _typeof(val2) !== "object") return false;
+    }
+    var val1Tag = objectToString(val1);
+    var val2Tag = objectToString(val2);
+    if (val1Tag !== val2Tag) return false;
+    if (Array.isArray(val1)) {
+        // Check for sparse arrays and general fast path
+        if (val1.length !== val2.length) return false;
+        var keys1 = getOwnNonIndexProperties(val1, ONLY_ENUMERABLE);
+        var keys2 = getOwnNonIndexProperties(val2, ONLY_ENUMERABLE);
+        if (keys1.length !== keys2.length) return false;
+        return keyCheck(val1, val2, strict, memos, kIsArray, keys1);
+    }
+    // [browserify] This triggers on certain types in IE (Map/Set) so we don't
+    // wan't to early return out of the rest of the checks. However we can check
+    // if the second value is one of these values and the first isn't.
+    if (val1Tag === "[object Object]") {
+        // return keyCheck(val1, val2, strict, memos, kNoIterator);
+        if (!isMap(val1) && isMap(val2) || !isSet(val1) && isSet(val2)) return false;
+    }
+    if (isDate(val1)) {
+        if (!isDate(val2) || Date.prototype.getTime.call(val1) !== Date.prototype.getTime.call(val2)) return false;
+    } else if (isRegExp(val1)) {
+        if (!isRegExp(val2) || !areSimilarRegExps(val1, val2)) return false;
+    } else if (isNativeError(val1) || val1 instanceof Error) {
+        // Do not compare the stack as it might differ even though the error itself
+        // is otherwise identical.
+        if (val1.message !== val2.message || val1.name !== val2.name) return false;
+    } else if (isArrayBufferView(val1)) {
+        if (!strict && (isFloat32Array(val1) || isFloat64Array(val1))) {
+            if (!areSimilarFloatArrays(val1, val2)) return false;
+        } else if (!areSimilarTypedArrays(val1, val2)) return false;
+        // Buffer.compare returns true, so val1.length === val2.length. If they both
+        // only contain numeric keys, we don't need to exam further than checking
+        // the symbols.
+        var _keys = getOwnNonIndexProperties(val1, ONLY_ENUMERABLE);
+        var _keys2 = getOwnNonIndexProperties(val2, ONLY_ENUMERABLE);
+        if (_keys.length !== _keys2.length) return false;
+        return keyCheck(val1, val2, strict, memos, kNoIterator, _keys);
+    } else if (isSet(val1)) {
+        if (!isSet(val2) || val1.size !== val2.size) return false;
+        return keyCheck(val1, val2, strict, memos, kIsSet);
+    } else if (isMap(val1)) {
+        if (!isMap(val2) || val1.size !== val2.size) return false;
+        return keyCheck(val1, val2, strict, memos, kIsMap);
+    } else if (isAnyArrayBuffer(val1)) {
+        if (!areEqualArrayBuffers(val1, val2)) return false;
+    } else if (isBoxedPrimitive(val1) && !isEqualBoxedPrimitive(val1, val2)) return false;
+    return keyCheck(val1, val2, strict, memos, kNoIterator);
+}
+function getEnumerables(val, keys) {
+    return keys.filter(function(k) {
+        return propertyIsEnumerable(val, k);
+    });
+}
+function keyCheck(val1, val2, strict, memos, iterationType, aKeys) {
+    // For all remaining Object pairs, including Array, objects and Maps,
+    // equivalence is determined by having:
+    // a) The same number of owned enumerable properties
+    // b) The same set of keys/indexes (although not necessarily the same order)
+    // c) Equivalent values for every corresponding key/index
+    // d) For Sets and Maps, equal contents
+    // Note: this accounts for both named and indexed properties on Arrays.
+    if (arguments.length === 5) {
+        aKeys = Object.keys(val1);
+        var bKeys = Object.keys(val2);
+        // The pair must have the same number of owned properties.
+        if (aKeys.length !== bKeys.length) return false;
+    }
+    // Cheap key test
+    var i = 0;
+    for(; i < aKeys.length; i++){
+        if (!hasOwnProperty(val2, aKeys[i])) return false;
+    }
+    if (strict && arguments.length === 5) {
+        var symbolKeysA = objectGetOwnPropertySymbols(val1);
+        if (symbolKeysA.length !== 0) {
+            var count = 0;
+            for(i = 0; i < symbolKeysA.length; i++){
+                var key = symbolKeysA[i];
+                if (propertyIsEnumerable(val1, key)) {
+                    if (!propertyIsEnumerable(val2, key)) return false;
+                    aKeys.push(key);
+                    count++;
+                } else if (propertyIsEnumerable(val2, key)) return false;
+            }
+            var symbolKeysB = objectGetOwnPropertySymbols(val2);
+            if (symbolKeysA.length !== symbolKeysB.length && getEnumerables(val2, symbolKeysB).length !== count) return false;
+        } else {
+            var _symbolKeysB = objectGetOwnPropertySymbols(val2);
+            if (_symbolKeysB.length !== 0 && getEnumerables(val2, _symbolKeysB).length !== 0) return false;
+        }
+    }
+    if (aKeys.length === 0 && (iterationType === kNoIterator || iterationType === kIsArray && val1.length === 0 || val1.size === 0)) return true;
+    // Use memos to handle cycles.
+    if (memos === undefined) memos = {
+        val1: new Map(),
+        val2: new Map(),
+        position: 0
+    };
+    else {
+        // We prevent up to two map.has(x) calls by directly retrieving the value
+        // and checking for undefined. The map can only contain numbers, so it is
+        // safe to check for undefined only.
+        var val2MemoA = memos.val1.get(val1);
+        if (val2MemoA !== undefined) {
+            var val2MemoB = memos.val2.get(val2);
+            if (val2MemoB !== undefined) return val2MemoA === val2MemoB;
+        }
+        memos.position++;
+    }
+    memos.val1.set(val1, memos.position);
+    memos.val2.set(val2, memos.position);
+    var areEq = objEquiv(val1, val2, strict, aKeys, memos, iterationType);
+    memos.val1.delete(val1);
+    memos.val2.delete(val2);
+    return areEq;
+}
+function setHasEqualElement(set, val1, strict, memo) {
+    // Go looking.
+    var setValues = arrayFromSet(set);
+    for(var i = 0; i < setValues.length; i++){
+        var val2 = setValues[i];
+        if (innerDeepEqual(val1, val2, strict, memo)) {
+            // Remove the matching element to make sure we do not check that again.
+            set.delete(val2);
+            return true;
+        }
+    }
+    return false;
+}
+// See https://developer.mozilla.org/en-US/docs/Web/JavaScript/Equality_comparisons_and_sameness#Loose_equality_using
+// Sadly it is not possible to detect corresponding values properly in case the
+// type is a string, number, bigint or boolean. The reason is that those values
+// can match lots of different string values (e.g., 1n == '+00001').
+function findLooseMatchingPrimitives(prim) {
+    switch(_typeof(prim)){
+        case "undefined":
+            return null;
+        case "object":
+            // Only pass in null as object!
+            return undefined;
+        case "symbol":
+            return false;
+        case "string":
+            prim = +prim;
+        // Loose equal entries exist only if the string is possible to convert to
+        // a regular number and not NaN.
+        // Fall through
+        case "number":
+            if (numberIsNaN(prim)) return false;
+    }
+    return true;
+}
+function setMightHaveLoosePrim(a, b, prim) {
+    var altValue = findLooseMatchingPrimitives(prim);
+    if (altValue != null) return altValue;
+    return b.has(altValue) && !a.has(altValue);
+}
+function mapMightHaveLoosePrim(a, b, prim, item, memo) {
+    var altValue = findLooseMatchingPrimitives(prim);
+    if (altValue != null) return altValue;
+    var curB = b.get(altValue);
+    if (curB === undefined && !b.has(altValue) || !innerDeepEqual(item, curB, false, memo)) return false;
+    return !a.has(altValue) && innerDeepEqual(item, curB, false, memo);
+}
+function setEquiv(a, b, strict, memo) {
+    // This is a lazily initiated Set of entries which have to be compared
+    // pairwise.
+    var set = null;
+    var aValues = arrayFromSet(a);
+    for(var i = 0; i < aValues.length; i++){
+        var val = aValues[i];
+        // Note: Checking for the objects first improves the performance for object
+        // heavy sets but it is a minor slow down for primitives. As they are fast
+        // to check this improves the worst case scenario instead.
+        if (_typeof(val) === "object" && val !== null) {
+            if (set === null) set = new Set();
+            // If the specified value doesn't exist in the second set its an not null
+            // object (or non strict only: a not matching primitive) we'll need to go
+            // hunting for something thats deep-(strict-)equal to it. To make this
+            // O(n log n) complexity we have to copy these values in a new set first.
+            set.add(val);
+        } else if (!b.has(val)) {
+            if (strict) return false;
+            // Fast path to detect missing string, symbol, undefined and null values.
+            if (!setMightHaveLoosePrim(a, b, val)) return false;
+            if (set === null) set = new Set();
+            set.add(val);
+        }
+    }
+    if (set !== null) {
+        var bValues = arrayFromSet(b);
+        for(var _i = 0; _i < bValues.length; _i++){
+            var _val = bValues[_i];
+            // We have to check if a primitive value is already
+            // matching and only if it's not, go hunting for it.
+            if (_typeof(_val) === "object" && _val !== null) {
+                if (!setHasEqualElement(set, _val, strict, memo)) return false;
+            } else if (!strict && !a.has(_val) && !setHasEqualElement(set, _val, strict, memo)) return false;
+        }
+        return set.size === 0;
+    }
+    return true;
+}
+function mapHasEqualEntry(set, map, key1, item1, strict, memo) {
+    // To be able to handle cases like:
+    //   Map([[{}, 'a'], [{}, 'b']]) vs Map([[{}, 'b'], [{}, 'a']])
+    // ... we need to consider *all* matching keys, not just the first we find.
+    var setValues = arrayFromSet(set);
+    for(var i = 0; i < setValues.length; i++){
+        var key2 = setValues[i];
+        if (innerDeepEqual(key1, key2, strict, memo) && innerDeepEqual(item1, map.get(key2), strict, memo)) {
+            set.delete(key2);
+            return true;
+        }
+    }
+    return false;
+}
+function mapEquiv(a, b, strict, memo) {
+    var set = null;
+    var aEntries = arrayFromMap(a);
+    for(var i = 0; i < aEntries.length; i++){
+        var _aEntries$i = _slicedToArray(aEntries[i], 2), key = _aEntries$i[0], item1 = _aEntries$i[1];
+        if (_typeof(key) === "object" && key !== null) {
+            if (set === null) set = new Set();
+            set.add(key);
+        } else {
+            // By directly retrieving the value we prevent another b.has(key) check in
+            // almost all possible cases.
+            var item2 = b.get(key);
+            if (item2 === undefined && !b.has(key) || !innerDeepEqual(item1, item2, strict, memo)) {
+                if (strict) return false;
+                // Fast path to detect missing string, symbol, undefined and null
+                // keys.
+                if (!mapMightHaveLoosePrim(a, b, key, item1, memo)) return false;
+                if (set === null) set = new Set();
+                set.add(key);
+            }
+        }
+    }
+    if (set !== null) {
+        var bEntries = arrayFromMap(b);
+        for(var _i2 = 0; _i2 < bEntries.length; _i2++){
+            var _bEntries$_i = _slicedToArray(bEntries[_i2], 2), _key = _bEntries$_i[0], item = _bEntries$_i[1];
+            if (_typeof(_key) === "object" && _key !== null) {
+                if (!mapHasEqualEntry(set, a, _key, item, strict, memo)) return false;
+            } else if (!strict && (!a.has(_key) || !innerDeepEqual(a.get(_key), item, false, memo)) && !mapHasEqualEntry(set, a, _key, item, false, memo)) return false;
+        }
+        return set.size === 0;
+    }
+    return true;
+}
+function objEquiv(a, b, strict, keys, memos, iterationType) {
+    // Sets and maps don't have their entries accessible via normal object
+    // properties.
+    var i = 0;
+    if (iterationType === kIsSet) {
+        if (!setEquiv(a, b, strict, memos)) return false;
+    } else if (iterationType === kIsMap) {
+        if (!mapEquiv(a, b, strict, memos)) return false;
+    } else if (iterationType === kIsArray) for(; i < a.length; i++){
+        if (hasOwnProperty(a, i)) {
+            if (!hasOwnProperty(b, i) || !innerDeepEqual(a[i], b[i], strict, memos)) return false;
+        } else if (hasOwnProperty(b, i)) return false;
+        else {
+            // Array is sparse.
+            var keysA = Object.keys(a);
+            for(; i < keysA.length; i++){
+                var key = keysA[i];
+                if (!hasOwnProperty(b, key) || !innerDeepEqual(a[key], b[key], strict, memos)) return false;
+            }
+            if (keysA.length !== Object.keys(b).length) return false;
+            return true;
+        }
+    }
+    // The pair must have equivalent values for every corresponding key.
+    // Possibly expensive deep test:
+    for(i = 0; i < keys.length; i++){
+        var _key2 = keys[i];
+        if (!innerDeepEqual(a[_key2], b[_key2], strict, memos)) return false;
+    }
+    return true;
+}
+function isDeepEqual(val1, val2) {
+    return innerDeepEqual(val1, val2, kLoose);
+}
+function isDeepStrictEqual(val1, val2) {
+    return innerDeepEqual(val1, val2, kStrict);
+}
+module.exports = {
+    isDeepEqual: isDeepEqual,
+    isDeepStrictEqual: isDeepStrictEqual
+};
+
+},{"3addb16fbdd05c1c":"k2tpA","a27e57a3fd2e2e23":"hY4fH","4940125679601087":"cxohQ"}],"k2tpA":[function(require,module,exports) {
+"use strict";
+var define = require("7a0bb7df335a6af");
+var callBind = require("794ce1103c4a65ba");
+var implementation = require("f52a71fcf365d3bd");
+var getPolyfill = require("59addbaef079e040");
+var shim = require("c0e8b0f7342ba484");
+var polyfill = callBind(getPolyfill(), Object);
+define(polyfill, {
+    getPolyfill: getPolyfill,
+    implementation: implementation,
+    shim: shim
+});
+module.exports = polyfill;
+
+},{"7a0bb7df335a6af":"6eq5U","794ce1103c4a65ba":"bfo8D","f52a71fcf365d3bd":"WLxcH","59addbaef079e040":"ezjA5","c0e8b0f7342ba484":"9p2yJ"}],"6eq5U":[function(require,module,exports) {
+"use strict";
+var keys = require("7ff177585d1618f0");
+var hasSymbols = typeof Symbol === "function" && typeof Symbol("foo") === "symbol";
+var toStr = Object.prototype.toString;
+var concat = Array.prototype.concat;
+var defineDataProperty = require("84ca194f5a28ce70");
+var isFunction = function(fn) {
+    return typeof fn === "function" && toStr.call(fn) === "[object Function]";
+};
+var supportsDescriptors = require("c52d62086511583f")();
+var defineProperty = function(object, name, value, predicate) {
+    if (name in object) {
+        if (predicate === true) {
+            if (object[name] === value) return;
+        } else if (!isFunction(predicate) || !predicate()) return;
+    }
+    if (supportsDescriptors) defineDataProperty(object, name, value, true);
+    else defineDataProperty(object, name, value);
+};
+var defineProperties = function(object, map) {
+    var predicates = arguments.length > 2 ? arguments[2] : {};
+    var props = keys(map);
+    if (hasSymbols) props = concat.call(props, Object.getOwnPropertySymbols(map));
+    for(var i = 0; i < props.length; i += 1)defineProperty(object, props[i], map[props[i]], predicates[props[i]]);
+};
+defineProperties.supportsDescriptors = !!supportsDescriptors;
+module.exports = defineProperties;
+
+},{"7ff177585d1618f0":"eNyf4","84ca194f5a28ce70":"6cEff","c52d62086511583f":"esBLZ"}],"9p2yJ":[function(require,module,exports) {
+"use strict";
+var getPolyfill = require("f188d636391a5061");
+var define = require("155865cffc557cd");
+module.exports = function shimObjectIs() {
+    var polyfill = getPolyfill();
+    define(Object, {
+        is: polyfill
+    }, {
+        is: function testObjectIs() {
+            return Object.is !== polyfill;
+        }
+    });
+    return polyfill;
+};
+
+},{"f188d636391a5061":"ezjA5","155865cffc557cd":"6eq5U"}],"hY4fH":[function(require,module,exports) {
+"use strict";
+var callBind = require("8bc778ead6edc2b");
+var define = require("1e9a111647ec40d6");
+var implementation = require("db9e8266e38a0a1c");
+var getPolyfill = require("37ae20d268339d21");
+var shim = require("9fe13ad91d3d9c68");
+var polyfill = callBind(getPolyfill(), Number);
+/* http://www.ecma-international.org/ecma-262/6.0/#sec-number.isnan */ define(polyfill, {
+    getPolyfill: getPolyfill,
+    implementation: implementation,
+    shim: shim
+});
+module.exports = polyfill;
+
+},{"8bc778ead6edc2b":"bfo8D","1e9a111647ec40d6":"6eq5U","db9e8266e38a0a1c":"lxsrq","37ae20d268339d21":"h00Nr","9fe13ad91d3d9c68":"cr2es"}],"lxsrq":[function(require,module,exports) {
+"use strict";
+/* http://www.ecma-international.org/ecma-262/6.0/#sec-number.isnan */ module.exports = function isNaN(value) {
+    return value !== value;
+};
+
+},{}],"h00Nr":[function(require,module,exports) {
+"use strict";
+var implementation = require("e25466f067cfd8fc");
+module.exports = function getPolyfill() {
+    if (Number.isNaN && Number.isNaN(NaN) && !Number.isNaN("a")) return Number.isNaN;
+    return implementation;
+};
+
+},{"e25466f067cfd8fc":"lxsrq"}],"cr2es":[function(require,module,exports) {
+"use strict";
+var define = require("6e613ddb8bace1c6");
+var getPolyfill = require("f2ce5ac0488eb372");
+/* http://www.ecma-international.org/ecma-262/6.0/#sec-number.isnan */ module.exports = function shimNumberIsNaN() {
+    var polyfill = getPolyfill();
+    define(Number, {
+        isNaN: polyfill
+    }, {
+        isNaN: function testIsNaN() {
+            return Number.isNaN !== polyfill;
+        }
+    });
+    return polyfill;
+};
+
+},{"6e613ddb8bace1c6":"6eq5U","f2ce5ac0488eb372":"h00Nr"}],"kVZrF":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "Resolver", ()=>Resolver);
@@ -42863,7 +46901,142 @@ Router.NavigationTrigger = {
     CLICK
 };
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"2zoGe":[function(require,module,exports) {
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"eBUGN":[function(require,module,exports) {
+var _index = require("./comps/welcome/index");
+var _index1 = require("./comps/game-room/index");
+var _index2 = require("./comps/new-game/index");
+var _index3 = require("./comps/instructions/index");
+var _index4 = require("./comps/game/index");
+var _router = require("@vaadin/router");
+const root = document.querySelector(".root");
+const router = new (0, _router.Router)(root);
+router.setRoutes([
+    {
+        path: "/",
+        component: "welc-el"
+    },
+    {
+        path: "/gameroom",
+        component: "game-room-el"
+    },
+    {
+        path: "/newgame",
+        component: "new-game-el"
+    },
+    {
+        path: "/instructions",
+        component: "inst-el"
+    },
+    {
+        path: "/game",
+        component: "game-el"
+    }
+]);
+
+},{"./comps/welcome/index":"8gRl4","./comps/game-room/index":"hbph1","./comps/new-game/index":"jbAs6","./comps/instructions/index":"dyuce","./comps/game/index":"gW4Uh","@vaadin/router":"kVZrF"}],"8gRl4":[function(require,module,exports) {
+var _router = require("@vaadin/router");
+customElements.define("welc-el", class Welcome extends HTMLElement {
+    connectedCallback() {
+        this.render();
+        this.listeners();
+    }
+    listeners() {
+        const buttonNewGame = this.querySelector(".new-game-button");
+        buttonNewGame.addEventListener("click", (e)=>{
+            e.preventDefault();
+            (0, _router.Router).go("/newgame");
+        });
+        const buttonNewRoom = this.querySelector(".new-room-button");
+        buttonNewRoom.addEventListener("click", (e)=>{
+            e.preventDefault();
+            (0, _router.Router).go("/gameroom");
+        });
+    }
+    render() {
+        const stonePicURL = require("76ce363eb5737da7");
+        const paperPicURL = require("21804f82075535f8");
+        const scissorsPicURL = require("c756706ec2b355e1");
+        const backgroundURL = require("da7d49f620c18671");
+        // -----------------------------------------------------
+        const div = document.createElement("div");
+        div.innerHTML = `
+      <h1 class="title">Piedra Papel \xf3 Tijera</h1>
+      <button type="button" class="new-game-button">Nuevo Juego</button>
+      <button type="button" class="new-room-button">Igresar a una Sala</button>
+      <div class="hands">
+          <img src=${stonePicURL} class="img">
+          <img src=${paperPicURL} class="img">
+          <img src=${scissorsPicURL} class="img">
+      </div>
+      `;
+        // -------------------------------------------------------
+        const style = document.createElement("style");
+        style.textContent = `
+      *{
+        box-sizing: border box;
+      }
+      body{
+        margin: 0;
+      }
+        .inner-root {
+            background-image: url(${backgroundURL});
+            min-width: 375px;
+            height: 667px;
+            display: flex;
+            align-items: center;
+            flex-direction: column;
+          justify-content: space-between;
+      }      
+      .title {
+          text-align: center;
+          margin-top: 70px;
+          color: #009048;
+          font-family: 'Courier Prime', monospace;
+          font-size: 70px;
+          font-style: normal;
+          font-weight: 1000;
+        }      
+      .new-game-button, .new-room-button{
+          width: 322px;
+          height: 87px;
+          border-radius: 10px;
+          border: 10px solid #001997;
+          background: #006CFC;
+          color: aliceblue;
+          
+          color: #D8FCFC;
+          text-align: center;
+          font-family: 'Odibee Sans';
+          font-size: 45px;
+          font-style: normal;
+          font-weight: 400;
+          line-height: normal;
+          letter-spacing: 2.25px;
+        }        
+      .hands {
+        min-width: 70vw;
+        display: flex;
+        justify-content: space-between;
+      }      
+      .button:hover {
+          background: #00449d;
+        }      
+      .button:active {
+          background: #009048;
+      }
+      `;
+        // ----------------------------------------------------------       
+        div.classList.add("inner-root");
+        this.appendChild(div);
+        this.appendChild(style);
+        const boton = this.querySelector(".welcome-button");
+        boton?.addEventListener("click", function() {
+            (0, _router.Router).go("/instructions");
+        });
+    }
+});
+
+},{"@vaadin/router":"kVZrF","76ce363eb5737da7":"2zoGe","21804f82075535f8":"dZ6rN","c756706ec2b355e1":"2NxtY","da7d49f620c18671":"7RiZ9"}],"2zoGe":[function(require,module,exports) {
 module.exports = require("9aa23e0076012ebe").getBundleURL("7UhFu") + "piedra.c1b66401.svg" + "?" + Date.now();
 
 },{"9aa23e0076012ebe":"lgJ39"}],"lgJ39":[function(require,module,exports) {
@@ -42911,7 +47084,6 @@ module.exports = require("9cb6818013f81e3b").getBundleURL("7UhFu") + "tijera.b72
 module.exports = require("1f59645b198b8966").getBundleURL("7UhFu") + "fondo.6699c41b.png" + "?" + Date.now();
 
 },{"1f59645b198b8966":"lgJ39"}],"hbph1":[function(require,module,exports) {
-var _router = require("@vaadin/router");
 var _state = require("../../src/state");
 customElements.define("game-room-el", class Welcome extends HTMLElement {
     connectedCallback() {
@@ -42924,13 +47096,11 @@ customElements.define("game-room-el", class Welcome extends HTMLElement {
             e.preventDefault();
             const form = e.target;
             const roomId = form.room.value;
-            console.log(roomId);
             const rivalName = form.name.value;
-            console.log(rivalName);
             (0, _state.state).setRivalName(rivalName);
             (0, _state.state).data.roomId = roomId;
             (0, _state.state).data.ownerName = false;
-            (0, _state.state).accessToRoom();
+            (0, _state.state).signUp();
         });
     }
     render() {
@@ -43017,14 +47187,10 @@ customElements.define("game-room-el", class Welcome extends HTMLElement {
         div.classList.add("inner-root");
         this.appendChild(div);
         this.appendChild(style);
-        const boton = this.querySelector(".welcome-button");
-        boton?.addEventListener("click", function() {
-            (0, _router.Router).go("/instructions");
-        });
     }
 });
 
-},{"@vaadin/router":"kVZrF","145036d79d863638":"2zoGe","c3cda4497dcbb731":"dZ6rN","be62aa816d071a38":"2NxtY","cce889747a91c3ec":"7RiZ9","../../src/state":"1Yeju"}],"jbAs6":[function(require,module,exports) {
+},{"../../src/state":"1Yeju","145036d79d863638":"2zoGe","c3cda4497dcbb731":"dZ6rN","be62aa816d071a38":"2NxtY","cce889747a91c3ec":"7RiZ9"}],"jbAs6":[function(require,module,exports) {
 var _router = require("@vaadin/router");
 var _state = require("../../src/state");
 customElements.define("new-game-el", class Welcome extends HTMLElement {
@@ -43040,8 +47206,7 @@ customElements.define("new-game-el", class Welcome extends HTMLElement {
             const playerName = form.name.value;
             (0, _state.state).setPlayerName(playerName);
             (0, _state.state).data.ownerName = true;
-            if ((0, _state.state).data.userId !== " ") (0, _state.state).signUp();
-            (0, _router.Router).go("/instructions");
+            (0, _state.state).roomId();
         });
     }
     render() {
@@ -43067,6 +47232,7 @@ customElements.define("new-game-el", class Welcome extends HTMLElement {
           <img src=${paperPicURL} class="img">
           <img src=${scissorsPicURL} class="img">
       </div>
+      <rooms-el></rooms-el>
       `;
         // -------------------------------------------------------
         const style = document.createElement("style");
@@ -43132,66 +47298,89 @@ var _router = require("@vaadin/router");
 var _state = require("../../src/state");
 customElements.define("inst-el", class Instructions extends HTMLElement {
     connectedCallback() {
-        this.render();
+        console.log();
+        const st = (0, _state.state).data;
+        if (st.ownerName == true) {
+            st.gameStatus[0].player = st.playerName;
+            st.gameStatus[0].playerOnline = true;
+        }
+        this.addDiv1();
+        this.addStyle();
         (0, _state.state).subscribe(()=>{
-            (0, _state.state).data.playerName;
-            (0, _state.state).pushGame(this.gameStatus);
+            console.log("subscribe de instructions");
+            if (st.ownerName == false) {
+                st.gameStatus[0].rival = st.rivalName;
+                st.gameStatus[0].rivalOnline = true;
+            }
+            console.log(st.gameStatus);
+            const otherPlayerInfo = st.gameStatus;
+            if (st.gameStatus[0].player == "") {
+                if (st.ownerName == false) {
+                    console.log(otherPlayerInfo);
+                    st.gameStatus[0].player = st.playerName;
+                    st.gameStatus[0].playerOnline = otherPlayerInfo[0].playerOnline;
+                    st.playerName = otherPlayerInfo[0].player;
+                }
+            }
+            if (st.gameStatus[0].rival == "") {
+                if (st.ownerName == true) {
+                    console.log(otherPlayerInfo);
+                    st.gameStatus[0].rival = st.rivalName;
+                    st.gameStatus[0].rivalOnline = otherPlayerInfo[0].rivalOnline;
+                    st.rivalName = otherPlayerInfo[0].rival;
+                }
+            }
+            this.addHeader();
+            const playerOnlineStatus = st.gameStatus[0].playerOnline;
+            const rivalOnlineStatus = st.gameStatus[0].rivalOnline;
+            if (rivalOnlineStatus == true) {
+                this.addDiv2();
+                this.addStyle();
+            }
+            if (st.ownerName == true && st.gameStatus[0].playerStatus == true) {
+                this.addDiv3();
+                this.addStyle();
+            }
+            if (st.ownerName == false && st.gameStatus[0].rivalStatus == true) {
+                this.addDiv3();
+                this.addStyle();
+            }
+            if (st.gameStatus[0].playerStatus == true && st.gameStatus[0].rivalStatus == true) (0, _router.Router).go("/game");
         });
+        console.log((0, _state.state).data.gameStatus[0]);
+        if ((0, _state.state).data.playerName !== "") {
+            (0, _state.state).pushGame((0, _state.state).data.gameStatus);
+            console.log("se ejecuta el pushGame");
+        }
+        if ((0, _state.state).data.ownerName == false && (0, _state.state).data.playerName !== "") (0, _state.state).pushGame((0, _state.state).data.gameStatus);
     }
-    render() {
+    addHeader() {
+        console.log("addHeader");
+        const palyerEl = this.querySelector(".player-points");
+        const rivalEl = this.querySelector(".rival-points");
         var playerPageName;
         var rivalPageName;
         var playerPoints;
         var rivalPoints;
         const st = (0, _state.state).data;
+        console.log(st);
+        playerPageName = st.playerName;
+        rivalPageName = st.rivalName;
+        playerPoints = st.playerNumber;
+        rivalPoints = st.rivalNumber;
+        console.log(playerPageName);
+        console.log(rivalPageName);
         if (st.ownerName) {
-            playerPageName = st.playerName;
-            rivalPageName = st.rivalName;
-            playerPoints = st.playerNumber;
-            rivalPoints = st.rivalNumber;
+            palyerEl.innerHTML = `${playerPageName}:${playerPoints}`;
+            rivalEl.innerHTML = `${rivalPageName}:${rivalPoints}`;
         } else if (st.ownerName == false) {
-            playerPageName = st.rivalName;
-            rivalPageName = st.playerName;
-            playerPoints = st.rivalNumber;
-            rivalPoints = st.playerNumber;
+            console.log(playerPageName);
+            rivalEl.innerHTML = `${playerPageName}:${playerPoints}`;
+            palyerEl.innerHTML = `${rivalPageName}:${rivalPoints}`;
         }
-        const stonePicURL = require("bc3027b16a50e5fd");
-        const paperPicURL = require("3df831f5e754144f");
-        const scissorsPicURL = require("99486f88cb0ea89e");
+    }
+    addStyle() {
         const backgroundURL = require("bd2726b461f130e4");
-        const div1 = document.createElement("div");
-        div1.innerHTML = `
-      <header class="header">
-        <div class="players">
-        <div class="player-points">${playerPageName}:${playerPoints}</div>
-        <div class="rival-points">${rivalPageName}:${rivalPoints}</div>
-        </div>
-        <div class="room-id"><div>Sala</div>${(0, _state.state).data.roomId}</div>
-      </header>
-          <h3 class="title">Compart\xed el c\xf3digo ${(0, _state.state).data.roomId} con tu contrincante</h3>
-          <div class="hands">
-          <img src=${stonePicURL} class="img">
-          <img src=${paperPicURL} class="img">
-          <img src=${scissorsPicURL} class="img">
-          </div>
-          `;
-        const div2 = document.createElement("div");
-        div2.innerHTML = `
-    <header class="header">
-    <div class="players">
-    <div class="player-points">${playerPageName}:${playerPoints}</div>
-    <div class="rival-points">${rivalPageName}:${rivalPoints}</div>
-    </div>
-    <div class="room-id"><div>Sala</div>${st.roomId}</div>
-    </header>
-    <h3 class="title">Presion\xe1 Jugar y eleg\xed piedra, papel o tijera antes de que pasen los 3 segundos</h3>
-    <button class="button">\xa1Jugar!</button>
-    <div class="hands">
-    <img src=${stonePicURL} class="img">
-    <img src=${paperPicURL} class="img">
-    <img src=${scissorsPicURL} class="img">
-    </div>
-    `;
         const style = document.createElement("style");
         style.textContent = `
       *{box-sizing: border-box;}
@@ -43226,41 +47415,97 @@ customElements.define("inst-el", class Instructions extends HTMLElement {
         .button:hover { background: #00449d; }        
         .button:active { background: #009048; }
         `;
+        this.appendChild(style);
+    }
+    addDiv1() {
+        console.log("addDiv1");
+        const stonePicURL = require("bc3027b16a50e5fd");
+        const paperPicURL = require("3df831f5e754144f");
+        const scissorsPicURL = require("99486f88cb0ea89e");
+        const div1 = document.createElement("div");
+        div1.innerHTML = `
+      <header class="header">
+        <div class="players">
+        <div class="player-points"></div>
+        <div class="rival-points"></div>
+        </div>
+        <div class="room-id"><div>Sala</div>${(0, _state.state).data.roomId}</div>
+      </header>
+          <h3 class="title">Compart\xed el c\xf3digo ${(0, _state.state).data.roomId} con tu contrincante</h3>
+          <div class="hands">
+          <img src=${stonePicURL} class="img">
+          <img src=${paperPicURL} class="img">
+          <img src=${scissorsPicURL} class="img">
+          </div>
+          `;
         div1.classList.add("inner-root");
         this.appendChild(div1);
-        this.appendChild(style);
+        this.addHeader();
+    }
+    addDiv2() {
+        console.log("addDiv2");
+        const stonePicURL = require("bc3027b16a50e5fd");
+        const paperPicURL = require("3df831f5e754144f");
+        const scissorsPicURL = require("99486f88cb0ea89e");
+        console.log((0, _state.state).data.rivalName);
+        const div2 = document.createElement("div");
+        div2.innerHTML = `
+    <header class="header">
+    <div class="players">
+    <div class="player-points"></div>
+    <div class="rival-points"></div>
+    </div>
+    <div class="room-id"><div>Sala</div>${(0, _state.state).data.roomId}</div>
+    </header>
+    <h3 class="title">Presion\xe1 Jugar y eleg\xed piedra, papel o tijera antes de que pasen los 3 segundos</h3>
+    <button class="button">\xa1Jugar!</button>
+    <div class="hands">
+    <img src=${stonePicURL} class="img">
+    <img src=${paperPicURL} class="img">
+    <img src=${scissorsPicURL} class="img">
+    </div>
+    `;
+        this.firstChild.remove();
+        this.firstChild.remove();
+        div2.classList.add("inner-root");
+        this.appendChild(div2);
+        this.addHeader();
+        const boton = this.querySelector(".button");
+        boton.addEventListener("click", function(e) {
+            e.preventDefault();
+            const gameSttus = (0, _state.state).data.gameStatus;
+            console.log(gameSttus);
+            if ((0, _state.state).data.ownerName == true) gameSttus[0].playerStatus = true;
+            if ((0, _state.state).data.ownerName == false) gameSttus[0].rivalStatus = true;
+            (0, _state.state).pushGame(gameSttus);
+        });
+    }
+    addDiv3() {
+        console.log("addDiv3");
+        const stonePicURL = require("bc3027b16a50e5fd");
+        const paperPicURL = require("3df831f5e754144f");
+        const scissorsPicURL = require("99486f88cb0ea89e");
         const div3 = document.createElement("div");
         div3.innerHTML = `
     <header class="header">
     <div class="players">
-    <div class="player-points">${playerPageName}:${playerPoints}</div>
-    <div class="rival-points">${rivalPageName}:${rivalPoints}</div>
+    <div class="player-points"></div>
+    <div class="rival-points"></div>
     </div>
-    <div class="room-id"><div>Sala</div>${st.roomId}</div>
+    <div class="room-id"><div>Sala</div>${(0, _state.state).data.roomId}</div>
     </header>
-    <h3 class="title">Esperando a que ${rivalPageName} presione jugar...</h3>
+    <h3 class="title">Esperando a que ${(0, _state.state).data.gameStatus[0].rival} presione jugar...</h3>
     <div class="hands">
     <img src=${stonePicURL} class="img">
     <img src=${paperPicURL} class="img">
     <img src=${scissorsPicURL} class="img">
     </div>        
     `;
-        if ((0, _state.state).data.rivalName !== "") {
-            console.log(st.rivalName);
-            console.log(this.firstChild);
-            this.firstChild.remove();
-            div2.classList.add("inner-root");
-            this.appendChild(div2);
-            const boton = this.querySelector(".button");
-            boton.addEventListener("click", function(e) {
-                e.preventDefault();
-                (0, _router.Router).go("/game");
-            });
-        }
-    }
-    constructor(...args){
-        super(...args);
-        this.gameStatus = [];
+        this.firstChild.remove();
+        this.firstChild.remove();
+        div3.classList.add("inner-root");
+        this.appendChild(div3);
+        this.addHeader();
     }
 });
 

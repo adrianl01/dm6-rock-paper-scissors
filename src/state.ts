@@ -1,9 +1,12 @@
+import { fsdb, rtdb } from "./db"
 import { onValue, ref } from "firebase/database"
-import { rtdb } from "./db"
+import { collection, query, where, getDocs } from "firebase/firestore";
+const roomsRef = collection(fsdb, "rooms")
 import * as map from "lodash/map"
 const API_BASE_URL = "http://localhost:3000"
-import { Router } from "@vaadin/router";
+import { funcRoomId } from "../comps/room-id";
 import { error } from "console";
+import { Router } from "@vaadin/router";
 
 const state = {
     data: {
@@ -15,46 +18,60 @@ const state = {
         userId: "",
         roomId: "",
         rtdbRoomId: "",
-        gameStatus: []
+        gameStatus: [
+            {
+                player: "",
+                playerOnline: false,
+                playerStatus: false,
+                rival: "",
+                rivalOnline: false,
+                rivalStatus: false,
+            }
+        ],
+        rooms: [],
+        playerOnValue: "disabled"
     },
     listeners: [],
     init() { if (this.data.rtdbRoomId !== " ") { this.listenRoom() } },
     listenRoom() {
-        console.log("listenRoom")
         const cs = state.data; const db = rtdb;
         const chatroomsRef = ref(db, "/rooms/" + cs.rtdbRoomId);
-        if (state.data.ownerName == false) {
-            onValue(chatroomsRef, (snap => {
-                const val = snap.val();
-                const rtdbStatus = map(val);
-                console.log(rtdbStatus[0])
-                if (rtdbStatus[0] == state.data.playerName) {
-                    cs.ownerName = true;
-                    this.setState(cs)
-                } else {
-                    state.data.rivalName = state.data.playerName;
-                }
-            }));
-        }
+        // function roomOnValue() {
         onValue(chatroomsRef, (snapshot => {
             const val = snapshot.val();
             const rtdbStatus = map(val);
-            cs.gameStatus = rtdbStatus[0].gameStatusList;
-            this.setState(cs);
+            console.log("se ejecuta el onValue del GameStatus")
+            const res = rtdbStatus[0].gameStatusList
+            console.log(rtdbStatus[0].player, rtdbStatus[0].rival)
+            if (rtdbStatus[0].rival !== "" && state.data.ownerName == true) {
+                console.log("SE EJECUTA CUANDO SOY EL JUGADOR UNO y No pasa nada")
+                console.log(rtdbStatus[0].gameStatusList)
+                cs.gameStatus = rtdbStatus[0].gameStatusList;
+                cs.rivalName = rtdbStatus[0].rival
+                this.setState(cs);
+            } else if (state.data.ownerName == false) {
+                console.log("SE EJECUTA CUANDO NO SOY EL JUGADOR UNO")
+                cs.gameStatus = rtdbStatus[0].gameStatusList;
+                cs.playerName = rtdbStatus[0].player
+                this.setState(cs);
+            }
         }))
+        // }
+        // if (cs.rivalName !== "") { roomOnValue(); }
+        // if (state.data.playerOnValue == "enabled") { roomOnValue(); }
     },
 
     getState() { return this.data; },
 
     pushGame(gameStatus) {
         const rtdbRoom = this.data.rtdbRoomId; const player1 = this.data.playerName; const player2 = this.data.rivalName;
-        const nameId = 1000 + Math.floor(Math.random() * 999)
-        const stringedGameStatus = JSON.stringify(gameStatus)
-        const strngNameId = JSON.stringify(nameId)
-        const strngGameStatus = '{' + '"' + strngNameId + "matchStatus" + '"' + ':' + stringedGameStatus + '}';
-        const gameStatusReady = JSON.parse(strngGameStatus)
-        const gameStatusList = state.data.gameStatus
-        gameStatusList.push(gameStatusReady)
+        // const nameId = 1000 + Math.floor(Math.random() * 999)
+        // const stringedGameStatus = JSON.stringify(gameStatus)
+        // const strngNameId = JSON.stringify(nameId)
+        // const strngGameStatus = '{' + '"' + strngNameId + "matchStatus" + '"' + ':' + stringedGameStatus + '}';
+        // const gameStatusReady = JSON.parse(strngGameStatus)
+        const gameStatusList = gameStatus
+        // gameStatusList.push(gameStatusReady)
         const gameState = {
             gameStatusList,
             player: player1,
@@ -69,6 +86,7 @@ const state = {
             },
             body: JSON.stringify(gameState),
         })
+        state.data.playerOnValue = "enabled";
     },
     setPlayerName(playerName: string) {
         const cs = this.getState();
@@ -77,7 +95,7 @@ const state = {
     },
     setRivalName(playerName: string) {
         const cs = this.getState();
-        cs.playerName = playerName;
+        cs.rivalName = playerName;
         this.setState(cs);
     },
     playerOne() {
@@ -90,20 +108,41 @@ const state = {
             body: JSON.stringify(ownerName),
         })
     },
+    roomId() {
+        const userId = state.data.userId;
+        const q = query(roomsRef, where("userId", "==", userId));
+        getDocs(q).then(res => {
+            res.forEach((n) => {
+                {
+                    state.data.rooms.push(n.id)
+                }
+            })
+            if (state.data.rooms.length > 0) { console.log("se ejecuta funcRoomId en el State"); funcRoomId(); }
+            else { console.log("se ejecuta el signUp en el State"); state.signUp(); };
+        });
+        // setTimeout(() => {
+        //     console.log(state.data.rooms);
+        // }, 5000)
+    },
     signUp() {
         console.log("esto es el signUp")
         const cs = state.data;
-        console.log(cs.playerName)
+        var currentPlayer
+        if (state.data.playerName == "") {
+            currentPlayer = cs.rivalName
+        } else {
+            currentPlayer = cs.playerName
+        }
         fetch(API_BASE_URL + "/signup", {
             method: "post",
             headers: {
                 "content-type": "application/json"
             },
-            body: JSON.stringify({ player1: cs.playerName })
+            body: JSON.stringify({ player: currentPlayer })
         }).then((res) => {
             console.log(res.status)
             if (res.status == 400) {
-                return console.log("ese perfil ya existe")
+                return error("ese perfil ya existe")
             } else { return res.json(); }
         })
             .then(data => {
@@ -111,36 +150,38 @@ const state = {
                     state.singIn()
                 } else {
                     cs.userId = data.id;
-                    console.log("User Id:", data.id);
                     this.setState(cs);
-                    state.singIn()
+                    state.askNewRoom();
                 }
             })
     },
     singIn() {
         console.log("Inside singIn function")
         const cs = this.getState()
-        if (cs.playerName) {
+        var currentPlayer
+        if (state.data.playerName == "") {
+            currentPlayer = cs.rivalName
+        } else {
+            currentPlayer = cs.playerName
+        }
+        if (currentPlayer) {
             fetch(API_BASE_URL + "/signin", {
                 method: "post",
                 headers: {
                     "content-type": "application/json"
                 },
-                body: JSON.stringify({ player1: cs.playerName })
+                body: JSON.stringify({ player1: currentPlayer })
             }).then((res) => {
                 return res.json();
             }).then(data => {
                 cs.userId = data.id;
-                console.log("User Id:", data.id);
                 this.setState(cs);
-                if (state.data.roomId == "") { state.askNewRoom() } else { state.accessToRoom() }
+                if (state.data.roomId == "") { state.roomId() } else { state.accessToRoom() }
+                // if (state.data.roomId == "") { state.askNewRoom() } 
             })
-        } else {
-            console.error("No hay un email en el state");
-        }
+        } else { console.error("No hay un email en el state"); }
         // lunes 9/10/2023 19:16, agregar el endpoint signUp. Update: lunes 30/10/2023, ya estan todos los enpoints listos hace una semana.
     },
-
     askNewRoom() {
         console.log("askNewRoom");
         const cs = this.getState();
@@ -165,7 +206,6 @@ const state = {
             console.error("No hay userId")
         }
     },
-
     accessToRoom() {
         console.log("accessToRoom");
         const cs = this.getState();
@@ -178,12 +218,10 @@ const state = {
                 cs.rtdbRoomId = data.rtdbRoomId;
                 this.setState(cs);
                 this.listenRoom();
-                console.log("rtdbId:", data.rtdbRoomId)
-                console.log("el router se ejecuta")
-
+                console.log("CAMBIO A /INSTRUCTIONS")
+                Router.go("/instructions");
             })
     },
-
     setState(newState) {
         this.data = newState;
         for (const cb of this.listeners) {
@@ -191,6 +229,7 @@ const state = {
         }
         // --------------------------
         console.log("State Changed", this.data)
+        if (state.data.ownerName == false && state.data.playerName !== "" && state.data.rivalName !== "") { state.pushGame(state.data.gameStatus) }
     },
     subscribe(callback: (any) => any) {
         this.listeners.push(callback)
