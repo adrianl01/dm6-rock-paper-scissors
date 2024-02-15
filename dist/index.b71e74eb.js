@@ -579,13 +579,6 @@ var _state = require("./state");
 var _routerTs = require("../router.ts");
 (function() {
     (0, _state.state).init();
-// state.setEmailAndFullName("gustavo.adrian.leiva879@gmail.com", "Gustavo Adrián Leiva");
-// state.singIn((err) => {
-//     if (err) console.error("Hubo un error en el singIn")
-//     state.askNewRoom(() => {
-//         state.accessToRoom();
-//     })
-// })
 })();
 
 },{"./state":"1Yeju","../router.ts":"eBUGN"}],"1Yeju":[function(require,module,exports) {
@@ -595,10 +588,9 @@ parcelHelpers.export(exports, "state", ()=>state);
 var _db = require("./db");
 var _database = require("firebase/database");
 var _firestore = require("firebase/firestore");
-var _map = require("lodash/map");
 var _roomId = require("../comps/room-id");
-var _console = require("console");
 var _router = require("@vaadin/router");
+var _console = require("console");
 const roomsRef = (0, _firestore.collection)((0, _db.fsdb), "rooms");
 const API_BASE_URL = "http://localhost:3000";
 const state = {
@@ -611,119 +603,46 @@ const state = {
         userId: "",
         roomId: "",
         rtdbRoomId: "",
-        gameStatus: [
-            {
+        cleaner: true,
+        gameStatus: {
+            player: "",
+            playerOnline: false,
+            playerStatus: false,
+            rival: "",
+            rivalOnline: false,
+            rivalStatus: false,
+            used: true,
+            hands: {
                 player: "",
-                playerOnline: false,
-                playerStatus: false,
-                rival: "",
-                rivalOnline: false,
-                rivalStatus: false
+                rival: ""
             }
-        ],
+        },
         rooms: [],
-        playerOnValue: "disabled"
+        playerOnValue: "disabled",
+        results: false
     },
     listeners: [],
-    init () {
-        if (this.data.rtdbRoomId !== " ") this.listenRoom();
-    },
-    listenRoom () {
-        const cs = state.data;
-        const db = (0, _db.rtdb);
-        const chatroomsRef = (0, _database.ref)(db, "/rooms/" + cs.rtdbRoomId);
-        // function roomOnValue() {
-        (0, _database.onValue)(chatroomsRef, (snapshot)=>{
-            const val = snapshot.val();
-            const rtdbStatus = _map(val);
-            console.log("se ejecuta el onValue del GameStatus");
-            const res = rtdbStatus[0].gameStatusList;
-            console.log(rtdbStatus[0].player, rtdbStatus[0].rival);
-            if (rtdbStatus[0].rival !== "" && state.data.ownerName == true) {
-                console.log("SE EJECUTA CUANDO SOY EL JUGADOR UNO y No pasa nada");
-                console.log(rtdbStatus[0].gameStatusList);
-                cs.gameStatus = rtdbStatus[0].gameStatusList;
-                cs.rivalName = rtdbStatus[0].rival;
-                this.setState(cs);
-            } else if (state.data.ownerName == false) {
-                console.log("SE EJECUTA CUANDO NO SOY EL JUGADOR UNO");
-                cs.gameStatus = rtdbStatus[0].gameStatusList;
-                cs.playerName = rtdbStatus[0].player;
-                this.setState(cs);
-            }
-        });
-    // }
-    // if (cs.rivalName !== "") { roomOnValue(); }
-    // if (state.data.playerOnValue == "enabled") { roomOnValue(); }
-    },
     getState () {
         return this.data;
     },
-    pushGame (gameStatus) {
-        const rtdbRoom = this.data.rtdbRoomId;
-        const player1 = this.data.playerName;
-        const player2 = this.data.rivalName;
-        // const nameId = 1000 + Math.floor(Math.random() * 999)
-        // const stringedGameStatus = JSON.stringify(gameStatus)
-        // const strngNameId = JSON.stringify(nameId)
-        // const strngGameStatus = '{' + '"' + strngNameId + "matchStatus" + '"' + ':' + stringedGameStatus + '}';
-        // const gameStatusReady = JSON.parse(strngGameStatus)
-        const gameStatusList = gameStatus;
-        // gameStatusList.push(gameStatusReady)
-        const gameState = {
-            gameStatusList,
-            player: player1,
-            rival: player2,
-            rtdbRoom: rtdbRoom
-        };
-        console.log(gameState);
-        fetch(API_BASE_URL + "/games", {
-            method: "post",
-            headers: {
-                "content-type": "application/json"
-            },
-            body: JSON.stringify(gameState)
-        });
-        state.data.playerOnValue = "enabled";
+    setState (newState) {
+        this.data = newState;
+        for (const cb of this.listeners)cb();
+        // --------------------------
+        console.log("State Changed", this.data);
+    },
+    subscribe (callback) {
+        this.listeners.push(callback);
     },
     setPlayerName (playerName) {
         const cs = this.getState();
         cs.playerName = playerName;
         this.setState(cs);
     },
-    setRivalName (playerName) {
+    setRivalName (rivalName) {
         const cs = this.getState();
-        cs.rivalName = playerName;
+        cs.rivalName = rivalName;
         this.setState(cs);
-    },
-    playerOne () {
-        const ownerName = state.data.ownerName;
-        fetch(API_BASE_URL + "/games", {
-            method: "post",
-            headers: {
-                "content-type": "application/json"
-            },
-            body: JSON.stringify(ownerName)
-        });
-    },
-    roomId () {
-        const userId = state.data.userId;
-        const q = (0, _firestore.query)(roomsRef, (0, _firestore.where)("userId", "==", userId));
-        (0, _firestore.getDocs)(q).then((res)=>{
-            res.forEach((n)=>{
-                state.data.rooms.push(n.id);
-            });
-            if (state.data.rooms.length > 0) {
-                console.log("se ejecuta funcRoomId en el State");
-                (0, _roomId.funcRoomId)();
-            } else {
-                console.log("se ejecuta el signUp en el State");
-                state.signUp();
-            }
-        });
-    // setTimeout(() => {
-    //     console.log(state.data.rooms);
-    // }, 5000)
     },
     signUp () {
         console.log("esto es el signUp");
@@ -740,7 +659,6 @@ const state = {
                 player: currentPlayer
             })
         }).then((res)=>{
-            console.log(res.status);
             if (res.status == 400) return (0, _console.error)("ese perfil ya existe");
             else return res.json();
         }).then((data)=>{
@@ -748,7 +666,7 @@ const state = {
             else {
                 cs.userId = data.id;
                 this.setState(cs);
-                state.askNewRoom();
+                state.singIn();
             }
         });
     },
@@ -771,9 +689,8 @@ const state = {
         }).then((data)=>{
             cs.userId = data.id;
             this.setState(cs);
-            if (state.data.roomId == "") state.roomId();
-            else state.accessToRoom();
-        // if (state.data.roomId == "") { state.askNewRoom() } 
+            if (state.data.ownerName == true) state.roomId();
+            if (state.data.ownerName == false) state.accessToRoom();
         });
         else console.error("No hay un email en el state");
     // lunes 9/10/2023 19:16, agregar el endpoint signUp. Update: lunes 30/10/2023, ya estan todos los enpoints listos hace una semana.
@@ -781,7 +698,6 @@ const state = {
     askNewRoom () {
         console.log("askNewRoom");
         const cs = this.getState();
-        console.log(cs.userId);
         if (cs.playerName) fetch(API_BASE_URL + "/rooms", {
             method: "post",
             headers: {
@@ -794,7 +710,6 @@ const state = {
         }).then((res)=>{
             return res.json();
         }).then((data)=>{
-            console.log(data);
             cs.roomId = data.id;
             this.setState(cs);
             state.accessToRoom();
@@ -808,27 +723,220 @@ const state = {
         const userIdState = cs.userId;
         fetch(API_BASE_URL + "/rooms/" + roomIdState + "?userId=" + userIdState).then((res)=>{
             return res.json();
-        }).then((data)=>{
+        }).then(async (data)=>{
             cs.rtdbRoomId = data.rtdbRoomId;
             this.setState(cs);
             this.listenRoom();
-            console.log("CAMBIO A /INSTRUCTIONS");
-            (0, _router.Router).go("/instructions");
         });
     },
-    setState (newState) {
-        this.data = newState;
-        for (const cb of this.listeners)cb();
-        // --------------------------
-        console.log("State Changed", this.data);
-        if (state.data.ownerName == false && state.data.playerName !== "" && state.data.rivalName !== "") state.pushGame(state.data.gameStatus);
+    init () {
+        if (this.data.rtdbRoomId !== " ") this.listenRoom();
     },
-    subscribe (callback) {
-        this.listeners.push(callback);
+    roomCleaner () {
+        console.log("roomCleaner");
+        let player1 = state.data.playerName;
+        let player2 = state.data.rivalName;
+        const gameStatus = {
+            player: player1,
+            playerOnline: true,
+            playerStatus: false,
+            rival: player2,
+            rivalOnline: true,
+            rivalStatus: false,
+            used: false,
+            hands: {
+                player: "",
+                rival: ""
+            }
+        };
+        const rtdbRoom = this.data.rtdbRoomId;
+        // if (state.data.playerName !== undefined) { player1 = state.data.playerName };
+        // if (state.data.playerName !== undefined) { player2 = state.data.rivalName };
+        function fetcher() {
+            const gameState = {
+                gameStatus,
+                player: player1,
+                rival: player2,
+                playerPoints: state.data.playerNumber,
+                rivalPoints: state.data.rivalNumber,
+                rtdbRoom: rtdbRoom
+            };
+            fetch(API_BASE_URL + "/games", {
+                method: "post",
+                headers: {
+                    "content-type": "application/json"
+                },
+                body: JSON.stringify(gameState)
+            }).then((res)=>{
+                console.log("Mensaje del roomCleaner:", res.statusText);
+                if (res.statusText == "OK") return state.data.cleaner = true;
+            });
+        }
+        // if (state.data.cleaner == true) {
+        console.log("roomCleaner");
+        state.data.gameStatus.used = false;
+        fetcher();
+        if (location.pathname == "/game") (0, _router.Router).go("instructions");
+    //     state.data.gameStatus.used = true
+    //     fetcher()
+    // } else if (state.data.ownerName == true) {
+    //     if (rtdbStatus.used == true) {
+    //         console.log("VACIANDO GAMESTATUS")
+    //         fetcher();
+    // state.listenRoom();
+    // console.log("CAMBIO A /INSTRUCTIONS")
+    // Router.go("/instructions");
+    // }
+    // else if (rtdbStatus.used == false) {
+    //     console.log("YA ESTABA VACIO GAMESTATUS")
+    //     state.data.cleaner = true
+    //     state.listenRoom();
+    //     // console.log("CAMBIO A /INSTRUCTIONS")
+    //     // Router.go("/instructions");
+    // }
+    // else {
+    //     console.log("jugador dos");
+    //     state.data.cleaner = true
+    //     state.listenRoom();
+    // }
+    },
+    listenRoom () {
+        console.log("listenRoom");
+        const cs = state.data;
+        const db = (0, _db.rtdb);
+        const chatroomsRef = (0, _database.ref)(db, "/rooms/" + cs.rtdbRoomId);
+        if (cs.cleaner == true) (0, _database.onValue)(chatroomsRef, (snapshot)=>{
+            const val = snapshot.val();
+            const rtdbStatus = val.gameState;
+            console.log(rtdbStatus);
+            console.log("onValue RTDBGameStatus");
+            if (state.data.ownerName == true) {
+                console.log(rtdbStatus.rival);
+                console.log("OBTAINING PLAYER TWO INFO");
+                cs.gameStatus = rtdbStatus.gameStatus;
+                cs.rivalName = rtdbStatus.rival;
+                cs.playerNumber = rtdbStatus.playerPoints;
+                cs.rivalNumber = rtdbStatus.rivalPoints;
+                this.setState(cs);
+                if (location.pathname === "/newgame") (0, _router.Router).go("instructions");
+                if (location.pathname === "/game") {
+                    if (state.data.results) (0, _router.Router).go("/instructions");
+                }
+            } else if (state.data.ownerName == false) {
+                console.log("OBTAINING PLAYER ONE INFO");
+                cs.gameStatus = rtdbStatus.gameStatus;
+                cs.playerName = rtdbStatus.player;
+                cs.playerNumber = rtdbStatus.playerPoints;
+                cs.rivalNumber = rtdbStatus.rivalPoints;
+                this.setState(cs);
+                if (location.pathname === "/gameroom") (0, _router.Router).go("instructions");
+                if (location.pathname === "/game") {
+                    if (state.data.results) (0, _router.Router).go("/instructions");
+                }
+            }
+        });
+    },
+    pushGame (gameStatus) {
+        console.log("pushGame");
+        const rtdbRoom = this.data.rtdbRoomId;
+        let player1 = "";
+        let player2 = "";
+        if (state.data.playerName !== undefined) player1 = state.data.playerName;
+        if (state.data.playerName !== undefined) player2 = state.data.rivalName;
+        // const nameId = 1000 + Math.floor(Math.random() * 999)
+        // const stringedGameStatus = JSON.stringify(gameStatus)
+        // const strngNameId = JSON.stringify(nameId)
+        // const strngGameStatus = '{' + '"' + strngNameId + "matchStatus" + '"' + ':' + stringedGameStatus + '}';
+        // const gameStatusReady = JSON.parse(strngGameStatus)
+        // gameStatusList.push(gameStatusReady)
+        console.log(gameStatus);
+        console.log(player1, player2);
+        const gameState = {
+            gameStatus,
+            playerPoints: state.data.playerNumber,
+            rivalPoints: state.data.rivalNumber,
+            player: player1,
+            rival: player2,
+            rtdbRoom: rtdbRoom
+        };
+        state.data.gameStatus.used = true;
+        fetch(API_BASE_URL + "/games", {
+            method: "post",
+            headers: {
+                "content-type": "application/json"
+            },
+            body: JSON.stringify(gameState)
+        }).then((res)=>{
+            console.log(res.statusText);
+        });
+        state.data.playerOnValue = "enabled";
+    // if (location.pathname == "/game") { Router.go("/instructions") }
+    },
+    async pushGameAsync (gameStatus) {
+        console.log("PUSHGAME EN EL ASYNC PUSHGAME");
+        let res = await state.pushGame(gameStatus);
+        console.log(res);
+    },
+    playerOne () {
+        const ownerName = state.data.ownerName;
+        fetch(API_BASE_URL + "/games", {
+            method: "post",
+            headers: {
+                "content-type": "application/json"
+            },
+            body: JSON.stringify(ownerName)
+        });
+    },
+    roomId () {
+        console.log("roomId");
+        const userId = state.data.userId;
+        const q = (0, _firestore.query)(roomsRef, (0, _firestore.where)("userId", "==", userId));
+        (0, _firestore.getDocs)(q).then((res)=>{
+            res.forEach((n)=>{
+                state.data.rooms.push(n.id);
+            });
+        }).then(()=>{
+            console.log(state.data.rooms.length);
+            if (state.data.rooms.length > 0) {
+                console.log("funcRoomId from State");
+                (0, _roomId.funcRoomId)();
+            } else {
+                console.log("New room is created due to lack of it");
+                state.askNewRoom();
+            }
+        });
+    },
+    hands (hands) {
+        console.log("pushGame Hands");
+        const rtdbRoom = this.data.rtdbRoomId;
+        let player1 = "";
+        let player2 = "";
+        if (state.data.playerName !== undefined) player1 = state.data.playerName;
+        if (state.data.playerName !== undefined) player2 = state.data.rivalName;
+        const handsStatus = hands;
+        const gameStatus = state.data.gameStatus;
+        console.log(handsStatus);
+        const gameState = {
+            gameStatus,
+            handsStatus,
+            player: player1,
+            rival: player2,
+            rtdbRoom: rtdbRoom
+        };
+        state.data.gameStatus.used = true;
+        fetch(API_BASE_URL + "/games", {
+            method: "post",
+            headers: {
+                "content-type": "application/json"
+            },
+            body: JSON.stringify(gameState)
+        }).then((res)=>{
+            console.log(res.statusText);
+        });
     }
 };
 
-},{"./db":"98qAp","firebase/database":"SJ4UY","firebase/firestore":"8A4BC","lodash/map":"94CDd","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","../comps/room-id":"3Gh8t","console":"8kdFB","@vaadin/router":"kVZrF"}],"98qAp":[function(require,module,exports) {
+},{"./db":"98qAp","firebase/database":"SJ4UY","firebase/firestore":"8A4BC","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@vaadin/router":"kVZrF","console":"8kdFB","../comps/room-id":"3Gh8t"}],"98qAp":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "rtdb", ()=>rtdb);
@@ -38019,2550 +38127,2314 @@ var XhrIo = esm.XhrIo = P;
 var Md5 = esm.Md5 = S;
 var Integer = esm.Integer = T;
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"94CDd":[function(require,module,exports) {
-var arrayMap = require("61518c8bb036dd9b"), baseIteratee = require("8bad46685c8864d"), baseMap = require("51c76ab24fdb66f9"), isArray = require("7cb4cacc4dea406c");
-/**
- * Creates an array of values by running each element in `collection` thru
- * `iteratee`. The iteratee is invoked with three arguments:
- * (value, index|key, collection).
- *
- * Many lodash methods are guarded to work as iteratees for methods like
- * `_.every`, `_.filter`, `_.map`, `_.mapValues`, `_.reject`, and `_.some`.
- *
- * The guarded methods are:
- * `ary`, `chunk`, `curry`, `curryRight`, `drop`, `dropRight`, `every`,
- * `fill`, `invert`, `parseInt`, `random`, `range`, `rangeRight`, `repeat`,
- * `sampleSize`, `slice`, `some`, `sortBy`, `split`, `take`, `takeRight`,
- * `template`, `trim`, `trimEnd`, `trimStart`, and `words`
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Collection
- * @param {Array|Object} collection The collection to iterate over.
- * @param {Function} [iteratee=_.identity] The function invoked per iteration.
- * @returns {Array} Returns the new mapped array.
- * @example
- *
- * function square(n) {
- *   return n * n;
- * }
- *
- * _.map([4, 8], square);
- * // => [16, 64]
- *
- * _.map({ 'a': 4, 'b': 8 }, square);
- * // => [16, 64] (iteration order is not guaranteed)
- *
- * var users = [
- *   { 'user': 'barney' },
- *   { 'user': 'fred' }
- * ];
- *
- * // The `_.property` iteratee shorthand.
- * _.map(users, 'user');
- * // => ['barney', 'fred']
- */ function map(collection, iteratee) {
-    var func = isArray(collection) ? arrayMap : baseMap;
-    return func(collection, baseIteratee(iteratee, 3));
-}
-module.exports = map;
-
-},{"61518c8bb036dd9b":"imI5Z","8bad46685c8864d":"2fsgg","51c76ab24fdb66f9":"cLeHB","7cb4cacc4dea406c":"dZaTH"}],"imI5Z":[function(require,module,exports) {
-/**
- * A specialized version of `_.map` for arrays without support for iteratee
- * shorthands.
- *
- * @private
- * @param {Array} [array] The array to iterate over.
- * @param {Function} iteratee The function invoked per iteration.
- * @returns {Array} Returns the new mapped array.
- */ function arrayMap(array, iteratee) {
-    var index = -1, length = array == null ? 0 : array.length, result = Array(length);
-    while(++index < length)result[index] = iteratee(array[index], index, array);
-    return result;
-}
-module.exports = arrayMap;
-
-},{}],"2fsgg":[function(require,module,exports) {
-var baseMatches = require("30aeab910fab669"), baseMatchesProperty = require("4f010869f7b63154"), identity = require("28f06147d1eb9502"), isArray = require("3c56f88c4debf449"), property = require("aee920e0ef5bf111");
-/**
- * The base implementation of `_.iteratee`.
- *
- * @private
- * @param {*} [value=_.identity] The value to convert to an iteratee.
- * @returns {Function} Returns the iteratee.
- */ function baseIteratee(value) {
-    // Don't store the `typeof` result in a variable to avoid a JIT bug in Safari 9.
-    // See https://bugs.webkit.org/show_bug.cgi?id=156034 for more details.
-    if (typeof value == "function") return value;
-    if (value == null) return identity;
-    if (typeof value == "object") return isArray(value) ? baseMatchesProperty(value[0], value[1]) : baseMatches(value);
-    return property(value);
-}
-module.exports = baseIteratee;
-
-},{"30aeab910fab669":"2mdwX","4f010869f7b63154":"48kxC","28f06147d1eb9502":"dgTUN","3c56f88c4debf449":"dZaTH","aee920e0ef5bf111":"8aSQI"}],"2mdwX":[function(require,module,exports) {
-var baseIsMatch = require("e45515c903dc8f87"), getMatchData = require("89e9034a8071e297"), matchesStrictComparable = require("782598b150762386");
-/**
- * The base implementation of `_.matches` which doesn't clone `source`.
- *
- * @private
- * @param {Object} source The object of property values to match.
- * @returns {Function} Returns the new spec function.
- */ function baseMatches(source) {
-    var matchData = getMatchData(source);
-    if (matchData.length == 1 && matchData[0][2]) return matchesStrictComparable(matchData[0][0], matchData[0][1]);
-    return function(object) {
-        return object === source || baseIsMatch(object, source, matchData);
-    };
-}
-module.exports = baseMatches;
-
-},{"e45515c903dc8f87":"joJZV","89e9034a8071e297":"48Qyi","782598b150762386":"a9Bav"}],"joJZV":[function(require,module,exports) {
-var Stack = require("ae43062900bf7e4d"), baseIsEqual = require("9003c0cc8ac007b6");
-/** Used to compose bitmasks for value comparisons. */ var COMPARE_PARTIAL_FLAG = 1, COMPARE_UNORDERED_FLAG = 2;
-/**
- * The base implementation of `_.isMatch` without support for iteratee shorthands.
- *
- * @private
- * @param {Object} object The object to inspect.
- * @param {Object} source The object of property values to match.
- * @param {Array} matchData The property names, values, and compare flags to match.
- * @param {Function} [customizer] The function to customize comparisons.
- * @returns {boolean} Returns `true` if `object` is a match, else `false`.
- */ function baseIsMatch(object, source, matchData, customizer) {
-    var index = matchData.length, length = index, noCustomizer = !customizer;
-    if (object == null) return !length;
-    object = Object(object);
-    while(index--){
-        var data = matchData[index];
-        if (noCustomizer && data[2] ? data[1] !== object[data[0]] : !(data[0] in object)) return false;
-    }
-    while(++index < length){
-        data = matchData[index];
-        var key = data[0], objValue = object[key], srcValue = data[1];
-        if (noCustomizer && data[2]) {
-            if (objValue === undefined && !(key in object)) return false;
-        } else {
-            var stack = new Stack;
-            if (customizer) var result = customizer(objValue, srcValue, key, object, source, stack);
-            if (!(result === undefined ? baseIsEqual(srcValue, objValue, COMPARE_PARTIAL_FLAG | COMPARE_UNORDERED_FLAG, customizer, stack) : result)) return false;
-        }
-    }
-    return true;
-}
-module.exports = baseIsMatch;
-
-},{"ae43062900bf7e4d":"atP87","9003c0cc8ac007b6":"7i3qr"}],"atP87":[function(require,module,exports) {
-var ListCache = require("cfb30a39eead9e7e"), stackClear = require("ceda2a63c77c915"), stackDelete = require("91ee1b348d9d7172"), stackGet = require("3fe28318f65b9332"), stackHas = require("724ca4def8b84e06"), stackSet = require("e9ceacb40d9582bd");
-/**
- * Creates a stack cache object to store key-value pairs.
- *
- * @private
- * @constructor
- * @param {Array} [entries] The key-value pairs to cache.
- */ function Stack(entries) {
-    var data = this.__data__ = new ListCache(entries);
-    this.size = data.size;
-}
-// Add methods to `Stack`.
-Stack.prototype.clear = stackClear;
-Stack.prototype["delete"] = stackDelete;
-Stack.prototype.get = stackGet;
-Stack.prototype.has = stackHas;
-Stack.prototype.set = stackSet;
-module.exports = Stack;
-
-},{"cfb30a39eead9e7e":"3UZeo","ceda2a63c77c915":"6CpyN","91ee1b348d9d7172":"dGFb0","3fe28318f65b9332":"6zFUp","724ca4def8b84e06":"3VJUX","e9ceacb40d9582bd":"ZfrYM"}],"3UZeo":[function(require,module,exports) {
-var listCacheClear = require("4b1a0d54aed80a7b"), listCacheDelete = require("b700cb849df2c166"), listCacheGet = require("d76dd90eead6cced"), listCacheHas = require("3d210628ba60ec8"), listCacheSet = require("76026bf2d4cfff93");
-/**
- * Creates an list cache object.
- *
- * @private
- * @constructor
- * @param {Array} [entries] The key-value pairs to cache.
- */ function ListCache(entries) {
-    var index = -1, length = entries == null ? 0 : entries.length;
-    this.clear();
-    while(++index < length){
-        var entry = entries[index];
-        this.set(entry[0], entry[1]);
-    }
-}
-// Add methods to `ListCache`.
-ListCache.prototype.clear = listCacheClear;
-ListCache.prototype["delete"] = listCacheDelete;
-ListCache.prototype.get = listCacheGet;
-ListCache.prototype.has = listCacheHas;
-ListCache.prototype.set = listCacheSet;
-module.exports = ListCache;
-
-},{"4b1a0d54aed80a7b":"7AKQv","b700cb849df2c166":"j2Z5O","d76dd90eead6cced":"6Zrrs","3d210628ba60ec8":"i1CBK","76026bf2d4cfff93":"2Rcur"}],"7AKQv":[function(require,module,exports) {
-/**
- * Removes all key-value entries from the list cache.
- *
- * @private
- * @name clear
- * @memberOf ListCache
- */ function listCacheClear() {
-    this.__data__ = [];
-    this.size = 0;
-}
-module.exports = listCacheClear;
-
-},{}],"j2Z5O":[function(require,module,exports) {
-var assocIndexOf = require("173cad7d48c35f4f");
-/** Used for built-in method references. */ var arrayProto = Array.prototype;
-/** Built-in value references. */ var splice = arrayProto.splice;
-/**
- * Removes `key` and its value from the list cache.
- *
- * @private
- * @name delete
- * @memberOf ListCache
- * @param {string} key The key of the value to remove.
- * @returns {boolean} Returns `true` if the entry was removed, else `false`.
- */ function listCacheDelete(key) {
-    var data = this.__data__, index = assocIndexOf(data, key);
-    if (index < 0) return false;
-    var lastIndex = data.length - 1;
-    if (index == lastIndex) data.pop();
-    else splice.call(data, index, 1);
-    --this.size;
-    return true;
-}
-module.exports = listCacheDelete;
-
-},{"173cad7d48c35f4f":"cRVsl"}],"cRVsl":[function(require,module,exports) {
-var eq = require("b38bfe408564f7a5");
-/**
- * Gets the index at which the `key` is found in `array` of key-value pairs.
- *
- * @private
- * @param {Array} array The array to inspect.
- * @param {*} key The key to search for.
- * @returns {number} Returns the index of the matched value, else `-1`.
- */ function assocIndexOf(array, key) {
-    var length = array.length;
-    while(length--){
-        if (eq(array[length][0], key)) return length;
-    }
-    return -1;
-}
-module.exports = assocIndexOf;
-
-},{"b38bfe408564f7a5":"aVz5f"}],"aVz5f":[function(require,module,exports) {
-/**
- * Performs a
- * [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
- * comparison between two values to determine if they are equivalent.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to compare.
- * @param {*} other The other value to compare.
- * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
- * @example
- *
- * var object = { 'a': 1 };
- * var other = { 'a': 1 };
- *
- * _.eq(object, object);
- * // => true
- *
- * _.eq(object, other);
- * // => false
- *
- * _.eq('a', 'a');
- * // => true
- *
- * _.eq('a', Object('a'));
- * // => false
- *
- * _.eq(NaN, NaN);
- * // => true
- */ function eq(value, other) {
-    return value === other || value !== value && other !== other;
-}
-module.exports = eq;
-
-},{}],"6Zrrs":[function(require,module,exports) {
-var assocIndexOf = require("c0bae780ed176e2c");
-/**
- * Gets the list cache value for `key`.
- *
- * @private
- * @name get
- * @memberOf ListCache
- * @param {string} key The key of the value to get.
- * @returns {*} Returns the entry value.
- */ function listCacheGet(key) {
-    var data = this.__data__, index = assocIndexOf(data, key);
-    return index < 0 ? undefined : data[index][1];
-}
-module.exports = listCacheGet;
-
-},{"c0bae780ed176e2c":"cRVsl"}],"i1CBK":[function(require,module,exports) {
-var assocIndexOf = require("7ed3d4e3adbd64a4");
-/**
- * Checks if a list cache value for `key` exists.
- *
- * @private
- * @name has
- * @memberOf ListCache
- * @param {string} key The key of the entry to check.
- * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
- */ function listCacheHas(key) {
-    return assocIndexOf(this.__data__, key) > -1;
-}
-module.exports = listCacheHas;
-
-},{"7ed3d4e3adbd64a4":"cRVsl"}],"2Rcur":[function(require,module,exports) {
-var assocIndexOf = require("5be4035c2d7ca432");
-/**
- * Sets the list cache `key` to `value`.
- *
- * @private
- * @name set
- * @memberOf ListCache
- * @param {string} key The key of the value to set.
- * @param {*} value The value to set.
- * @returns {Object} Returns the list cache instance.
- */ function listCacheSet(key, value) {
-    var data = this.__data__, index = assocIndexOf(data, key);
-    if (index < 0) {
-        ++this.size;
-        data.push([
-            key,
-            value
-        ]);
-    } else data[index][1] = value;
-    return this;
-}
-module.exports = listCacheSet;
-
-},{"5be4035c2d7ca432":"cRVsl"}],"6CpyN":[function(require,module,exports) {
-var ListCache = require("8a0350213da984ae");
-/**
- * Removes all key-value entries from the stack.
- *
- * @private
- * @name clear
- * @memberOf Stack
- */ function stackClear() {
-    this.__data__ = new ListCache;
-    this.size = 0;
-}
-module.exports = stackClear;
-
-},{"8a0350213da984ae":"3UZeo"}],"dGFb0":[function(require,module,exports) {
-/**
- * Removes `key` and its value from the stack.
- *
- * @private
- * @name delete
- * @memberOf Stack
- * @param {string} key The key of the value to remove.
- * @returns {boolean} Returns `true` if the entry was removed, else `false`.
- */ function stackDelete(key) {
-    var data = this.__data__, result = data["delete"](key);
-    this.size = data.size;
-    return result;
-}
-module.exports = stackDelete;
-
-},{}],"6zFUp":[function(require,module,exports) {
-/**
- * Gets the stack value for `key`.
- *
- * @private
- * @name get
- * @memberOf Stack
- * @param {string} key The key of the value to get.
- * @returns {*} Returns the entry value.
- */ function stackGet(key) {
-    return this.__data__.get(key);
-}
-module.exports = stackGet;
-
-},{}],"3VJUX":[function(require,module,exports) {
-/**
- * Checks if a stack value for `key` exists.
- *
- * @private
- * @name has
- * @memberOf Stack
- * @param {string} key The key of the entry to check.
- * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
- */ function stackHas(key) {
-    return this.__data__.has(key);
-}
-module.exports = stackHas;
-
-},{}],"ZfrYM":[function(require,module,exports) {
-var ListCache = require("4737651e99b917d2"), Map = require("1494efbafafa9552"), MapCache = require("6049e8027fe9407f");
-/** Used as the size to enable large array optimizations. */ var LARGE_ARRAY_SIZE = 200;
-/**
- * Sets the stack `key` to `value`.
- *
- * @private
- * @name set
- * @memberOf Stack
- * @param {string} key The key of the value to set.
- * @param {*} value The value to set.
- * @returns {Object} Returns the stack cache instance.
- */ function stackSet(key, value) {
-    var data = this.__data__;
-    if (data instanceof ListCache) {
-        var pairs = data.__data__;
-        if (!Map || pairs.length < LARGE_ARRAY_SIZE - 1) {
-            pairs.push([
-                key,
-                value
-            ]);
-            this.size = ++data.size;
-            return this;
-        }
-        data = this.__data__ = new MapCache(pairs);
-    }
-    data.set(key, value);
-    this.size = data.size;
-    return this;
-}
-module.exports = stackSet;
-
-},{"4737651e99b917d2":"3UZeo","1494efbafafa9552":"8YjF4","6049e8027fe9407f":"664I1"}],"8YjF4":[function(require,module,exports) {
-var getNative = require("ed0752fe9f482107"), root = require("29224713b8d411e6");
-/* Built-in method references that are verified to be native. */ var Map = getNative(root, "Map");
-module.exports = Map;
-
-},{"ed0752fe9f482107":"9PCIl","29224713b8d411e6":"dSYUs"}],"9PCIl":[function(require,module,exports) {
-var baseIsNative = require("63e3f1300cdc459f"), getValue = require("16db51a0e009bd8c");
-/**
- * Gets the native function at `key` of `object`.
- *
- * @private
- * @param {Object} object The object to query.
- * @param {string} key The key of the method to get.
- * @returns {*} Returns the function if it's native, else `undefined`.
- */ function getNative(object, key) {
-    var value = getValue(object, key);
-    return baseIsNative(value) ? value : undefined;
-}
-module.exports = getNative;
-
-},{"63e3f1300cdc459f":"2U9Pn","16db51a0e009bd8c":"kKx5I"}],"2U9Pn":[function(require,module,exports) {
-var isFunction = require("2f9b4543c84c6692"), isMasked = require("cabbc2adfaeb27d9"), isObject = require("cbb5703fe1562e7f"), toSource = require("388b819f47a43aa5");
-/**
- * Used to match `RegExp`
- * [syntax characters](http://ecma-international.org/ecma-262/7.0/#sec-patterns).
- */ var reRegExpChar = /[\\^$.*+?()[\]{}|]/g;
-/** Used to detect host constructors (Safari). */ var reIsHostCtor = /^\[object .+?Constructor\]$/;
-/** Used for built-in method references. */ var funcProto = Function.prototype, objectProto = Object.prototype;
-/** Used to resolve the decompiled source of functions. */ var funcToString = funcProto.toString;
-/** Used to check objects for own properties. */ var hasOwnProperty = objectProto.hasOwnProperty;
-/** Used to detect if a method is native. */ var reIsNative = RegExp("^" + funcToString.call(hasOwnProperty).replace(reRegExpChar, "\\$&").replace(/hasOwnProperty|(function).*?(?=\\\()| for .+?(?=\\\])/g, "$1.*?") + "$");
-/**
- * The base implementation of `_.isNative` without bad shim checks.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a native function,
- *  else `false`.
- */ function baseIsNative(value) {
-    if (!isObject(value) || isMasked(value)) return false;
-    var pattern = isFunction(value) ? reIsNative : reIsHostCtor;
-    return pattern.test(toSource(value));
-}
-module.exports = baseIsNative;
-
-},{"2f9b4543c84c6692":"cfti6","cabbc2adfaeb27d9":"cMDzi","cbb5703fe1562e7f":"cGhqJ","388b819f47a43aa5":"bYHc7"}],"cfti6":[function(require,module,exports) {
-var baseGetTag = require("5419308bd9194e11"), isObject = require("3cba3c966459d528");
-/** `Object#toString` result references. */ var asyncTag = "[object AsyncFunction]", funcTag = "[object Function]", genTag = "[object GeneratorFunction]", proxyTag = "[object Proxy]";
-/**
- * Checks if `value` is classified as a `Function` object.
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a function, else `false`.
- * @example
- *
- * _.isFunction(_);
- * // => true
- *
- * _.isFunction(/abc/);
- * // => false
- */ function isFunction(value) {
-    if (!isObject(value)) return false;
-    // The use of `Object#toString` avoids issues with the `typeof` operator
-    // in Safari 9 which returns 'object' for typed arrays and other constructors.
-    var tag = baseGetTag(value);
-    return tag == funcTag || tag == genTag || tag == asyncTag || tag == proxyTag;
-}
-module.exports = isFunction;
-
-},{"5419308bd9194e11":"lOnbo","3cba3c966459d528":"cGhqJ"}],"lOnbo":[function(require,module,exports) {
-var Symbol = require("68a84eb98c5d3fa2"), getRawTag = require("9b2aaf31b7bdd837"), objectToString = require("46d5beb3375f8a28");
-/** `Object#toString` result references. */ var nullTag = "[object Null]", undefinedTag = "[object Undefined]";
-/** Built-in value references. */ var symToStringTag = Symbol ? Symbol.toStringTag : undefined;
-/**
- * The base implementation of `getTag` without fallbacks for buggy environments.
- *
- * @private
- * @param {*} value The value to query.
- * @returns {string} Returns the `toStringTag`.
- */ function baseGetTag(value) {
-    if (value == null) return value === undefined ? undefinedTag : nullTag;
-    return symToStringTag && symToStringTag in Object(value) ? getRawTag(value) : objectToString(value);
-}
-module.exports = baseGetTag;
-
-},{"68a84eb98c5d3fa2":"7lsL9","9b2aaf31b7bdd837":"995sO","46d5beb3375f8a28":"bmE3g"}],"7lsL9":[function(require,module,exports) {
-var root = require("9ff1abd51ad45ac0");
-/** Built-in value references. */ var Symbol = root.Symbol;
-module.exports = Symbol;
-
-},{"9ff1abd51ad45ac0":"dSYUs"}],"dSYUs":[function(require,module,exports) {
-var freeGlobal = require("cd92e8811deaabf5");
-/** Detect free variable `self`. */ var freeSelf = typeof self == "object" && self && self.Object === Object && self;
-/** Used as a reference to the global object. */ var root = freeGlobal || freeSelf || Function("return this")();
-module.exports = root;
-
-},{"cd92e8811deaabf5":"kAk32"}],"kAk32":[function(require,module,exports) {
-/** Detect free variable `global` from Node.js. */ var global = arguments[3];
-var freeGlobal = typeof global == "object" && global && global.Object === Object && global;
-module.exports = freeGlobal;
-
-},{}],"995sO":[function(require,module,exports) {
-var Symbol = require("e9b4533b2a68f814");
-/** Used for built-in method references. */ var objectProto = Object.prototype;
-/** Used to check objects for own properties. */ var hasOwnProperty = objectProto.hasOwnProperty;
-/**
- * Used to resolve the
- * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
- * of values.
- */ var nativeObjectToString = objectProto.toString;
-/** Built-in value references. */ var symToStringTag = Symbol ? Symbol.toStringTag : undefined;
-/**
- * A specialized version of `baseGetTag` which ignores `Symbol.toStringTag` values.
- *
- * @private
- * @param {*} value The value to query.
- * @returns {string} Returns the raw `toStringTag`.
- */ function getRawTag(value) {
-    var isOwn = hasOwnProperty.call(value, symToStringTag), tag = value[symToStringTag];
-    try {
-        value[symToStringTag] = undefined;
-        var unmasked = true;
-    } catch (e) {}
-    var result = nativeObjectToString.call(value);
-    if (unmasked) {
-        if (isOwn) value[symToStringTag] = tag;
-        else delete value[symToStringTag];
-    }
-    return result;
-}
-module.exports = getRawTag;
-
-},{"e9b4533b2a68f814":"7lsL9"}],"bmE3g":[function(require,module,exports) {
-/** Used for built-in method references. */ var objectProto = Object.prototype;
-/**
- * Used to resolve the
- * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
- * of values.
- */ var nativeObjectToString = objectProto.toString;
-/**
- * Converts `value` to a string using `Object.prototype.toString`.
- *
- * @private
- * @param {*} value The value to convert.
- * @returns {string} Returns the converted string.
- */ function objectToString(value) {
-    return nativeObjectToString.call(value);
-}
-module.exports = objectToString;
-
-},{}],"cGhqJ":[function(require,module,exports) {
-/**
- * Checks if `value` is the
- * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
- * of `Object`. (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an object, else `false`.
- * @example
- *
- * _.isObject({});
- * // => true
- *
- * _.isObject([1, 2, 3]);
- * // => true
- *
- * _.isObject(_.noop);
- * // => true
- *
- * _.isObject(null);
- * // => false
- */ function isObject(value) {
-    var type = typeof value;
-    return value != null && (type == "object" || type == "function");
-}
-module.exports = isObject;
-
-},{}],"cMDzi":[function(require,module,exports) {
-var coreJsData = require("2fa6c734b0792bcf");
-/** Used to detect methods masquerading as native. */ var maskSrcKey = function() {
-    var uid = /[^.]+$/.exec(coreJsData && coreJsData.keys && coreJsData.keys.IE_PROTO || "");
-    return uid ? "Symbol(src)_1." + uid : "";
-}();
-/**
- * Checks if `func` has its source masked.
- *
- * @private
- * @param {Function} func The function to check.
- * @returns {boolean} Returns `true` if `func` is masked, else `false`.
- */ function isMasked(func) {
-    return !!maskSrcKey && maskSrcKey in func;
-}
-module.exports = isMasked;
-
-},{"2fa6c734b0792bcf":"6gJwQ"}],"6gJwQ":[function(require,module,exports) {
-var root = require("2f0959b2c20d7fb0");
-/** Used to detect overreaching core-js shims. */ var coreJsData = root["__core-js_shared__"];
-module.exports = coreJsData;
-
-},{"2f0959b2c20d7fb0":"dSYUs"}],"bYHc7":[function(require,module,exports) {
-/** Used for built-in method references. */ var funcProto = Function.prototype;
-/** Used to resolve the decompiled source of functions. */ var funcToString = funcProto.toString;
-/**
- * Converts `func` to its source code.
- *
- * @private
- * @param {Function} func The function to convert.
- * @returns {string} Returns the source code.
- */ function toSource(func) {
-    if (func != null) {
-        try {
-            return funcToString.call(func);
-        } catch (e) {}
-        try {
-            return func + "";
-        } catch (e) {}
-    }
-    return "";
-}
-module.exports = toSource;
-
-},{}],"kKx5I":[function(require,module,exports) {
-/**
- * Gets the value at `key` of `object`.
- *
- * @private
- * @param {Object} [object] The object to query.
- * @param {string} key The key of the property to get.
- * @returns {*} Returns the property value.
- */ function getValue(object, key) {
-    return object == null ? undefined : object[key];
-}
-module.exports = getValue;
-
-},{}],"664I1":[function(require,module,exports) {
-var mapCacheClear = require("a5ffecfb6a8bdac1"), mapCacheDelete = require("d2967b0e32ccfa56"), mapCacheGet = require("ca21409ea89624c0"), mapCacheHas = require("f88fd07f8dd1f67d"), mapCacheSet = require("dbf3eae765642a3b");
-/**
- * Creates a map cache object to store key-value pairs.
- *
- * @private
- * @constructor
- * @param {Array} [entries] The key-value pairs to cache.
- */ function MapCache(entries) {
-    var index = -1, length = entries == null ? 0 : entries.length;
-    this.clear();
-    while(++index < length){
-        var entry = entries[index];
-        this.set(entry[0], entry[1]);
-    }
-}
-// Add methods to `MapCache`.
-MapCache.prototype.clear = mapCacheClear;
-MapCache.prototype["delete"] = mapCacheDelete;
-MapCache.prototype.get = mapCacheGet;
-MapCache.prototype.has = mapCacheHas;
-MapCache.prototype.set = mapCacheSet;
-module.exports = MapCache;
-
-},{"a5ffecfb6a8bdac1":"7kHs4","d2967b0e32ccfa56":"4ny9y","ca21409ea89624c0":"gVeFY","f88fd07f8dd1f67d":"idSOY","dbf3eae765642a3b":"lXUJT"}],"7kHs4":[function(require,module,exports) {
-var Hash = require("4ae82d88051cc92b"), ListCache = require("a07dcf3fd3097a0c"), Map = require("92c01c953ef00ded");
-/**
- * Removes all key-value entries from the map.
- *
- * @private
- * @name clear
- * @memberOf MapCache
- */ function mapCacheClear() {
-    this.size = 0;
-    this.__data__ = {
-        "hash": new Hash,
-        "map": new (Map || ListCache),
-        "string": new Hash
-    };
-}
-module.exports = mapCacheClear;
-
-},{"4ae82d88051cc92b":"jFMT5","a07dcf3fd3097a0c":"3UZeo","92c01c953ef00ded":"8YjF4"}],"jFMT5":[function(require,module,exports) {
-var hashClear = require("f47a1723b6e2d79b"), hashDelete = require("bc25d439ccd1fb47"), hashGet = require("f096b37295a92ab0"), hashHas = require("d88173cbc6a133c8"), hashSet = require("afb9b3bae0461cbf");
-/**
- * Creates a hash object.
- *
- * @private
- * @constructor
- * @param {Array} [entries] The key-value pairs to cache.
- */ function Hash(entries) {
-    var index = -1, length = entries == null ? 0 : entries.length;
-    this.clear();
-    while(++index < length){
-        var entry = entries[index];
-        this.set(entry[0], entry[1]);
-    }
-}
-// Add methods to `Hash`.
-Hash.prototype.clear = hashClear;
-Hash.prototype["delete"] = hashDelete;
-Hash.prototype.get = hashGet;
-Hash.prototype.has = hashHas;
-Hash.prototype.set = hashSet;
-module.exports = Hash;
-
-},{"f47a1723b6e2d79b":"f2NRo","bc25d439ccd1fb47":"cCdgz","f096b37295a92ab0":"eKqTO","d88173cbc6a133c8":"ghnqP","afb9b3bae0461cbf":"6i99R"}],"f2NRo":[function(require,module,exports) {
-var nativeCreate = require("dc294230a47ca365");
-/**
- * Removes all key-value entries from the hash.
- *
- * @private
- * @name clear
- * @memberOf Hash
- */ function hashClear() {
-    this.__data__ = nativeCreate ? nativeCreate(null) : {};
-    this.size = 0;
-}
-module.exports = hashClear;
-
-},{"dc294230a47ca365":"6i8Uf"}],"6i8Uf":[function(require,module,exports) {
-var getNative = require("12f496acdffb7cf7");
-/* Built-in method references that are verified to be native. */ var nativeCreate = getNative(Object, "create");
-module.exports = nativeCreate;
-
-},{"12f496acdffb7cf7":"9PCIl"}],"cCdgz":[function(require,module,exports) {
-/**
- * Removes `key` and its value from the hash.
- *
- * @private
- * @name delete
- * @memberOf Hash
- * @param {Object} hash The hash to modify.
- * @param {string} key The key of the value to remove.
- * @returns {boolean} Returns `true` if the entry was removed, else `false`.
- */ function hashDelete(key) {
-    var result = this.has(key) && delete this.__data__[key];
-    this.size -= result ? 1 : 0;
-    return result;
-}
-module.exports = hashDelete;
-
-},{}],"eKqTO":[function(require,module,exports) {
-var nativeCreate = require("627211fa3e1596e1");
-/** Used to stand-in for `undefined` hash values. */ var HASH_UNDEFINED = "__lodash_hash_undefined__";
-/** Used for built-in method references. */ var objectProto = Object.prototype;
-/** Used to check objects for own properties. */ var hasOwnProperty = objectProto.hasOwnProperty;
-/**
- * Gets the hash value for `key`.
- *
- * @private
- * @name get
- * @memberOf Hash
- * @param {string} key The key of the value to get.
- * @returns {*} Returns the entry value.
- */ function hashGet(key) {
-    var data = this.__data__;
-    if (nativeCreate) {
-        var result = data[key];
-        return result === HASH_UNDEFINED ? undefined : result;
-    }
-    return hasOwnProperty.call(data, key) ? data[key] : undefined;
-}
-module.exports = hashGet;
-
-},{"627211fa3e1596e1":"6i8Uf"}],"ghnqP":[function(require,module,exports) {
-var nativeCreate = require("52b3f0bfeddceb45");
-/** Used for built-in method references. */ var objectProto = Object.prototype;
-/** Used to check objects for own properties. */ var hasOwnProperty = objectProto.hasOwnProperty;
-/**
- * Checks if a hash value for `key` exists.
- *
- * @private
- * @name has
- * @memberOf Hash
- * @param {string} key The key of the entry to check.
- * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
- */ function hashHas(key) {
-    var data = this.__data__;
-    return nativeCreate ? data[key] !== undefined : hasOwnProperty.call(data, key);
-}
-module.exports = hashHas;
-
-},{"52b3f0bfeddceb45":"6i8Uf"}],"6i99R":[function(require,module,exports) {
-var nativeCreate = require("67b7d10f53ccd515");
-/** Used to stand-in for `undefined` hash values. */ var HASH_UNDEFINED = "__lodash_hash_undefined__";
-/**
- * Sets the hash `key` to `value`.
- *
- * @private
- * @name set
- * @memberOf Hash
- * @param {string} key The key of the value to set.
- * @param {*} value The value to set.
- * @returns {Object} Returns the hash instance.
- */ function hashSet(key, value) {
-    var data = this.__data__;
-    this.size += this.has(key) ? 0 : 1;
-    data[key] = nativeCreate && value === undefined ? HASH_UNDEFINED : value;
-    return this;
-}
-module.exports = hashSet;
-
-},{"67b7d10f53ccd515":"6i8Uf"}],"4ny9y":[function(require,module,exports) {
-var getMapData = require("656d8c5510e0af84");
-/**
- * Removes `key` and its value from the map.
- *
- * @private
- * @name delete
- * @memberOf MapCache
- * @param {string} key The key of the value to remove.
- * @returns {boolean} Returns `true` if the entry was removed, else `false`.
- */ function mapCacheDelete(key) {
-    var result = getMapData(this, key)["delete"](key);
-    this.size -= result ? 1 : 0;
-    return result;
-}
-module.exports = mapCacheDelete;
-
-},{"656d8c5510e0af84":"aptgk"}],"aptgk":[function(require,module,exports) {
-var isKeyable = require("adfdd2b4101370ed");
-/**
- * Gets the data for `map`.
- *
- * @private
- * @param {Object} map The map to query.
- * @param {string} key The reference key.
- * @returns {*} Returns the map data.
- */ function getMapData(map, key) {
-    var data = map.__data__;
-    return isKeyable(key) ? data[typeof key == "string" ? "string" : "hash"] : data.map;
-}
-module.exports = getMapData;
-
-},{"adfdd2b4101370ed":"icylN"}],"icylN":[function(require,module,exports) {
-/**
- * Checks if `value` is suitable for use as unique object key.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is suitable, else `false`.
- */ function isKeyable(value) {
-    var type = typeof value;
-    return type == "string" || type == "number" || type == "symbol" || type == "boolean" ? value !== "__proto__" : value === null;
-}
-module.exports = isKeyable;
-
-},{}],"gVeFY":[function(require,module,exports) {
-var getMapData = require("d345cdfee2b4007d");
-/**
- * Gets the map value for `key`.
- *
- * @private
- * @name get
- * @memberOf MapCache
- * @param {string} key The key of the value to get.
- * @returns {*} Returns the entry value.
- */ function mapCacheGet(key) {
-    return getMapData(this, key).get(key);
-}
-module.exports = mapCacheGet;
-
-},{"d345cdfee2b4007d":"aptgk"}],"idSOY":[function(require,module,exports) {
-var getMapData = require("29ebabd55e2d6074");
-/**
- * Checks if a map value for `key` exists.
- *
- * @private
- * @name has
- * @memberOf MapCache
- * @param {string} key The key of the entry to check.
- * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
- */ function mapCacheHas(key) {
-    return getMapData(this, key).has(key);
-}
-module.exports = mapCacheHas;
-
-},{"29ebabd55e2d6074":"aptgk"}],"lXUJT":[function(require,module,exports) {
-var getMapData = require("21c5ffca56eeb737");
-/**
- * Sets the map `key` to `value`.
- *
- * @private
- * @name set
- * @memberOf MapCache
- * @param {string} key The key of the value to set.
- * @param {*} value The value to set.
- * @returns {Object} Returns the map cache instance.
- */ function mapCacheSet(key, value) {
-    var data = getMapData(this, key), size = data.size;
-    data.set(key, value);
-    this.size += data.size == size ? 0 : 1;
-    return this;
-}
-module.exports = mapCacheSet;
-
-},{"21c5ffca56eeb737":"aptgk"}],"7i3qr":[function(require,module,exports) {
-var baseIsEqualDeep = require("bd1d38ebd4028e5a"), isObjectLike = require("809bbb0c20650dbc");
-/**
- * The base implementation of `_.isEqual` which supports partial comparisons
- * and tracks traversed objects.
- *
- * @private
- * @param {*} value The value to compare.
- * @param {*} other The other value to compare.
- * @param {boolean} bitmask The bitmask flags.
- *  1 - Unordered comparison
- *  2 - Partial comparison
- * @param {Function} [customizer] The function to customize comparisons.
- * @param {Object} [stack] Tracks traversed `value` and `other` objects.
- * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
- */ function baseIsEqual(value, other, bitmask, customizer, stack) {
-    if (value === other) return true;
-    if (value == null || other == null || !isObjectLike(value) && !isObjectLike(other)) return value !== value && other !== other;
-    return baseIsEqualDeep(value, other, bitmask, customizer, baseIsEqual, stack);
-}
-module.exports = baseIsEqual;
-
-},{"bd1d38ebd4028e5a":"6GoQ9","809bbb0c20650dbc":"3BLi4"}],"6GoQ9":[function(require,module,exports) {
-var Stack = require("60c73bca87468e58"), equalArrays = require("96bc8a1825db53a5"), equalByTag = require("8bdece495e87fb69"), equalObjects = require("bb94920432a68eca"), getTag = require("45495edff98e5837"), isArray = require("18256411ae9e2858"), isBuffer = require("e5ba7abf54247fc5"), isTypedArray = require("50d786bb5c7366af");
-/** Used to compose bitmasks for value comparisons. */ var COMPARE_PARTIAL_FLAG = 1;
-/** `Object#toString` result references. */ var argsTag = "[object Arguments]", arrayTag = "[object Array]", objectTag = "[object Object]";
-/** Used for built-in method references. */ var objectProto = Object.prototype;
-/** Used to check objects for own properties. */ var hasOwnProperty = objectProto.hasOwnProperty;
-/**
- * A specialized version of `baseIsEqual` for arrays and objects which performs
- * deep comparisons and tracks traversed objects enabling objects with circular
- * references to be compared.
- *
- * @private
- * @param {Object} object The object to compare.
- * @param {Object} other The other object to compare.
- * @param {number} bitmask The bitmask flags. See `baseIsEqual` for more details.
- * @param {Function} customizer The function to customize comparisons.
- * @param {Function} equalFunc The function to determine equivalents of values.
- * @param {Object} [stack] Tracks traversed `object` and `other` objects.
- * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
- */ function baseIsEqualDeep(object, other, bitmask, customizer, equalFunc, stack) {
-    var objIsArr = isArray(object), othIsArr = isArray(other), objTag = objIsArr ? arrayTag : getTag(object), othTag = othIsArr ? arrayTag : getTag(other);
-    objTag = objTag == argsTag ? objectTag : objTag;
-    othTag = othTag == argsTag ? objectTag : othTag;
-    var objIsObj = objTag == objectTag, othIsObj = othTag == objectTag, isSameTag = objTag == othTag;
-    if (isSameTag && isBuffer(object)) {
-        if (!isBuffer(other)) return false;
-        objIsArr = true;
-        objIsObj = false;
-    }
-    if (isSameTag && !objIsObj) {
-        stack || (stack = new Stack);
-        return objIsArr || isTypedArray(object) ? equalArrays(object, other, bitmask, customizer, equalFunc, stack) : equalByTag(object, other, objTag, bitmask, customizer, equalFunc, stack);
-    }
-    if (!(bitmask & COMPARE_PARTIAL_FLAG)) {
-        var objIsWrapped = objIsObj && hasOwnProperty.call(object, "__wrapped__"), othIsWrapped = othIsObj && hasOwnProperty.call(other, "__wrapped__");
-        if (objIsWrapped || othIsWrapped) {
-            var objUnwrapped = objIsWrapped ? object.value() : object, othUnwrapped = othIsWrapped ? other.value() : other;
-            stack || (stack = new Stack);
-            return equalFunc(objUnwrapped, othUnwrapped, bitmask, customizer, stack);
-        }
-    }
-    if (!isSameTag) return false;
-    stack || (stack = new Stack);
-    return equalObjects(object, other, bitmask, customizer, equalFunc, stack);
-}
-module.exports = baseIsEqualDeep;
-
-},{"60c73bca87468e58":"atP87","96bc8a1825db53a5":"dQBwf","8bdece495e87fb69":"iqa6H","bb94920432a68eca":"klCEf","45495edff98e5837":"cRPhM","18256411ae9e2858":"dZaTH","e5ba7abf54247fc5":"cn85h","50d786bb5c7366af":"6SVKk"}],"dQBwf":[function(require,module,exports) {
-var SetCache = require("9b110ce138e67ce5"), arraySome = require("1ee20de911db0cb0"), cacheHas = require("defff3d81be91b23");
-/** Used to compose bitmasks for value comparisons. */ var COMPARE_PARTIAL_FLAG = 1, COMPARE_UNORDERED_FLAG = 2;
-/**
- * A specialized version of `baseIsEqualDeep` for arrays with support for
- * partial deep comparisons.
- *
- * @private
- * @param {Array} array The array to compare.
- * @param {Array} other The other array to compare.
- * @param {number} bitmask The bitmask flags. See `baseIsEqual` for more details.
- * @param {Function} customizer The function to customize comparisons.
- * @param {Function} equalFunc The function to determine equivalents of values.
- * @param {Object} stack Tracks traversed `array` and `other` objects.
- * @returns {boolean} Returns `true` if the arrays are equivalent, else `false`.
- */ function equalArrays(array, other, bitmask, customizer, equalFunc, stack) {
-    var isPartial = bitmask & COMPARE_PARTIAL_FLAG, arrLength = array.length, othLength = other.length;
-    if (arrLength != othLength && !(isPartial && othLength > arrLength)) return false;
-    // Check that cyclic values are equal.
-    var arrStacked = stack.get(array);
-    var othStacked = stack.get(other);
-    if (arrStacked && othStacked) return arrStacked == other && othStacked == array;
-    var index = -1, result = true, seen = bitmask & COMPARE_UNORDERED_FLAG ? new SetCache : undefined;
-    stack.set(array, other);
-    stack.set(other, array);
-    // Ignore non-index properties.
-    while(++index < arrLength){
-        var arrValue = array[index], othValue = other[index];
-        if (customizer) var compared = isPartial ? customizer(othValue, arrValue, index, other, array, stack) : customizer(arrValue, othValue, index, array, other, stack);
-        if (compared !== undefined) {
-            if (compared) continue;
-            result = false;
-            break;
-        }
-        // Recursively compare arrays (susceptible to call stack limits).
-        if (seen) {
-            if (!arraySome(other, function(othValue, othIndex) {
-                if (!cacheHas(seen, othIndex) && (arrValue === othValue || equalFunc(arrValue, othValue, bitmask, customizer, stack))) return seen.push(othIndex);
-            })) {
-                result = false;
-                break;
-            }
-        } else if (!(arrValue === othValue || equalFunc(arrValue, othValue, bitmask, customizer, stack))) {
-            result = false;
-            break;
-        }
-    }
-    stack["delete"](array);
-    stack["delete"](other);
-    return result;
-}
-module.exports = equalArrays;
-
-},{"9b110ce138e67ce5":"1SXrY","1ee20de911db0cb0":"aLDHW","defff3d81be91b23":"70cVb"}],"1SXrY":[function(require,module,exports) {
-var MapCache = require("10fe37252553d0bd"), setCacheAdd = require("9a831e81e9a1f98c"), setCacheHas = require("1a2b6c8a7399c39f");
-/**
- *
- * Creates an array cache object to store unique values.
- *
- * @private
- * @constructor
- * @param {Array} [values] The values to cache.
- */ function SetCache(values) {
-    var index = -1, length = values == null ? 0 : values.length;
-    this.__data__ = new MapCache;
-    while(++index < length)this.add(values[index]);
-}
-// Add methods to `SetCache`.
-SetCache.prototype.add = SetCache.prototype.push = setCacheAdd;
-SetCache.prototype.has = setCacheHas;
-module.exports = SetCache;
-
-},{"10fe37252553d0bd":"664I1","9a831e81e9a1f98c":"cZViu","1a2b6c8a7399c39f":"4zNID"}],"cZViu":[function(require,module,exports) {
-/** Used to stand-in for `undefined` hash values. */ var HASH_UNDEFINED = "__lodash_hash_undefined__";
-/**
- * Adds `value` to the array cache.
- *
- * @private
- * @name add
- * @memberOf SetCache
- * @alias push
- * @param {*} value The value to cache.
- * @returns {Object} Returns the cache instance.
- */ function setCacheAdd(value) {
-    this.__data__.set(value, HASH_UNDEFINED);
-    return this;
-}
-module.exports = setCacheAdd;
-
-},{}],"4zNID":[function(require,module,exports) {
-/**
- * Checks if `value` is in the array cache.
- *
- * @private
- * @name has
- * @memberOf SetCache
- * @param {*} value The value to search for.
- * @returns {number} Returns `true` if `value` is found, else `false`.
- */ function setCacheHas(value) {
-    return this.__data__.has(value);
-}
-module.exports = setCacheHas;
-
-},{}],"aLDHW":[function(require,module,exports) {
-/**
- * A specialized version of `_.some` for arrays without support for iteratee
- * shorthands.
- *
- * @private
- * @param {Array} [array] The array to iterate over.
- * @param {Function} predicate The function invoked per iteration.
- * @returns {boolean} Returns `true` if any element passes the predicate check,
- *  else `false`.
- */ function arraySome(array, predicate) {
-    var index = -1, length = array == null ? 0 : array.length;
-    while(++index < length){
-        if (predicate(array[index], index, array)) return true;
-    }
-    return false;
-}
-module.exports = arraySome;
-
-},{}],"70cVb":[function(require,module,exports) {
-/**
- * Checks if a `cache` value for `key` exists.
- *
- * @private
- * @param {Object} cache The cache to query.
- * @param {string} key The key of the entry to check.
- * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
- */ function cacheHas(cache, key) {
-    return cache.has(key);
-}
-module.exports = cacheHas;
-
-},{}],"iqa6H":[function(require,module,exports) {
-var Symbol = require("474c1df4fc722b40"), Uint8Array = require("dbf6aa5033a0f48"), eq = require("539966708f906e61"), equalArrays = require("8142d4017f0a425f"), mapToArray = require("48cddf732eff33ba"), setToArray = require("9dc78b26c5daba20");
-/** Used to compose bitmasks for value comparisons. */ var COMPARE_PARTIAL_FLAG = 1, COMPARE_UNORDERED_FLAG = 2;
-/** `Object#toString` result references. */ var boolTag = "[object Boolean]", dateTag = "[object Date]", errorTag = "[object Error]", mapTag = "[object Map]", numberTag = "[object Number]", regexpTag = "[object RegExp]", setTag = "[object Set]", stringTag = "[object String]", symbolTag = "[object Symbol]";
-var arrayBufferTag = "[object ArrayBuffer]", dataViewTag = "[object DataView]";
-/** Used to convert symbols to primitives and strings. */ var symbolProto = Symbol ? Symbol.prototype : undefined, symbolValueOf = symbolProto ? symbolProto.valueOf : undefined;
-/**
- * A specialized version of `baseIsEqualDeep` for comparing objects of
- * the same `toStringTag`.
- *
- * **Note:** This function only supports comparing values with tags of
- * `Boolean`, `Date`, `Error`, `Number`, `RegExp`, or `String`.
- *
- * @private
- * @param {Object} object The object to compare.
- * @param {Object} other The other object to compare.
- * @param {string} tag The `toStringTag` of the objects to compare.
- * @param {number} bitmask The bitmask flags. See `baseIsEqual` for more details.
- * @param {Function} customizer The function to customize comparisons.
- * @param {Function} equalFunc The function to determine equivalents of values.
- * @param {Object} stack Tracks traversed `object` and `other` objects.
- * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
- */ function equalByTag(object, other, tag, bitmask, customizer, equalFunc, stack) {
-    switch(tag){
-        case dataViewTag:
-            if (object.byteLength != other.byteLength || object.byteOffset != other.byteOffset) return false;
-            object = object.buffer;
-            other = other.buffer;
-        case arrayBufferTag:
-            if (object.byteLength != other.byteLength || !equalFunc(new Uint8Array(object), new Uint8Array(other))) return false;
-            return true;
-        case boolTag:
-        case dateTag:
-        case numberTag:
-            // Coerce booleans to `1` or `0` and dates to milliseconds.
-            // Invalid dates are coerced to `NaN`.
-            return eq(+object, +other);
-        case errorTag:
-            return object.name == other.name && object.message == other.message;
-        case regexpTag:
-        case stringTag:
-            // Coerce regexes to strings and treat strings, primitives and objects,
-            // as equal. See http://www.ecma-international.org/ecma-262/7.0/#sec-regexp.prototype.tostring
-            // for more details.
-            return object == other + "";
-        case mapTag:
-            var convert = mapToArray;
-        case setTag:
-            var isPartial = bitmask & COMPARE_PARTIAL_FLAG;
-            convert || (convert = setToArray);
-            if (object.size != other.size && !isPartial) return false;
-            // Assume cyclic values are equal.
-            var stacked = stack.get(object);
-            if (stacked) return stacked == other;
-            bitmask |= COMPARE_UNORDERED_FLAG;
-            // Recursively compare objects (susceptible to call stack limits).
-            stack.set(object, other);
-            var result = equalArrays(convert(object), convert(other), bitmask, customizer, equalFunc, stack);
-            stack["delete"](object);
-            return result;
-        case symbolTag:
-            if (symbolValueOf) return symbolValueOf.call(object) == symbolValueOf.call(other);
-    }
-    return false;
-}
-module.exports = equalByTag;
-
-},{"474c1df4fc722b40":"7lsL9","dbf6aa5033a0f48":"6xFrA","539966708f906e61":"aVz5f","8142d4017f0a425f":"dQBwf","48cddf732eff33ba":"kAwkU","9dc78b26c5daba20":"2qJif"}],"6xFrA":[function(require,module,exports) {
-var root = require("f755339301d6568f");
-/** Built-in value references. */ var Uint8Array = root.Uint8Array;
-module.exports = Uint8Array;
-
-},{"f755339301d6568f":"dSYUs"}],"kAwkU":[function(require,module,exports) {
-/**
- * Converts `map` to its key-value pairs.
- *
- * @private
- * @param {Object} map The map to convert.
- * @returns {Array} Returns the key-value pairs.
- */ function mapToArray(map) {
-    var index = -1, result = Array(map.size);
-    map.forEach(function(value, key) {
-        result[++index] = [
-            key,
-            value
-        ];
-    });
-    return result;
-}
-module.exports = mapToArray;
-
-},{}],"2qJif":[function(require,module,exports) {
-/**
- * Converts `set` to an array of its values.
- *
- * @private
- * @param {Object} set The set to convert.
- * @returns {Array} Returns the values.
- */ function setToArray(set) {
-    var index = -1, result = Array(set.size);
-    set.forEach(function(value) {
-        result[++index] = value;
-    });
-    return result;
-}
-module.exports = setToArray;
-
-},{}],"klCEf":[function(require,module,exports) {
-var getAllKeys = require("b911593d305cf4a2");
-/** Used to compose bitmasks for value comparisons. */ var COMPARE_PARTIAL_FLAG = 1;
-/** Used for built-in method references. */ var objectProto = Object.prototype;
-/** Used to check objects for own properties. */ var hasOwnProperty = objectProto.hasOwnProperty;
-/**
- * A specialized version of `baseIsEqualDeep` for objects with support for
- * partial deep comparisons.
- *
- * @private
- * @param {Object} object The object to compare.
- * @param {Object} other The other object to compare.
- * @param {number} bitmask The bitmask flags. See `baseIsEqual` for more details.
- * @param {Function} customizer The function to customize comparisons.
- * @param {Function} equalFunc The function to determine equivalents of values.
- * @param {Object} stack Tracks traversed `object` and `other` objects.
- * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
- */ function equalObjects(object, other, bitmask, customizer, equalFunc, stack) {
-    var isPartial = bitmask & COMPARE_PARTIAL_FLAG, objProps = getAllKeys(object), objLength = objProps.length, othProps = getAllKeys(other), othLength = othProps.length;
-    if (objLength != othLength && !isPartial) return false;
-    var index = objLength;
-    while(index--){
-        var key = objProps[index];
-        if (!(isPartial ? key in other : hasOwnProperty.call(other, key))) return false;
-    }
-    // Check that cyclic values are equal.
-    var objStacked = stack.get(object);
-    var othStacked = stack.get(other);
-    if (objStacked && othStacked) return objStacked == other && othStacked == object;
-    var result = true;
-    stack.set(object, other);
-    stack.set(other, object);
-    var skipCtor = isPartial;
-    while(++index < objLength){
-        key = objProps[index];
-        var objValue = object[key], othValue = other[key];
-        if (customizer) var compared = isPartial ? customizer(othValue, objValue, key, other, object, stack) : customizer(objValue, othValue, key, object, other, stack);
-        // Recursively compare objects (susceptible to call stack limits).
-        if (!(compared === undefined ? objValue === othValue || equalFunc(objValue, othValue, bitmask, customizer, stack) : compared)) {
-            result = false;
-            break;
-        }
-        skipCtor || (skipCtor = key == "constructor");
-    }
-    if (result && !skipCtor) {
-        var objCtor = object.constructor, othCtor = other.constructor;
-        // Non `Object` object instances with different constructors are not equal.
-        if (objCtor != othCtor && "constructor" in object && "constructor" in other && !(typeof objCtor == "function" && objCtor instanceof objCtor && typeof othCtor == "function" && othCtor instanceof othCtor)) result = false;
-    }
-    stack["delete"](object);
-    stack["delete"](other);
-    return result;
-}
-module.exports = equalObjects;
-
-},{"b911593d305cf4a2":"d2kML"}],"d2kML":[function(require,module,exports) {
-var baseGetAllKeys = require("c3dbe402f6996a21"), getSymbols = require("aa79b69a13f924db"), keys = require("e3ad83e53433bc8a");
-/**
- * Creates an array of own enumerable property names and symbols of `object`.
- *
- * @private
- * @param {Object} object The object to query.
- * @returns {Array} Returns the array of property names and symbols.
- */ function getAllKeys(object) {
-    return baseGetAllKeys(object, keys, getSymbols);
-}
-module.exports = getAllKeys;
-
-},{"c3dbe402f6996a21":"aeckf","aa79b69a13f924db":"5p5Yd","e3ad83e53433bc8a":"6fHVw"}],"aeckf":[function(require,module,exports) {
-var arrayPush = require("abfc70b400ed76c2"), isArray = require("148b85918856c33a");
-/**
- * The base implementation of `getAllKeys` and `getAllKeysIn` which uses
- * `keysFunc` and `symbolsFunc` to get the enumerable property names and
- * symbols of `object`.
- *
- * @private
- * @param {Object} object The object to query.
- * @param {Function} keysFunc The function to get the keys of `object`.
- * @param {Function} symbolsFunc The function to get the symbols of `object`.
- * @returns {Array} Returns the array of property names and symbols.
- */ function baseGetAllKeys(object, keysFunc, symbolsFunc) {
-    var result = keysFunc(object);
-    return isArray(object) ? result : arrayPush(result, symbolsFunc(object));
-}
-module.exports = baseGetAllKeys;
-
-},{"abfc70b400ed76c2":"ivo5r","148b85918856c33a":"dZaTH"}],"ivo5r":[function(require,module,exports) {
-/**
- * Appends the elements of `values` to `array`.
- *
- * @private
- * @param {Array} array The array to modify.
- * @param {Array} values The values to append.
- * @returns {Array} Returns `array`.
- */ function arrayPush(array, values) {
-    var index = -1, length = values.length, offset = array.length;
-    while(++index < length)array[offset + index] = values[index];
-    return array;
-}
-module.exports = arrayPush;
-
-},{}],"dZaTH":[function(require,module,exports) {
-/**
- * Checks if `value` is classified as an `Array` object.
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an array, else `false`.
- * @example
- *
- * _.isArray([1, 2, 3]);
- * // => true
- *
- * _.isArray(document.body.children);
- * // => false
- *
- * _.isArray('abc');
- * // => false
- *
- * _.isArray(_.noop);
- * // => false
- */ var isArray = Array.isArray;
-module.exports = isArray;
-
-},{}],"5p5Yd":[function(require,module,exports) {
-var arrayFilter = require("7fe025254f0b7e4a"), stubArray = require("6b1c62cea92cdb9");
-/** Used for built-in method references. */ var objectProto = Object.prototype;
-/** Built-in value references. */ var propertyIsEnumerable = objectProto.propertyIsEnumerable;
-/* Built-in method references for those with the same name as other `lodash` methods. */ var nativeGetSymbols = Object.getOwnPropertySymbols;
-/**
- * Creates an array of the own enumerable symbols of `object`.
- *
- * @private
- * @param {Object} object The object to query.
- * @returns {Array} Returns the array of symbols.
- */ var getSymbols = !nativeGetSymbols ? stubArray : function(object) {
-    if (object == null) return [];
-    object = Object(object);
-    return arrayFilter(nativeGetSymbols(object), function(symbol) {
-        return propertyIsEnumerable.call(object, symbol);
-    });
-};
-module.exports = getSymbols;
-
-},{"7fe025254f0b7e4a":"hmIQ7","6b1c62cea92cdb9":"6TgRy"}],"hmIQ7":[function(require,module,exports) {
-/**
- * A specialized version of `_.filter` for arrays without support for
- * iteratee shorthands.
- *
- * @private
- * @param {Array} [array] The array to iterate over.
- * @param {Function} predicate The function invoked per iteration.
- * @returns {Array} Returns the new filtered array.
- */ function arrayFilter(array, predicate) {
-    var index = -1, length = array == null ? 0 : array.length, resIndex = 0, result = [];
-    while(++index < length){
-        var value = array[index];
-        if (predicate(value, index, array)) result[resIndex++] = value;
-    }
-    return result;
-}
-module.exports = arrayFilter;
-
-},{}],"6TgRy":[function(require,module,exports) {
-/**
- * This method returns a new empty array.
- *
- * @static
- * @memberOf _
- * @since 4.13.0
- * @category Util
- * @returns {Array} Returns the new empty array.
- * @example
- *
- * var arrays = _.times(2, _.stubArray);
- *
- * console.log(arrays);
- * // => [[], []]
- *
- * console.log(arrays[0] === arrays[1]);
- * // => false
- */ function stubArray() {
-    return [];
-}
-module.exports = stubArray;
-
-},{}],"6fHVw":[function(require,module,exports) {
-var arrayLikeKeys = require("4c73ca42c789e5ab"), baseKeys = require("e8453365fdacc8da"), isArrayLike = require("7760b47b02971dfa");
-/**
- * Creates an array of the own enumerable property names of `object`.
- *
- * **Note:** Non-object values are coerced to objects. See the
- * [ES spec](http://ecma-international.org/ecma-262/7.0/#sec-object.keys)
- * for more details.
- *
- * @static
- * @since 0.1.0
- * @memberOf _
- * @category Object
- * @param {Object} object The object to query.
- * @returns {Array} Returns the array of property names.
- * @example
- *
- * function Foo() {
- *   this.a = 1;
- *   this.b = 2;
- * }
- *
- * Foo.prototype.c = 3;
- *
- * _.keys(new Foo);
- * // => ['a', 'b'] (iteration order is not guaranteed)
- *
- * _.keys('hi');
- * // => ['0', '1']
- */ function keys(object) {
-    return isArrayLike(object) ? arrayLikeKeys(object) : baseKeys(object);
-}
-module.exports = keys;
-
-},{"4c73ca42c789e5ab":"dquIQ","e8453365fdacc8da":"c0eiI","7760b47b02971dfa":"gMCbp"}],"dquIQ":[function(require,module,exports) {
-var baseTimes = require("7ed875a0e67be76f"), isArguments = require("9cdb51ffa56f149b"), isArray = require("38cd49f1e493b3d7"), isBuffer = require("b379831fe1873fed"), isIndex = require("f362a34cd8321bb7"), isTypedArray = require("c019db5297494469");
-/** Used for built-in method references. */ var objectProto = Object.prototype;
-/** Used to check objects for own properties. */ var hasOwnProperty = objectProto.hasOwnProperty;
-/**
- * Creates an array of the enumerable property names of the array-like `value`.
- *
- * @private
- * @param {*} value The value to query.
- * @param {boolean} inherited Specify returning inherited property names.
- * @returns {Array} Returns the array of property names.
- */ function arrayLikeKeys(value, inherited) {
-    var isArr = isArray(value), isArg = !isArr && isArguments(value), isBuff = !isArr && !isArg && isBuffer(value), isType = !isArr && !isArg && !isBuff && isTypedArray(value), skipIndexes = isArr || isArg || isBuff || isType, result = skipIndexes ? baseTimes(value.length, String) : [], length = result.length;
-    for(var key in value)if ((inherited || hasOwnProperty.call(value, key)) && !(skipIndexes && // Safari 9 has enumerable `arguments.length` in strict mode.
-    (key == "length" || // Node.js 0.10 has enumerable non-index properties on buffers.
-    isBuff && (key == "offset" || key == "parent") || // PhantomJS 2 has enumerable non-index properties on typed arrays.
-    isType && (key == "buffer" || key == "byteLength" || key == "byteOffset") || // Skip index properties.
-    isIndex(key, length)))) result.push(key);
-    return result;
-}
-module.exports = arrayLikeKeys;
-
-},{"7ed875a0e67be76f":"odqYd","9cdb51ffa56f149b":"8ReNj","38cd49f1e493b3d7":"dZaTH","b379831fe1873fed":"cn85h","f362a34cd8321bb7":"aJpx0","c019db5297494469":"6SVKk"}],"odqYd":[function(require,module,exports) {
-/**
- * The base implementation of `_.times` without support for iteratee shorthands
- * or max array length checks.
- *
- * @private
- * @param {number} n The number of times to invoke `iteratee`.
- * @param {Function} iteratee The function invoked per iteration.
- * @returns {Array} Returns the array of results.
- */ function baseTimes(n, iteratee) {
-    var index = -1, result = Array(n);
-    while(++index < n)result[index] = iteratee(index);
-    return result;
-}
-module.exports = baseTimes;
-
-},{}],"8ReNj":[function(require,module,exports) {
-var baseIsArguments = require("b56e5b7d86069686"), isObjectLike = require("bead821d6af018b5");
-/** Used for built-in method references. */ var objectProto = Object.prototype;
-/** Used to check objects for own properties. */ var hasOwnProperty = objectProto.hasOwnProperty;
-/** Built-in value references. */ var propertyIsEnumerable = objectProto.propertyIsEnumerable;
-/**
- * Checks if `value` is likely an `arguments` object.
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an `arguments` object,
- *  else `false`.
- * @example
- *
- * _.isArguments(function() { return arguments; }());
- * // => true
- *
- * _.isArguments([1, 2, 3]);
- * // => false
- */ var isArguments = baseIsArguments(function() {
-    return arguments;
-}()) ? baseIsArguments : function(value) {
-    return isObjectLike(value) && hasOwnProperty.call(value, "callee") && !propertyIsEnumerable.call(value, "callee");
-};
-module.exports = isArguments;
-
-},{"b56e5b7d86069686":"gx70P","bead821d6af018b5":"3BLi4"}],"gx70P":[function(require,module,exports) {
-var baseGetTag = require("7e8612a4a451f2cc"), isObjectLike = require("b6cdbe52dcf709f8");
-/** `Object#toString` result references. */ var argsTag = "[object Arguments]";
-/**
- * The base implementation of `_.isArguments`.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an `arguments` object,
- */ function baseIsArguments(value) {
-    return isObjectLike(value) && baseGetTag(value) == argsTag;
-}
-module.exports = baseIsArguments;
-
-},{"7e8612a4a451f2cc":"lOnbo","b6cdbe52dcf709f8":"3BLi4"}],"3BLi4":[function(require,module,exports) {
-/**
- * Checks if `value` is object-like. A value is object-like if it's not `null`
- * and has a `typeof` result of "object".
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
- * @example
- *
- * _.isObjectLike({});
- * // => true
- *
- * _.isObjectLike([1, 2, 3]);
- * // => true
- *
- * _.isObjectLike(_.noop);
- * // => false
- *
- * _.isObjectLike(null);
- * // => false
- */ function isObjectLike(value) {
-    return value != null && typeof value == "object";
-}
-module.exports = isObjectLike;
-
-},{}],"cn85h":[function(require,module,exports) {
-var root = require("cef5ec6f0da1ab00"), stubFalse = require("a1e87b138cf75d1d");
-/** Detect free variable `exports`. */ var freeExports = exports && !exports.nodeType && exports;
-/** Detect free variable `module`. */ var freeModule = freeExports && true && module && !module.nodeType && module;
-/** Detect the popular CommonJS extension `module.exports`. */ var moduleExports = freeModule && freeModule.exports === freeExports;
-/** Built-in value references. */ var Buffer = moduleExports ? root.Buffer : undefined;
-/* Built-in method references for those with the same name as other `lodash` methods. */ var nativeIsBuffer = Buffer ? Buffer.isBuffer : undefined;
-/**
- * Checks if `value` is a buffer.
- *
- * @static
- * @memberOf _
- * @since 4.3.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a buffer, else `false`.
- * @example
- *
- * _.isBuffer(new Buffer(2));
- * // => true
- *
- * _.isBuffer(new Uint8Array(2));
- * // => false
- */ var isBuffer = nativeIsBuffer || stubFalse;
-module.exports = isBuffer;
-
-},{"cef5ec6f0da1ab00":"dSYUs","a1e87b138cf75d1d":"dx4uy"}],"dx4uy":[function(require,module,exports) {
-/**
- * This method returns `false`.
- *
- * @static
- * @memberOf _
- * @since 4.13.0
- * @category Util
- * @returns {boolean} Returns `false`.
- * @example
- *
- * _.times(2, _.stubFalse);
- * // => [false, false]
- */ function stubFalse() {
-    return false;
-}
-module.exports = stubFalse;
-
-},{}],"aJpx0":[function(require,module,exports) {
-/** Used as references for various `Number` constants. */ var MAX_SAFE_INTEGER = 9007199254740991;
-/** Used to detect unsigned integer values. */ var reIsUint = /^(?:0|[1-9]\d*)$/;
-/**
- * Checks if `value` is a valid array-like index.
- *
- * @private
- * @param {*} value The value to check.
- * @param {number} [length=MAX_SAFE_INTEGER] The upper bounds of a valid index.
- * @returns {boolean} Returns `true` if `value` is a valid index, else `false`.
- */ function isIndex(value, length) {
-    var type = typeof value;
-    length = length == null ? MAX_SAFE_INTEGER : length;
-    return !!length && (type == "number" || type != "symbol" && reIsUint.test(value)) && value > -1 && value % 1 == 0 && value < length;
-}
-module.exports = isIndex;
-
-},{}],"6SVKk":[function(require,module,exports) {
-var baseIsTypedArray = require("75a26f037e65be61"), baseUnary = require("903f50eb1c16d257"), nodeUtil = require("fa49853a82034c30");
-/* Node.js helper references. */ var nodeIsTypedArray = nodeUtil && nodeUtil.isTypedArray;
-/**
- * Checks if `value` is classified as a typed array.
- *
- * @static
- * @memberOf _
- * @since 3.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a typed array, else `false`.
- * @example
- *
- * _.isTypedArray(new Uint8Array);
- * // => true
- *
- * _.isTypedArray([]);
- * // => false
- */ var isTypedArray = nodeIsTypedArray ? baseUnary(nodeIsTypedArray) : baseIsTypedArray;
-module.exports = isTypedArray;
-
-},{"75a26f037e65be61":"lGSsl","903f50eb1c16d257":"eJXq4","fa49853a82034c30":"5edNe"}],"lGSsl":[function(require,module,exports) {
-var baseGetTag = require("67544c3df364a802"), isLength = require("f661b3a120d7a4cb"), isObjectLike = require("cdd86c83797c0618");
-/** `Object#toString` result references. */ var argsTag = "[object Arguments]", arrayTag = "[object Array]", boolTag = "[object Boolean]", dateTag = "[object Date]", errorTag = "[object Error]", funcTag = "[object Function]", mapTag = "[object Map]", numberTag = "[object Number]", objectTag = "[object Object]", regexpTag = "[object RegExp]", setTag = "[object Set]", stringTag = "[object String]", weakMapTag = "[object WeakMap]";
-var arrayBufferTag = "[object ArrayBuffer]", dataViewTag = "[object DataView]", float32Tag = "[object Float32Array]", float64Tag = "[object Float64Array]", int8Tag = "[object Int8Array]", int16Tag = "[object Int16Array]", int32Tag = "[object Int32Array]", uint8Tag = "[object Uint8Array]", uint8ClampedTag = "[object Uint8ClampedArray]", uint16Tag = "[object Uint16Array]", uint32Tag = "[object Uint32Array]";
-/** Used to identify `toStringTag` values of typed arrays. */ var typedArrayTags = {};
-typedArrayTags[float32Tag] = typedArrayTags[float64Tag] = typedArrayTags[int8Tag] = typedArrayTags[int16Tag] = typedArrayTags[int32Tag] = typedArrayTags[uint8Tag] = typedArrayTags[uint8ClampedTag] = typedArrayTags[uint16Tag] = typedArrayTags[uint32Tag] = true;
-typedArrayTags[argsTag] = typedArrayTags[arrayTag] = typedArrayTags[arrayBufferTag] = typedArrayTags[boolTag] = typedArrayTags[dataViewTag] = typedArrayTags[dateTag] = typedArrayTags[errorTag] = typedArrayTags[funcTag] = typedArrayTags[mapTag] = typedArrayTags[numberTag] = typedArrayTags[objectTag] = typedArrayTags[regexpTag] = typedArrayTags[setTag] = typedArrayTags[stringTag] = typedArrayTags[weakMapTag] = false;
-/**
- * The base implementation of `_.isTypedArray` without Node.js optimizations.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a typed array, else `false`.
- */ function baseIsTypedArray(value) {
-    return isObjectLike(value) && isLength(value.length) && !!typedArrayTags[baseGetTag(value)];
-}
-module.exports = baseIsTypedArray;
-
-},{"67544c3df364a802":"lOnbo","f661b3a120d7a4cb":"hrTBx","cdd86c83797c0618":"3BLi4"}],"hrTBx":[function(require,module,exports) {
-/** Used as references for various `Number` constants. */ var MAX_SAFE_INTEGER = 9007199254740991;
-/**
- * Checks if `value` is a valid array-like length.
- *
- * **Note:** This method is loosely based on
- * [`ToLength`](http://ecma-international.org/ecma-262/7.0/#sec-tolength).
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a valid length, else `false`.
- * @example
- *
- * _.isLength(3);
- * // => true
- *
- * _.isLength(Number.MIN_VALUE);
- * // => false
- *
- * _.isLength(Infinity);
- * // => false
- *
- * _.isLength('3');
- * // => false
- */ function isLength(value) {
-    return typeof value == "number" && value > -1 && value % 1 == 0 && value <= MAX_SAFE_INTEGER;
-}
-module.exports = isLength;
-
-},{}],"eJXq4":[function(require,module,exports) {
-/**
- * The base implementation of `_.unary` without support for storing metadata.
- *
- * @private
- * @param {Function} func The function to cap arguments for.
- * @returns {Function} Returns the new capped function.
- */ function baseUnary(func) {
-    return function(value) {
-        return func(value);
-    };
-}
-module.exports = baseUnary;
-
-},{}],"5edNe":[function(require,module,exports) {
-var freeGlobal = require("94e753dfbe54816e");
-/** Detect free variable `exports`. */ var freeExports = exports && !exports.nodeType && exports;
-/** Detect free variable `module`. */ var freeModule = freeExports && true && module && !module.nodeType && module;
-/** Detect the popular CommonJS extension `module.exports`. */ var moduleExports = freeModule && freeModule.exports === freeExports;
-/** Detect free variable `process` from Node.js. */ var freeProcess = moduleExports && freeGlobal.process;
-/** Used to access faster Node.js helpers. */ var nodeUtil = function() {
-    try {
-        // Use `util.types` for Node.js 10+.
-        var types = freeModule && freeModule.require && freeModule.require("util").types;
-        if (types) return types;
-        // Legacy `process.binding('util')` for Node.js < 10.
-        return freeProcess && freeProcess.binding && freeProcess.binding("util");
-    } catch (e) {}
-}();
-module.exports = nodeUtil;
-
-},{"94e753dfbe54816e":"kAk32"}],"c0eiI":[function(require,module,exports) {
-var isPrototype = require("7da6298814f9bd95"), nativeKeys = require("3ec652610d8dd5d3");
-/** Used for built-in method references. */ var objectProto = Object.prototype;
-/** Used to check objects for own properties. */ var hasOwnProperty = objectProto.hasOwnProperty;
-/**
- * The base implementation of `_.keys` which doesn't treat sparse arrays as dense.
- *
- * @private
- * @param {Object} object The object to query.
- * @returns {Array} Returns the array of property names.
- */ function baseKeys(object) {
-    if (!isPrototype(object)) return nativeKeys(object);
-    var result = [];
-    for(var key in Object(object))if (hasOwnProperty.call(object, key) && key != "constructor") result.push(key);
-    return result;
-}
-module.exports = baseKeys;
-
-},{"7da6298814f9bd95":"iG4eR","3ec652610d8dd5d3":"k97u2"}],"iG4eR":[function(require,module,exports) {
-/** Used for built-in method references. */ var objectProto = Object.prototype;
-/**
- * Checks if `value` is likely a prototype object.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a prototype, else `false`.
- */ function isPrototype(value) {
-    var Ctor = value && value.constructor, proto = typeof Ctor == "function" && Ctor.prototype || objectProto;
-    return value === proto;
-}
-module.exports = isPrototype;
-
-},{}],"k97u2":[function(require,module,exports) {
-var overArg = require("aa3357c7a3889df");
-/* Built-in method references for those with the same name as other `lodash` methods. */ var nativeKeys = overArg(Object.keys, Object);
-module.exports = nativeKeys;
-
-},{"aa3357c7a3889df":"dpUvl"}],"dpUvl":[function(require,module,exports) {
-/**
- * Creates a unary function that invokes `func` with its argument transformed.
- *
- * @private
- * @param {Function} func The function to wrap.
- * @param {Function} transform The argument transform.
- * @returns {Function} Returns the new function.
- */ function overArg(func, transform) {
-    return function(arg) {
-        return func(transform(arg));
-    };
-}
-module.exports = overArg;
-
-},{}],"gMCbp":[function(require,module,exports) {
-var isFunction = require("bb060d4356645330"), isLength = require("f3db08d4d1110aaf");
-/**
- * Checks if `value` is array-like. A value is considered array-like if it's
- * not a function and has a `value.length` that's an integer greater than or
- * equal to `0` and less than or equal to `Number.MAX_SAFE_INTEGER`.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is array-like, else `false`.
- * @example
- *
- * _.isArrayLike([1, 2, 3]);
- * // => true
- *
- * _.isArrayLike(document.body.children);
- * // => true
- *
- * _.isArrayLike('abc');
- * // => true
- *
- * _.isArrayLike(_.noop);
- * // => false
- */ function isArrayLike(value) {
-    return value != null && isLength(value.length) && !isFunction(value);
-}
-module.exports = isArrayLike;
-
-},{"bb060d4356645330":"cfti6","f3db08d4d1110aaf":"hrTBx"}],"cRPhM":[function(require,module,exports) {
-var DataView = require("7f038695b2fdb86e"), Map = require("28e3344aae951f13"), Promise = require("b286298be5b1d9a4"), Set = require("3ae50c158f89813"), WeakMap = require("9f458755f627d456"), baseGetTag = require("8e9160b373d7fe66"), toSource = require("b210627dd951641f");
-/** `Object#toString` result references. */ var mapTag = "[object Map]", objectTag = "[object Object]", promiseTag = "[object Promise]", setTag = "[object Set]", weakMapTag = "[object WeakMap]";
-var dataViewTag = "[object DataView]";
-/** Used to detect maps, sets, and weakmaps. */ var dataViewCtorString = toSource(DataView), mapCtorString = toSource(Map), promiseCtorString = toSource(Promise), setCtorString = toSource(Set), weakMapCtorString = toSource(WeakMap);
-/**
- * Gets the `toStringTag` of `value`.
- *
- * @private
- * @param {*} value The value to query.
- * @returns {string} Returns the `toStringTag`.
- */ var getTag = baseGetTag;
-// Fallback for data views, maps, sets, and weak maps in IE 11 and promises in Node.js < 6.
-if (DataView && getTag(new DataView(new ArrayBuffer(1))) != dataViewTag || Map && getTag(new Map) != mapTag || Promise && getTag(Promise.resolve()) != promiseTag || Set && getTag(new Set) != setTag || WeakMap && getTag(new WeakMap) != weakMapTag) getTag = function(value) {
-    var result = baseGetTag(value), Ctor = result == objectTag ? value.constructor : undefined, ctorString = Ctor ? toSource(Ctor) : "";
-    if (ctorString) switch(ctorString){
-        case dataViewCtorString:
-            return dataViewTag;
-        case mapCtorString:
-            return mapTag;
-        case promiseCtorString:
-            return promiseTag;
-        case setCtorString:
-            return setTag;
-        case weakMapCtorString:
-            return weakMapTag;
-    }
-    return result;
-};
-module.exports = getTag;
-
-},{"7f038695b2fdb86e":"ejRu5","28e3344aae951f13":"8YjF4","b286298be5b1d9a4":"jbvCt","3ae50c158f89813":"4xGLf","9f458755f627d456":"av50V","8e9160b373d7fe66":"lOnbo","b210627dd951641f":"bYHc7"}],"ejRu5":[function(require,module,exports) {
-var getNative = require("a6517d0448dad786"), root = require("f83c375075418382");
-/* Built-in method references that are verified to be native. */ var DataView = getNative(root, "DataView");
-module.exports = DataView;
-
-},{"a6517d0448dad786":"9PCIl","f83c375075418382":"dSYUs"}],"jbvCt":[function(require,module,exports) {
-var getNative = require("6940648d854355b5"), root = require("a5c6637bac681a0");
-/* Built-in method references that are verified to be native. */ var Promise = getNative(root, "Promise");
-module.exports = Promise;
-
-},{"6940648d854355b5":"9PCIl","a5c6637bac681a0":"dSYUs"}],"4xGLf":[function(require,module,exports) {
-var getNative = require("56b792d64741a4ff"), root = require("ca486d41cdf819d4");
-/* Built-in method references that are verified to be native. */ var Set = getNative(root, "Set");
-module.exports = Set;
-
-},{"56b792d64741a4ff":"9PCIl","ca486d41cdf819d4":"dSYUs"}],"av50V":[function(require,module,exports) {
-var getNative = require("4507415bd8810d3c"), root = require("7a9a6581834a8452");
-/* Built-in method references that are verified to be native. */ var WeakMap = getNative(root, "WeakMap");
-module.exports = WeakMap;
-
-},{"4507415bd8810d3c":"9PCIl","7a9a6581834a8452":"dSYUs"}],"48Qyi":[function(require,module,exports) {
-var isStrictComparable = require("8ba18052e16e94fb"), keys = require("94ffded3a85af2f6");
-/**
- * Gets the property names, values, and compare flags of `object`.
- *
- * @private
- * @param {Object} object The object to query.
- * @returns {Array} Returns the match data of `object`.
- */ function getMatchData(object) {
-    var result = keys(object), length = result.length;
-    while(length--){
-        var key = result[length], value = object[key];
-        result[length] = [
-            key,
-            value,
-            isStrictComparable(value)
-        ];
-    }
-    return result;
-}
-module.exports = getMatchData;
-
-},{"8ba18052e16e94fb":"lpdGS","94ffded3a85af2f6":"6fHVw"}],"lpdGS":[function(require,module,exports) {
-var isObject = require("be1941f960bbf057");
-/**
- * Checks if `value` is suitable for strict equality comparisons, i.e. `===`.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` if suitable for strict
- *  equality comparisons, else `false`.
- */ function isStrictComparable(value) {
-    return value === value && !isObject(value);
-}
-module.exports = isStrictComparable;
-
-},{"be1941f960bbf057":"cGhqJ"}],"a9Bav":[function(require,module,exports) {
-/**
- * A specialized version of `matchesProperty` for source values suitable
- * for strict equality comparisons, i.e. `===`.
- *
- * @private
- * @param {string} key The key of the property to get.
- * @param {*} srcValue The value to match.
- * @returns {Function} Returns the new spec function.
- */ function matchesStrictComparable(key, srcValue) {
-    return function(object) {
-        if (object == null) return false;
-        return object[key] === srcValue && (srcValue !== undefined || key in Object(object));
-    };
-}
-module.exports = matchesStrictComparable;
-
-},{}],"48kxC":[function(require,module,exports) {
-var baseIsEqual = require("cebe22f5ca0827a7"), get = require("d5ca180f7d6f956a"), hasIn = require("3462bb3f546fa1f7"), isKey = require("f5fef07966a1c4ee"), isStrictComparable = require("2a1cd212d48516"), matchesStrictComparable = require("885e72ee7fc6d296"), toKey = require("cd65eaf4a3af29f6");
-/** Used to compose bitmasks for value comparisons. */ var COMPARE_PARTIAL_FLAG = 1, COMPARE_UNORDERED_FLAG = 2;
-/**
- * The base implementation of `_.matchesProperty` which doesn't clone `srcValue`.
- *
- * @private
- * @param {string} path The path of the property to get.
- * @param {*} srcValue The value to match.
- * @returns {Function} Returns the new spec function.
- */ function baseMatchesProperty(path, srcValue) {
-    if (isKey(path) && isStrictComparable(srcValue)) return matchesStrictComparable(toKey(path), srcValue);
-    return function(object) {
-        var objValue = get(object, path);
-        return objValue === undefined && objValue === srcValue ? hasIn(object, path) : baseIsEqual(srcValue, objValue, COMPARE_PARTIAL_FLAG | COMPARE_UNORDERED_FLAG);
-    };
-}
-module.exports = baseMatchesProperty;
-
-},{"cebe22f5ca0827a7":"7i3qr","d5ca180f7d6f956a":"8UELX","3462bb3f546fa1f7":"57qii","f5fef07966a1c4ee":"4wPWG","2a1cd212d48516":"lpdGS","885e72ee7fc6d296":"a9Bav","cd65eaf4a3af29f6":"bEgue"}],"8UELX":[function(require,module,exports) {
-var baseGet = require("446ba3c1be7939a3");
-/**
- * Gets the value at `path` of `object`. If the resolved value is
- * `undefined`, the `defaultValue` is returned in its place.
- *
- * @static
- * @memberOf _
- * @since 3.7.0
- * @category Object
- * @param {Object} object The object to query.
- * @param {Array|string} path The path of the property to get.
- * @param {*} [defaultValue] The value returned for `undefined` resolved values.
- * @returns {*} Returns the resolved value.
- * @example
- *
- * var object = { 'a': [{ 'b': { 'c': 3 } }] };
- *
- * _.get(object, 'a[0].b.c');
- * // => 3
- *
- * _.get(object, ['a', '0', 'b', 'c']);
- * // => 3
- *
- * _.get(object, 'a.b.c', 'default');
- * // => 'default'
- */ function get(object, path, defaultValue) {
-    var result = object == null ? undefined : baseGet(object, path);
-    return result === undefined ? defaultValue : result;
-}
-module.exports = get;
-
-},{"446ba3c1be7939a3":"kMRe3"}],"kMRe3":[function(require,module,exports) {
-var castPath = require("434ba191fc1dcf09"), toKey = require("c3296f04fad32769");
-/**
- * The base implementation of `_.get` without support for default values.
- *
- * @private
- * @param {Object} object The object to query.
- * @param {Array|string} path The path of the property to get.
- * @returns {*} Returns the resolved value.
- */ function baseGet(object, path) {
-    path = castPath(path, object);
-    var index = 0, length = path.length;
-    while(object != null && index < length)object = object[toKey(path[index++])];
-    return index && index == length ? object : undefined;
-}
-module.exports = baseGet;
-
-},{"434ba191fc1dcf09":"apxk5","c3296f04fad32769":"bEgue"}],"apxk5":[function(require,module,exports) {
-var isArray = require("26a856890198f45b"), isKey = require("e823e604d75f975b"), stringToPath = require("f5fff1c342107fbd"), toString = require("b04e8cc634273c23");
-/**
- * Casts `value` to a path array if it's not one.
- *
- * @private
- * @param {*} value The value to inspect.
- * @param {Object} [object] The object to query keys on.
- * @returns {Array} Returns the cast property path array.
- */ function castPath(value, object) {
-    if (isArray(value)) return value;
-    return isKey(value, object) ? [
-        value
-    ] : stringToPath(toString(value));
-}
-module.exports = castPath;
-
-},{"26a856890198f45b":"dZaTH","e823e604d75f975b":"4wPWG","f5fff1c342107fbd":"1m1j5","b04e8cc634273c23":"joIdQ"}],"4wPWG":[function(require,module,exports) {
-var isArray = require("1efcc081e9a448a8"), isSymbol = require("4cdff6c9e9ff5d38");
-/** Used to match property names within property paths. */ var reIsDeepProp = /\.|\[(?:[^[\]]*|(["'])(?:(?!\1)[^\\]|\\.)*?\1)\]/, reIsPlainProp = /^\w*$/;
-/**
- * Checks if `value` is a property name and not a property path.
- *
- * @private
- * @param {*} value The value to check.
- * @param {Object} [object] The object to query keys on.
- * @returns {boolean} Returns `true` if `value` is a property name, else `false`.
- */ function isKey(value, object) {
-    if (isArray(value)) return false;
-    var type = typeof value;
-    if (type == "number" || type == "symbol" || type == "boolean" || value == null || isSymbol(value)) return true;
-    return reIsPlainProp.test(value) || !reIsDeepProp.test(value) || object != null && value in Object(object);
-}
-module.exports = isKey;
-
-},{"1efcc081e9a448a8":"dZaTH","4cdff6c9e9ff5d38":"i3BHC"}],"i3BHC":[function(require,module,exports) {
-var baseGetTag = require("6118c0d5630f51ce"), isObjectLike = require("74644060ad1a1d3c");
-/** `Object#toString` result references. */ var symbolTag = "[object Symbol]";
-/**
- * Checks if `value` is classified as a `Symbol` primitive or object.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a symbol, else `false`.
- * @example
- *
- * _.isSymbol(Symbol.iterator);
- * // => true
- *
- * _.isSymbol('abc');
- * // => false
- */ function isSymbol(value) {
-    return typeof value == "symbol" || isObjectLike(value) && baseGetTag(value) == symbolTag;
-}
-module.exports = isSymbol;
-
-},{"6118c0d5630f51ce":"lOnbo","74644060ad1a1d3c":"3BLi4"}],"1m1j5":[function(require,module,exports) {
-var memoizeCapped = require("55f565a895f455e5");
-/** Used to match property names within property paths. */ var rePropName = /[^.[\]]+|\[(?:(-?\d+(?:\.\d+)?)|(["'])((?:(?!\2)[^\\]|\\.)*?)\2)\]|(?=(?:\.|\[\])(?:\.|\[\]|$))/g;
-/** Used to match backslashes in property paths. */ var reEscapeChar = /\\(\\)?/g;
-/**
- * Converts `string` to a property path array.
- *
- * @private
- * @param {string} string The string to convert.
- * @returns {Array} Returns the property path array.
- */ var stringToPath = memoizeCapped(function(string) {
-    var result = [];
-    if (string.charCodeAt(0) === 46 /* . */ ) result.push("");
-    string.replace(rePropName, function(match, number, quote, subString) {
-        result.push(quote ? subString.replace(reEscapeChar, "$1") : number || match);
-    });
-    return result;
-});
-module.exports = stringToPath;
-
-},{"55f565a895f455e5":"j3xlQ"}],"j3xlQ":[function(require,module,exports) {
-var memoize = require("cb456550b1f5dd0a");
-/** Used as the maximum memoize cache size. */ var MAX_MEMOIZE_SIZE = 500;
-/**
- * A specialized version of `_.memoize` which clears the memoized function's
- * cache when it exceeds `MAX_MEMOIZE_SIZE`.
- *
- * @private
- * @param {Function} func The function to have its output memoized.
- * @returns {Function} Returns the new memoized function.
- */ function memoizeCapped(func) {
-    var result = memoize(func, function(key) {
-        if (cache.size === MAX_MEMOIZE_SIZE) cache.clear();
-        return key;
-    });
-    var cache = result.cache;
-    return result;
-}
-module.exports = memoizeCapped;
-
-},{"cb456550b1f5dd0a":"azHKC"}],"azHKC":[function(require,module,exports) {
-var MapCache = require("b34b26bf235f1cdd");
-/** Error message constants. */ var FUNC_ERROR_TEXT = "Expected a function";
-/**
- * Creates a function that memoizes the result of `func`. If `resolver` is
- * provided, it determines the cache key for storing the result based on the
- * arguments provided to the memoized function. By default, the first argument
- * provided to the memoized function is used as the map cache key. The `func`
- * is invoked with the `this` binding of the memoized function.
- *
- * **Note:** The cache is exposed as the `cache` property on the memoized
- * function. Its creation may be customized by replacing the `_.memoize.Cache`
- * constructor with one whose instances implement the
- * [`Map`](http://ecma-international.org/ecma-262/7.0/#sec-properties-of-the-map-prototype-object)
- * method interface of `clear`, `delete`, `get`, `has`, and `set`.
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Function
- * @param {Function} func The function to have its output memoized.
- * @param {Function} [resolver] The function to resolve the cache key.
- * @returns {Function} Returns the new memoized function.
- * @example
- *
- * var object = { 'a': 1, 'b': 2 };
- * var other = { 'c': 3, 'd': 4 };
- *
- * var values = _.memoize(_.values);
- * values(object);
- * // => [1, 2]
- *
- * values(other);
- * // => [3, 4]
- *
- * object.a = 2;
- * values(object);
- * // => [1, 2]
- *
- * // Modify the result cache.
- * values.cache.set(object, ['a', 'b']);
- * values(object);
- * // => ['a', 'b']
- *
- * // Replace `_.memoize.Cache`.
- * _.memoize.Cache = WeakMap;
- */ function memoize(func, resolver) {
-    if (typeof func != "function" || resolver != null && typeof resolver != "function") throw new TypeError(FUNC_ERROR_TEXT);
-    var memoized = function() {
-        var args = arguments, key = resolver ? resolver.apply(this, args) : args[0], cache = memoized.cache;
-        if (cache.has(key)) return cache.get(key);
-        var result = func.apply(this, args);
-        memoized.cache = cache.set(key, result) || cache;
-        return result;
-    };
-    memoized.cache = new (memoize.Cache || MapCache);
-    return memoized;
-}
-// Expose `MapCache`.
-memoize.Cache = MapCache;
-module.exports = memoize;
-
-},{"b34b26bf235f1cdd":"664I1"}],"joIdQ":[function(require,module,exports) {
-var baseToString = require("81fca33832a744d9");
-/**
- * Converts `value` to a string. An empty string is returned for `null`
- * and `undefined` values. The sign of `-0` is preserved.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to convert.
- * @returns {string} Returns the converted string.
- * @example
- *
- * _.toString(null);
- * // => ''
- *
- * _.toString(-0);
- * // => '-0'
- *
- * _.toString([1, 2, 3]);
- * // => '1,2,3'
- */ function toString(value) {
-    return value == null ? "" : baseToString(value);
-}
-module.exports = toString;
-
-},{"81fca33832a744d9":"goDP8"}],"goDP8":[function(require,module,exports) {
-var Symbol = require("16af83505444e42a"), arrayMap = require("8439a3a1551d0706"), isArray = require("4b12c9f502d3288a"), isSymbol = require("a0ebd327d618908a");
-/** Used as references for various `Number` constants. */ var INFINITY = 1 / 0;
-/** Used to convert symbols to primitives and strings. */ var symbolProto = Symbol ? Symbol.prototype : undefined, symbolToString = symbolProto ? symbolProto.toString : undefined;
-/**
- * The base implementation of `_.toString` which doesn't convert nullish
- * values to empty strings.
- *
- * @private
- * @param {*} value The value to process.
- * @returns {string} Returns the string.
- */ function baseToString(value) {
-    // Exit early for strings to avoid a performance hit in some environments.
-    if (typeof value == "string") return value;
-    if (isArray(value)) // Recursively convert values (susceptible to call stack limits).
-    return arrayMap(value, baseToString) + "";
-    if (isSymbol(value)) return symbolToString ? symbolToString.call(value) : "";
-    var result = value + "";
-    return result == "0" && 1 / value == -INFINITY ? "-0" : result;
-}
-module.exports = baseToString;
-
-},{"16af83505444e42a":"7lsL9","8439a3a1551d0706":"imI5Z","4b12c9f502d3288a":"dZaTH","a0ebd327d618908a":"i3BHC"}],"bEgue":[function(require,module,exports) {
-var isSymbol = require("2aed9f6fd4b7386");
-/** Used as references for various `Number` constants. */ var INFINITY = 1 / 0;
-/**
- * Converts `value` to a string key if it's not a string or symbol.
- *
- * @private
- * @param {*} value The value to inspect.
- * @returns {string|symbol} Returns the key.
- */ function toKey(value) {
-    if (typeof value == "string" || isSymbol(value)) return value;
-    var result = value + "";
-    return result == "0" && 1 / value == -INFINITY ? "-0" : result;
-}
-module.exports = toKey;
-
-},{"2aed9f6fd4b7386":"i3BHC"}],"57qii":[function(require,module,exports) {
-var baseHasIn = require("9fbd4bb192f3f572"), hasPath = require("b0aefd36de99e579");
-/**
- * Checks if `path` is a direct or inherited property of `object`.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Object
- * @param {Object} object The object to query.
- * @param {Array|string} path The path to check.
- * @returns {boolean} Returns `true` if `path` exists, else `false`.
- * @example
- *
- * var object = _.create({ 'a': _.create({ 'b': 2 }) });
- *
- * _.hasIn(object, 'a');
- * // => true
- *
- * _.hasIn(object, 'a.b');
- * // => true
- *
- * _.hasIn(object, ['a', 'b']);
- * // => true
- *
- * _.hasIn(object, 'b');
- * // => false
- */ function hasIn(object, path) {
-    return object != null && hasPath(object, path, baseHasIn);
-}
-module.exports = hasIn;
-
-},{"9fbd4bb192f3f572":"in8KZ","b0aefd36de99e579":"4QNMG"}],"in8KZ":[function(require,module,exports) {
-/**
- * The base implementation of `_.hasIn` without support for deep paths.
- *
- * @private
- * @param {Object} [object] The object to query.
- * @param {Array|string} key The key to check.
- * @returns {boolean} Returns `true` if `key` exists, else `false`.
- */ function baseHasIn(object, key) {
-    return object != null && key in Object(object);
-}
-module.exports = baseHasIn;
-
-},{}],"4QNMG":[function(require,module,exports) {
-var castPath = require("bdbd2cfd212d36f7"), isArguments = require("47ffafdab3ba0d6f"), isArray = require("93ebd263ff0131c1"), isIndex = require("252ef74480e01958"), isLength = require("23c2f64e75e90a2"), toKey = require("af5ade297cb685ee");
-/**
- * Checks if `path` exists on `object`.
- *
- * @private
- * @param {Object} object The object to query.
- * @param {Array|string} path The path to check.
- * @param {Function} hasFunc The function to check properties.
- * @returns {boolean} Returns `true` if `path` exists, else `false`.
- */ function hasPath(object, path, hasFunc) {
-    path = castPath(path, object);
-    var index = -1, length = path.length, result = false;
-    while(++index < length){
-        var key = toKey(path[index]);
-        if (!(result = object != null && hasFunc(object, key))) break;
-        object = object[key];
-    }
-    if (result || ++index != length) return result;
-    length = object == null ? 0 : object.length;
-    return !!length && isLength(length) && isIndex(key, length) && (isArray(object) || isArguments(object));
-}
-module.exports = hasPath;
-
-},{"bdbd2cfd212d36f7":"apxk5","47ffafdab3ba0d6f":"8ReNj","93ebd263ff0131c1":"dZaTH","252ef74480e01958":"aJpx0","23c2f64e75e90a2":"hrTBx","af5ade297cb685ee":"bEgue"}],"dgTUN":[function(require,module,exports) {
-/**
- * This method returns the first argument it receives.
- *
- * @static
- * @since 0.1.0
- * @memberOf _
- * @category Util
- * @param {*} value Any value.
- * @returns {*} Returns `value`.
- * @example
- *
- * var object = { 'a': 1 };
- *
- * console.log(_.identity(object) === object);
- * // => true
- */ function identity(value) {
-    return value;
-}
-module.exports = identity;
-
-},{}],"8aSQI":[function(require,module,exports) {
-var baseProperty = require("c7f2d79ee4b1c16a"), basePropertyDeep = require("abf31da39349df22"), isKey = require("a387ef4a4373de2c"), toKey = require("9315973458389ae7");
-/**
- * Creates a function that returns the value at `path` of a given object.
- *
- * @static
- * @memberOf _
- * @since 2.4.0
- * @category Util
- * @param {Array|string} path The path of the property to get.
- * @returns {Function} Returns the new accessor function.
- * @example
- *
- * var objects = [
- *   { 'a': { 'b': 2 } },
- *   { 'a': { 'b': 1 } }
- * ];
- *
- * _.map(objects, _.property('a.b'));
- * // => [2, 1]
- *
- * _.map(_.sortBy(objects, _.property(['a', 'b'])), 'a.b');
- * // => [1, 2]
- */ function property(path) {
-    return isKey(path) ? baseProperty(toKey(path)) : basePropertyDeep(path);
-}
-module.exports = property;
-
-},{"c7f2d79ee4b1c16a":"4HOmE","abf31da39349df22":"c9dhz","a387ef4a4373de2c":"4wPWG","9315973458389ae7":"bEgue"}],"4HOmE":[function(require,module,exports) {
-/**
- * The base implementation of `_.property` without support for deep paths.
- *
- * @private
- * @param {string} key The key of the property to get.
- * @returns {Function} Returns the new accessor function.
- */ function baseProperty(key) {
-    return function(object) {
-        return object == null ? undefined : object[key];
-    };
-}
-module.exports = baseProperty;
-
-},{}],"c9dhz":[function(require,module,exports) {
-var baseGet = require("f0f9f03bc3030d02");
-/**
- * A specialized version of `baseProperty` which supports deep paths.
- *
- * @private
- * @param {Array|string} path The path of the property to get.
- * @returns {Function} Returns the new accessor function.
- */ function basePropertyDeep(path) {
-    return function(object) {
-        return baseGet(object, path);
-    };
-}
-module.exports = basePropertyDeep;
-
-},{"f0f9f03bc3030d02":"kMRe3"}],"cLeHB":[function(require,module,exports) {
-var baseEach = require("488df795cf6fe570"), isArrayLike = require("2924e2db4bb5430d");
-/**
- * The base implementation of `_.map` without support for iteratee shorthands.
- *
- * @private
- * @param {Array|Object} collection The collection to iterate over.
- * @param {Function} iteratee The function invoked per iteration.
- * @returns {Array} Returns the new mapped array.
- */ function baseMap(collection, iteratee) {
-    var index = -1, result = isArrayLike(collection) ? Array(collection.length) : [];
-    baseEach(collection, function(value, key, collection) {
-        result[++index] = iteratee(value, key, collection);
-    });
-    return result;
-}
-module.exports = baseMap;
-
-},{"488df795cf6fe570":"1glfs","2924e2db4bb5430d":"gMCbp"}],"1glfs":[function(require,module,exports) {
-var baseForOwn = require("ee57d32bcdc873cb"), createBaseEach = require("f1e3fc84161ef3ec");
-/**
- * The base implementation of `_.forEach` without support for iteratee shorthands.
- *
- * @private
- * @param {Array|Object} collection The collection to iterate over.
- * @param {Function} iteratee The function invoked per iteration.
- * @returns {Array|Object} Returns `collection`.
- */ var baseEach = createBaseEach(baseForOwn);
-module.exports = baseEach;
-
-},{"ee57d32bcdc873cb":"6MqUM","f1e3fc84161ef3ec":"dfv3e"}],"6MqUM":[function(require,module,exports) {
-var baseFor = require("c7da20818a5fe3d6"), keys = require("1fb77c53defe5720");
-/**
- * The base implementation of `_.forOwn` without support for iteratee shorthands.
- *
- * @private
- * @param {Object} object The object to iterate over.
- * @param {Function} iteratee The function invoked per iteration.
- * @returns {Object} Returns `object`.
- */ function baseForOwn(object, iteratee) {
-    return object && baseFor(object, iteratee, keys);
-}
-module.exports = baseForOwn;
-
-},{"c7da20818a5fe3d6":"k0bbR","1fb77c53defe5720":"6fHVw"}],"k0bbR":[function(require,module,exports) {
-var createBaseFor = require("178c767a7be60d59");
-/**
- * The base implementation of `baseForOwn` which iterates over `object`
- * properties returned by `keysFunc` and invokes `iteratee` for each property.
- * Iteratee functions may exit iteration early by explicitly returning `false`.
- *
- * @private
- * @param {Object} object The object to iterate over.
- * @param {Function} iteratee The function invoked per iteration.
- * @param {Function} keysFunc The function to get the keys of `object`.
- * @returns {Object} Returns `object`.
- */ var baseFor = createBaseFor();
-module.exports = baseFor;
-
-},{"178c767a7be60d59":"hCIGA"}],"hCIGA":[function(require,module,exports) {
-/**
- * Creates a base function for methods like `_.forIn` and `_.forOwn`.
- *
- * @private
- * @param {boolean} [fromRight] Specify iterating from right to left.
- * @returns {Function} Returns the new base function.
- */ function createBaseFor(fromRight) {
-    return function(object, iteratee, keysFunc) {
-        var index = -1, iterable = Object(object), props = keysFunc(object), length = props.length;
-        while(length--){
-            var key = props[fromRight ? length : ++index];
-            if (iteratee(iterable[key], key, iterable) === false) break;
-        }
-        return object;
-    };
-}
-module.exports = createBaseFor;
-
-},{}],"dfv3e":[function(require,module,exports) {
-var isArrayLike = require("49bbd11cbf093bb1");
-/**
- * Creates a `baseEach` or `baseEachRight` function.
- *
- * @private
- * @param {Function} eachFunc The function to iterate over a collection.
- * @param {boolean} [fromRight] Specify iterating from right to left.
- * @returns {Function} Returns the new base function.
- */ function createBaseEach(eachFunc, fromRight) {
-    return function(collection, iteratee) {
-        if (collection == null) return collection;
-        if (!isArrayLike(collection)) return eachFunc(collection, iteratee);
-        var length = collection.length, index = fromRight ? length : -1, iterable = Object(collection);
-        while(fromRight ? index-- : ++index < length){
-            if (iteratee(iterable[index], index, iterable) === false) break;
-        }
-        return collection;
-    };
-}
-module.exports = createBaseEach;
-
-},{"49bbd11cbf093bb1":"gMCbp"}],"3Gh8t":[function(require,module,exports) {
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"kVZrF":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "funcRoomId", ()=>funcRoomId);
-var _state = require("../../src/state");
-function funcRoomId() {
-    customElements.define("rooms-el", class Results extends HTMLElement {
-        connectedCallback() {
-            this.render();
-            this.rooms();
-            this.listeners();
+parcelHelpers.export(exports, "Resolver", ()=>Resolver);
+parcelHelpers.export(exports, "Router", ()=>Router);
+function toArray(objectOrArray) {
+    objectOrArray = objectOrArray || [];
+    return Array.isArray(objectOrArray) ? objectOrArray : [
+        objectOrArray
+    ];
+}
+function log(msg) {
+    return `[Vaadin.Router] ${msg}`;
+}
+function logValue(value) {
+    if (typeof value !== "object") return String(value);
+    const stringType = Object.prototype.toString.call(value).match(/ (.*)\]$/)[1];
+    if (stringType === "Object" || stringType === "Array") return `${stringType} ${JSON.stringify(value)}`;
+    else return stringType;
+}
+const MODULE = "module";
+const NOMODULE = "nomodule";
+const bundleKeys = [
+    MODULE,
+    NOMODULE
+];
+function ensureBundle(src) {
+    if (!src.match(/.+\.[m]?js$/)) throw new Error(log(`Unsupported type for bundle "${src}": .js or .mjs expected.`));
+}
+function ensureRoute(route) {
+    if (!route || !isString(route.path)) throw new Error(log(`Expected route config to be an object with a "path" string property, or an array of such objects`));
+    const bundle = route.bundle;
+    const stringKeys = [
+        "component",
+        "redirect",
+        "bundle"
+    ];
+    if (!isFunction(route.action) && !Array.isArray(route.children) && !isFunction(route.children) && !isObject(bundle) && !stringKeys.some((key)=>isString(route[key]))) throw new Error(log(`Expected route config "${route.path}" to include either "${stringKeys.join('", "')}" ` + `or "action" function but none found.`));
+    if (bundle) {
+        if (isString(bundle)) ensureBundle(bundle);
+        else if (!bundleKeys.some((key)=>key in bundle)) throw new Error(log('Expected route bundle to include either "' + NOMODULE + '" or "' + MODULE + '" keys, or both'));
+        else bundleKeys.forEach((key)=>key in bundle && ensureBundle(bundle[key]));
+    }
+    if (route.redirect) [
+        "bundle",
+        "component"
+    ].forEach((overriddenProp)=>{
+        if (overriddenProp in route) console.warn(log(`Route config "${route.path}" has both "redirect" and "${overriddenProp}" properties, ` + `and "redirect" will always override the latter. Did you mean to only use "${overriddenProp}"?`));
+    });
+}
+function ensureRoutes(routes) {
+    toArray(routes).forEach((route)=>ensureRoute(route));
+}
+function loadScript(src, key) {
+    let script = document.head.querySelector('script[src="' + src + '"][async]');
+    if (!script) {
+        script = document.createElement("script");
+        script.setAttribute("src", src);
+        if (key === MODULE) script.setAttribute("type", MODULE);
+        else if (key === NOMODULE) script.setAttribute(NOMODULE, "");
+        script.async = true;
+    }
+    return new Promise((resolve, reject)=>{
+        script.onreadystatechange = script.onload = (e)=>{
+            script.__dynamicImportLoaded = true;
+            resolve(e);
+        };
+        script.onerror = (e)=>{
+            if (script.parentNode) script.parentNode.removeChild(script);
+            reject(e);
+        };
+        if (script.parentNode === null) document.head.appendChild(script);
+        else if (script.__dynamicImportLoaded) resolve();
+    });
+}
+function loadBundle(bundle) {
+    if (isString(bundle)) return loadScript(bundle);
+    else return Promise.race(bundleKeys.filter((key)=>key in bundle).map((key)=>loadScript(bundle[key], key)));
+}
+function fireRouterEvent(type, detail) {
+    return !window.dispatchEvent(new CustomEvent(`vaadin-router-${type}`, {
+        cancelable: type === "go",
+        detail
+    }));
+}
+function isObject(o) {
+    // guard against null passing the typeof check
+    return typeof o === "object" && !!o;
+}
+function isFunction(f) {
+    return typeof f === "function";
+}
+function isString(s) {
+    return typeof s === "string";
+}
+function getNotFoundError(context) {
+    const error = new Error(log(`Page not found (${context.pathname})`));
+    error.context = context;
+    error.code = 404;
+    return error;
+}
+const notFoundResult = new class NotFoundResult {
+}();
+/* istanbul ignore next: coverage is calculated in Chrome, this code is for IE */ function getAnchorOrigin(anchor) {
+    // IE11: on HTTP and HTTPS the default port is not included into
+    // window.location.origin, so won't include it here either.
+    const port = anchor.port;
+    const protocol = anchor.protocol;
+    const defaultHttp = protocol === "http:" && port === "80";
+    const defaultHttps = protocol === "https:" && port === "443";
+    const host = defaultHttp || defaultHttps ? anchor.hostname // does not include the port number (e.g. www.example.org)
+     : anchor.host; // does include the port number (e.g. www.example.org:80)
+    return `${protocol}//${host}`;
+}
+// The list of checks is not complete:
+//  - SVG support is missing
+//  - the 'rel' attribute is not considered
+function vaadinRouterGlobalClickHandler(event) {
+    // ignore the click if the default action is prevented
+    if (event.defaultPrevented) return;
+    // ignore the click if not with the primary mouse button
+    if (event.button !== 0) return;
+    // ignore the click if a modifier key is pressed
+    if (event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
+    // find the <a> element that the click is at (or within)
+    let anchor = event.target;
+    const path = event.composedPath ? event.composedPath() : event.path || [];
+    // FIXME(web-padawan): `Symbol.iterator` used by webcomponentsjs is broken for arrays
+    // example to check: `for...of` loop here throws the "Not yet implemented" error
+    for(let i = 0; i < path.length; i++){
+        const target = path[i];
+        if (target.nodeName && target.nodeName.toLowerCase() === "a") {
+            anchor = target;
+            break;
         }
-        render() {
-            this.roomIds = (0, _state.state).data.rooms;
-            const div = document.createElement("div");
-            div.innerHTML = `                
-            <div class="window__text">
-            <div class="window-title">Salas Creadas con Este Nombre</div>                
-            <div class="rooms-list"></div>                              
-            </div>                     
-            `;
-            const style = document.createElement("style");
-            style.textContent = `
-            .window {
-                backdrop-filter: blur(10px);
-                display: flex;
-                position: absolute;
-                color: red;
-                /* background-color: rgb(0, 0, 0); */
-                /* opacity: .4; */
-                    top: 5%;
-                    left: 5%;
-                    right: 5%;
-                    bottom: 5%;
-                    text-align: center;
-                    align-items: center;
-                    justify-content: center;
-                    flex-direction: column;
-                    font-family: 'Odibee Sans';
-                    font-weight:400;
-                    gap: 30px;
-                    border: solid black
-                }
-                .window-title {
-                    font-size:30px;
-                }
-                .room-button {
-                    width: 322px;height: 67px;
-                    border-radius: 10px;
-                    border: 10px solid #001997;
-                    background: #006CFC;         
-                    color: #D8FCFC;
-                    text-align: center;
-                    font-family: 'Odibee Sans';
-                    font-size: 25px;
-                    font-weight: 400;
-                    line-height: normal;
-                    letter-spacing: 2.25px;
-                }                 
-                .rooms-list {
-                    display:flex;
-                    flex-direction: column;
-                    height: 100;
-                }                
-                `;
-            div.classList.add("window");
-            this.appendChild(div);
-            this.appendChild(style);
+    }
+    while(anchor && anchor.nodeName.toLowerCase() !== "a")anchor = anchor.parentNode;
+    // ignore the click if not at an <a> element
+    if (!anchor || anchor.nodeName.toLowerCase() !== "a") return;
+    // ignore the click if the <a> element has a non-default target
+    if (anchor.target && anchor.target.toLowerCase() !== "_self") return;
+    // ignore the click if the <a> element has the 'download' attribute
+    if (anchor.hasAttribute("download")) return;
+    // ignore the click if the <a> element has the 'router-ignore' attribute
+    if (anchor.hasAttribute("router-ignore")) return;
+    // ignore the click if the target URL is a fragment on the current page
+    if (anchor.pathname === window.location.pathname && anchor.hash !== "") return;
+    // ignore the click if the target is external to the app
+    // In IE11 HTMLAnchorElement does not have the `origin` property
+    const origin = anchor.origin || getAnchorOrigin(anchor);
+    if (origin !== window.location.origin) return;
+    // if none of the above, convert the click into a navigation event
+    const { pathname, search, hash } = anchor;
+    if (fireRouterEvent("go", {
+        pathname,
+        search,
+        hash
+    })) {
+        event.preventDefault();
+        // for a click event, the scroll is reset to the top position.
+        if (event && event.type === "click") window.scrollTo(0, 0);
+    }
+}
+/**
+ * A navigation trigger for Vaadin Router that translated clicks on `<a>` links
+ * into Vaadin Router navigation events.
+ *
+ * Only regular clicks on in-app links are translated (primary mouse button, no
+ * modifier keys, the target href is within the app's URL space).
+ *
+ * @memberOf Router.NavigationTrigger
+ * @type {NavigationTrigger}
+ */ const CLICK = {
+    activate () {
+        window.document.addEventListener("click", vaadinRouterGlobalClickHandler);
+    },
+    inactivate () {
+        window.document.removeEventListener("click", vaadinRouterGlobalClickHandler);
+    }
+};
+// PopStateEvent constructor shim
+const isIE = /Trident/.test(navigator.userAgent);
+/* istanbul ignore next: coverage is calculated in Chrome, this code is for IE */ if (isIE && !isFunction(window.PopStateEvent)) {
+    window.PopStateEvent = function(inType, params) {
+        params = params || {};
+        var e = document.createEvent("Event");
+        e.initEvent(inType, Boolean(params.bubbles), Boolean(params.cancelable));
+        e.state = params.state || null;
+        return e;
+    };
+    window.PopStateEvent.prototype = window.Event.prototype;
+}
+function vaadinRouterGlobalPopstateHandler(event) {
+    if (event.state === "vaadin-router-ignore") return;
+    const { pathname, search, hash } = window.location;
+    fireRouterEvent("go", {
+        pathname,
+        search,
+        hash
+    });
+}
+/**
+ * A navigation trigger for Vaadin Router that translates popstate events into
+ * Vaadin Router navigation events.
+ *
+ * @memberOf Router.NavigationTrigger
+ * @type {NavigationTrigger}
+ */ const POPSTATE = {
+    activate () {
+        window.addEventListener("popstate", vaadinRouterGlobalPopstateHandler);
+    },
+    inactivate () {
+        window.removeEventListener("popstate", vaadinRouterGlobalPopstateHandler);
+    }
+};
+/**
+ * Expose `pathToRegexp`.
+ */ var pathToRegexp_1 = pathToRegexp$1;
+var parse_1 = parse;
+var compile_1 = compile;
+var tokensToFunction_1 = tokensToFunction;
+var tokensToRegExp_1 = tokensToRegExp;
+/**
+ * Default configs.
+ */ var DEFAULT_DELIMITER = "/";
+var DEFAULT_DELIMITERS = "./";
+/**
+ * The main path matching regexp utility.
+ *
+ * @type {RegExp}
+ */ var PATH_REGEXP = new RegExp([
+    // Match escaped characters that would otherwise appear in future matches.
+    // This allows the user to escape special characters that won't transform.
+    "(\\\\.)",
+    // Match Express-style parameters and un-named parameters with a prefix
+    // and optional suffixes. Matches appear as:
+    //
+    // ":test(\\d+)?" => ["test", "\d+", undefined, "?"]
+    // "(\\d+)"  => [undefined, undefined, "\d+", undefined]
+    "(?:\\:(\\w+)(?:\\(((?:\\\\.|[^\\\\()])+)\\))?|\\(((?:\\\\.|[^\\\\()])+)\\))([+*?])?"
+].join("|"), "g");
+/**
+ * Parse a string for the raw tokens.
+ *
+ * @param  {string}  str
+ * @param  {Object=} options
+ * @return {!Array}
+ */ function parse(str, options) {
+    var tokens = [];
+    var key = 0;
+    var index = 0;
+    var path = "";
+    var defaultDelimiter = options && options.delimiter || DEFAULT_DELIMITER;
+    var delimiters = options && options.delimiters || DEFAULT_DELIMITERS;
+    var pathEscaped = false;
+    var res;
+    while((res = PATH_REGEXP.exec(str)) !== null){
+        var m = res[0];
+        var escaped = res[1];
+        var offset = res.index;
+        path += str.slice(index, offset);
+        index = offset + m.length;
+        // Ignore already escaped sequences.
+        if (escaped) {
+            path += escaped[1];
+            pathEscaped = true;
+            continue;
         }
-        rooms() {
-            this.roomIds.map((r)=>{
-                const div = document.createElement("button");
-                div.innerHTML = `${r.toString()}`;
-                div.classList.add("room-button");
-                return this.querySelector(".rooms-list").appendChild(div);
+        var prev = "";
+        var next = str[index];
+        var name = res[2];
+        var capture = res[3];
+        var group = res[4];
+        var modifier = res[5];
+        if (!pathEscaped && path.length) {
+            var k = path.length - 1;
+            if (delimiters.indexOf(path[k]) > -1) {
+                prev = path[k];
+                path = path.slice(0, k);
+            }
+        }
+        // Push the current path onto the tokens.
+        if (path) {
+            tokens.push(path);
+            path = "";
+            pathEscaped = false;
+        }
+        var partial = prev !== "" && next !== undefined && next !== prev;
+        var repeat = modifier === "+" || modifier === "*";
+        var optional = modifier === "?" || modifier === "*";
+        var delimiter = prev || defaultDelimiter;
+        var pattern = capture || group;
+        tokens.push({
+            name: name || key++,
+            prefix: prev,
+            delimiter: delimiter,
+            optional: optional,
+            repeat: repeat,
+            partial: partial,
+            pattern: pattern ? escapeGroup(pattern) : "[^" + escapeString(delimiter) + "]+?"
+        });
+    }
+    // Push any remaining characters.
+    if (path || index < str.length) tokens.push(path + str.substr(index));
+    return tokens;
+}
+/**
+ * Compile a string to a template function for the path.
+ *
+ * @param  {string}             str
+ * @param  {Object=}            options
+ * @return {!function(Object=, Object=)}
+ */ function compile(str, options) {
+    return tokensToFunction(parse(str, options));
+}
+/**
+ * Expose a method for transforming tokens into the path function.
+ */ function tokensToFunction(tokens) {
+    // Compile all the tokens into regexps.
+    var matches = new Array(tokens.length);
+    // Compile all the patterns before compilation.
+    for(var i = 0; i < tokens.length; i++)if (typeof tokens[i] === "object") matches[i] = new RegExp("^(?:" + tokens[i].pattern + ")$");
+    return function(data, options) {
+        var path = "";
+        var encode = options && options.encode || encodeURIComponent;
+        for(var i = 0; i < tokens.length; i++){
+            var token = tokens[i];
+            if (typeof token === "string") {
+                path += token;
+                continue;
+            }
+            var value = data ? data[token.name] : undefined;
+            var segment;
+            if (Array.isArray(value)) {
+                if (!token.repeat) throw new TypeError('Expected "' + token.name + '" to not repeat, but got array');
+                if (value.length === 0) {
+                    if (token.optional) continue;
+                    throw new TypeError('Expected "' + token.name + '" to not be empty');
+                }
+                for(var j = 0; j < value.length; j++){
+                    segment = encode(value[j], token);
+                    if (!matches[i].test(segment)) throw new TypeError('Expected all "' + token.name + '" to match "' + token.pattern + '"');
+                    path += (j === 0 ? token.prefix : token.delimiter) + segment;
+                }
+                continue;
+            }
+            if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+                segment = encode(String(value), token);
+                if (!matches[i].test(segment)) throw new TypeError('Expected "' + token.name + '" to match "' + token.pattern + '", but got "' + segment + '"');
+                path += token.prefix + segment;
+                continue;
+            }
+            if (token.optional) {
+                // Prepend partial segment prefixes.
+                if (token.partial) path += token.prefix;
+                continue;
+            }
+            throw new TypeError('Expected "' + token.name + '" to be ' + (token.repeat ? "an array" : "a string"));
+        }
+        return path;
+    };
+}
+/**
+ * Escape a regular expression string.
+ *
+ * @param  {string} str
+ * @return {string}
+ */ function escapeString(str) {
+    return str.replace(/([.+*?=^!:${}()[\]|/\\])/g, "\\$1");
+}
+/**
+ * Escape the capturing group by escaping special characters and meaning.
+ *
+ * @param  {string} group
+ * @return {string}
+ */ function escapeGroup(group) {
+    return group.replace(/([=!:$/()])/g, "\\$1");
+}
+/**
+ * Get the flags for a regexp from the options.
+ *
+ * @param  {Object} options
+ * @return {string}
+ */ function flags(options) {
+    return options && options.sensitive ? "" : "i";
+}
+/**
+ * Pull out keys from a regexp.
+ *
+ * @param  {!RegExp} path
+ * @param  {Array=}  keys
+ * @return {!RegExp}
+ */ function regexpToRegexp(path, keys) {
+    if (!keys) return path;
+    // Use a negative lookahead to match only capturing groups.
+    var groups = path.source.match(/\((?!\?)/g);
+    if (groups) for(var i = 0; i < groups.length; i++)keys.push({
+        name: i,
+        prefix: null,
+        delimiter: null,
+        optional: false,
+        repeat: false,
+        partial: false,
+        pattern: null
+    });
+    return path;
+}
+/**
+ * Transform an array into a regexp.
+ *
+ * @param  {!Array}  path
+ * @param  {Array=}  keys
+ * @param  {Object=} options
+ * @return {!RegExp}
+ */ function arrayToRegexp(path, keys, options) {
+    var parts = [];
+    for(var i = 0; i < path.length; i++)parts.push(pathToRegexp$1(path[i], keys, options).source);
+    return new RegExp("(?:" + parts.join("|") + ")", flags(options));
+}
+/**
+ * Create a path regexp from string input.
+ *
+ * @param  {string}  path
+ * @param  {Array=}  keys
+ * @param  {Object=} options
+ * @return {!RegExp}
+ */ function stringToRegexp(path, keys, options) {
+    return tokensToRegExp(parse(path, options), keys, options);
+}
+/**
+ * Expose a function for taking tokens and returning a RegExp.
+ *
+ * @param  {!Array}  tokens
+ * @param  {Array=}  keys
+ * @param  {Object=} options
+ * @return {!RegExp}
+ */ function tokensToRegExp(tokens, keys, options) {
+    options = options || {};
+    var strict = options.strict;
+    var start = options.start !== false;
+    var end = options.end !== false;
+    var delimiter = escapeString(options.delimiter || DEFAULT_DELIMITER);
+    var delimiters = options.delimiters || DEFAULT_DELIMITERS;
+    var endsWith = [].concat(options.endsWith || []).map(escapeString).concat("$").join("|");
+    var route = start ? "^" : "";
+    var isEndDelimited = tokens.length === 0;
+    // Iterate over the tokens and create our regexp string.
+    for(var i = 0; i < tokens.length; i++){
+        var token = tokens[i];
+        if (typeof token === "string") {
+            route += escapeString(token);
+            isEndDelimited = i === tokens.length - 1 && delimiters.indexOf(token[token.length - 1]) > -1;
+        } else {
+            var capture = token.repeat ? "(?:" + token.pattern + ")(?:" + escapeString(token.delimiter) + "(?:" + token.pattern + "))*" : token.pattern;
+            if (keys) keys.push(token);
+            if (token.optional) {
+                if (token.partial) route += escapeString(token.prefix) + "(" + capture + ")?";
+                else route += "(?:" + escapeString(token.prefix) + "(" + capture + "))?";
+            } else route += escapeString(token.prefix) + "(" + capture + ")";
+        }
+    }
+    if (end) {
+        if (!strict) route += "(?:" + delimiter + ")?";
+        route += endsWith === "$" ? "$" : "(?=" + endsWith + ")";
+    } else {
+        if (!strict) route += "(?:" + delimiter + "(?=" + endsWith + "))?";
+        if (!isEndDelimited) route += "(?=" + delimiter + "|" + endsWith + ")";
+    }
+    return new RegExp(route, flags(options));
+}
+/**
+ * Normalize the given path string, returning a regular expression.
+ *
+ * An empty array can be passed in for the keys, which will hold the
+ * placeholder key descriptions. For example, using `/user/:id`, `keys` will
+ * contain `[{ name: 'id', delimiter: '/', optional: false, repeat: false }]`.
+ *
+ * @param  {(string|RegExp|Array)} path
+ * @param  {Array=}                keys
+ * @param  {Object=}               options
+ * @return {!RegExp}
+ */ function pathToRegexp$1(path, keys, options) {
+    if (path instanceof RegExp) return regexpToRegexp(path, keys);
+    if (Array.isArray(path)) return arrayToRegexp(/** @type {!Array} */ path, keys, options);
+    return stringToRegexp(/** @type {string} */ path, keys, options);
+}
+pathToRegexp_1.parse = parse_1;
+pathToRegexp_1.compile = compile_1;
+pathToRegexp_1.tokensToFunction = tokensToFunction_1;
+pathToRegexp_1.tokensToRegExp = tokensToRegExp_1;
+/**
+ * Universal Router (https://www.kriasoft.com/universal-router/)
+ *
+ * Copyright (c) 2015-present Kriasoft.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE.txt file in the root directory of this source tree.
+ */ const { hasOwnProperty } = Object.prototype;
+const cache$1 = new Map();
+// see https://github.com/pillarjs/path-to-regexp/issues/148
+cache$1.set("|false", {
+    keys: [],
+    pattern: /(?:)/
+});
+function decodeParam(val) {
+    try {
+        return decodeURIComponent(val);
+    } catch (err) {
+        return val;
+    }
+}
+function matchPath(routepath, path, exact, parentKeys, parentParams) {
+    exact = !!exact;
+    const cacheKey = `${routepath}|${exact}`;
+    let regexp = cache$1.get(cacheKey);
+    if (!regexp) {
+        const keys = [];
+        regexp = {
+            keys,
+            pattern: pathToRegexp_1(routepath, keys, {
+                end: exact,
+                strict: routepath === ""
+            })
+        };
+        cache$1.set(cacheKey, regexp);
+    }
+    const m = regexp.pattern.exec(path);
+    if (!m) return null;
+    const params = Object.assign({}, parentParams);
+    for(let i = 1; i < m.length; i++){
+        const key = regexp.keys[i - 1];
+        const prop = key.name;
+        const value = m[i];
+        if (value !== undefined || !hasOwnProperty.call(params, prop)) {
+            if (key.repeat) params[prop] = value ? value.split(key.delimiter).map(decodeParam) : [];
+            else params[prop] = value ? decodeParam(value) : value;
+        }
+    }
+    return {
+        path: m[0],
+        keys: (parentKeys || []).concat(regexp.keys),
+        params
+    };
+}
+/**
+ * Universal Router (https://www.kriasoft.com/universal-router/)
+ *
+ * Copyright (c) 2015-present Kriasoft.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE.txt file in the root directory of this source tree.
+ */ /**
+ * Traverses the routes tree and matches its nodes to the given pathname from
+ * the root down to the leaves. Each match consumes a part of the pathname and
+ * the matching process continues for as long as there is a matching child
+ * route for the remaining part of the pathname.
+ *
+ * The returned value is a lazily evaluated iterator.
+ *
+ * The leading "/" in a route path matters only for the root of the routes
+ * tree (or if all parent routes are ""). In all other cases a leading "/" in
+ * a child route path has no significance.
+ *
+ * The trailing "/" in a _route path_ matters only for the leaves of the
+ * routes tree. A leaf route with a trailing "/" matches only a pathname that
+ * also has a trailing "/".
+ *
+ * The trailing "/" in a route path does not affect matching of child routes
+ * in any way.
+ *
+ * The trailing "/" in a _pathname_ generally does not matter (except for
+ * the case of leaf nodes described above).
+ *
+ * The "" and "/" routes have special treatment:
+ *  1. as a single route
+ *     the "" and "/" routes match only the "" and "/" pathnames respectively
+ *  2. as a parent in the routes tree
+ *     the "" route matches any pathname without consuming any part of it
+ *     the "/" route matches any absolute pathname consuming its leading "/"
+ *  3. as a leaf in the routes tree
+ *     the "" and "/" routes match only if the entire pathname is consumed by
+ *         the parent routes chain. In this case "" and "/" are equivalent.
+ *  4. several directly nested "" or "/" routes
+ *     - directly nested "" or "/" routes are 'squashed' (i.e. nesting two
+ *       "/" routes does not require a double "/" in the pathname to match)
+ *     - if there are only "" in the parent routes chain, no part of the
+ *       pathname is consumed, and the leading "/" in the child routes' paths
+ *       remains significant
+ *
+ * Side effect:
+ *   - the routes tree { path: '' } matches only the '' pathname
+ *   - the routes tree { path: '', children: [ { path: '' } ] } matches any
+ *     pathname (for the tree root)
+ *
+ * Prefix matching can be enabled also by `children: true`.
+ */ function matchRoute(route, pathname, ignoreLeadingSlash, parentKeys, parentParams) {
+    let match;
+    let childMatches;
+    let childIndex = 0;
+    let routepath = route.path || "";
+    if (routepath.charAt(0) === "/") {
+        if (ignoreLeadingSlash) routepath = routepath.substr(1);
+        ignoreLeadingSlash = true;
+    }
+    return {
+        next (routeToSkip) {
+            if (route === routeToSkip) return {
+                done: true
+            };
+            const children = route.__children = route.__children || route.children;
+            if (!match) {
+                match = matchPath(routepath, pathname, !children, parentKeys, parentParams);
+                if (match) return {
+                    done: false,
+                    value: {
+                        route,
+                        keys: match.keys,
+                        params: match.params,
+                        path: match.path
+                    }
+                };
+            }
+            if (match && children) while(childIndex < children.length){
+                if (!childMatches) {
+                    const childRoute = children[childIndex];
+                    childRoute.parent = route;
+                    let matchedLength = match.path.length;
+                    if (matchedLength > 0 && pathname.charAt(matchedLength) === "/") matchedLength += 1;
+                    childMatches = matchRoute(childRoute, pathname.substr(matchedLength), ignoreLeadingSlash, match.keys, match.params);
+                }
+                const childMatch = childMatches.next(routeToSkip);
+                if (!childMatch.done) return {
+                    done: false,
+                    value: childMatch.value
+                };
+                childMatches = null;
+                childIndex++;
+            }
+            return {
+                done: true
+            };
+        }
+    };
+}
+/**
+ * Universal Router (https://www.kriasoft.com/universal-router/)
+ *
+ * Copyright (c) 2015-present Kriasoft.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE.txt file in the root directory of this source tree.
+ */ function resolveRoute(context) {
+    if (isFunction(context.route.action)) return context.route.action(context);
+    return undefined;
+}
+/**
+ * Universal Router (https://www.kriasoft.com/universal-router/)
+ *
+ * Copyright (c) 2015-present Kriasoft.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE.txt file in the root directory of this source tree.
+ */ function isChildRoute(parentRoute, childRoute) {
+    let route = childRoute;
+    while(route){
+        route = route.parent;
+        if (route === parentRoute) return true;
+    }
+    return false;
+}
+function generateErrorMessage(currentContext) {
+    let errorMessage = `Path '${currentContext.pathname}' is not properly resolved due to an error.`;
+    const routePath = (currentContext.route || {}).path;
+    if (routePath) errorMessage += ` Resolution had failed on route: '${routePath}'`;
+    return errorMessage;
+}
+function updateChainForRoute(context, match) {
+    const { route, path } = match;
+    if (route && !route.__synthetic) {
+        const item = {
+            path,
+            route
+        };
+        if (!context.chain) context.chain = [];
+        else // Discard old items
+        if (route.parent) {
+            let i = context.chain.length;
+            while(i-- && context.chain[i].route && context.chain[i].route !== route.parent)context.chain.pop();
+        }
+        context.chain.push(item);
+    }
+}
+/**
+ */ class Resolver {
+    constructor(routes, options = {}){
+        if (Object(routes) !== routes) throw new TypeError("Invalid routes");
+        this.baseUrl = options.baseUrl || "";
+        this.errorHandler = options.errorHandler;
+        this.resolveRoute = options.resolveRoute || resolveRoute;
+        this.context = Object.assign({
+            resolver: this
+        }, options.context);
+        this.root = Array.isArray(routes) ? {
+            path: "",
+            __children: routes,
+            parent: null,
+            __synthetic: true
+        } : routes;
+        this.root.parent = null;
+    }
+    /**
+   * Returns the current list of routes (as a shallow copy). Adding / removing
+   * routes to / from the returned array does not affect the routing config,
+   * but modifying the route objects does.
+   *
+   * @return {!Array<!Router.Route>}
+   */ getRoutes() {
+        return [
+            ...this.root.__children
+        ];
+    }
+    /**
+   * Sets the routing config (replacing the existing one).
+   *
+   * @param {!Array<!Router.Route>|!Router.Route} routes a single route or an array of those
+   *    (the array is shallow copied)
+   */ setRoutes(routes) {
+        ensureRoutes(routes);
+        const newRoutes = [
+            ...toArray(routes)
+        ];
+        this.root.__children = newRoutes;
+    }
+    /**
+   * Appends one or several routes to the routing config and returns the
+   * effective routing config after the operation.
+   *
+   * @param {!Array<!Router.Route>|!Router.Route} routes a single route or an array of those
+   *    (the array is shallow copied)
+   * @return {!Array<!Router.Route>}
+   * @protected
+   */ addRoutes(routes) {
+        ensureRoutes(routes);
+        this.root.__children.push(...toArray(routes));
+        return this.getRoutes();
+    }
+    /**
+   * Removes all existing routes from the routing config.
+   */ removeRoutes() {
+        this.setRoutes([]);
+    }
+    /**
+   * Asynchronously resolves the given pathname, i.e. finds all routes matching
+   * the pathname and tries resolving them one after another in the order they
+   * are listed in the routes config until the first non-null result.
+   *
+   * Returns a promise that is fulfilled with the return value of an object that consists of the first
+   * route handler result that returns something other than `null` or `undefined` and context used to get this result.
+   *
+   * If no route handlers return a non-null result, or if no route matches the
+   * given pathname the returned promise is rejected with a 'page not found'
+   * `Error`.
+   *
+   * @param {!string|!{pathname: !string}} pathnameOrContext the pathname to
+   *    resolve or a context object with a `pathname` property and other
+   *    properties to pass to the route resolver functions.
+   * @return {!Promise<any>}
+   */ resolve(pathnameOrContext) {
+        const context = Object.assign({}, this.context, isString(pathnameOrContext) ? {
+            pathname: pathnameOrContext
+        } : pathnameOrContext);
+        const match = matchRoute(this.root, this.__normalizePathname(context.pathname), this.baseUrl);
+        const resolve = this.resolveRoute;
+        let matches = null;
+        let nextMatches = null;
+        let currentContext = context;
+        function next(resume, parent = matches.value.route, prevResult) {
+            const routeToSkip = prevResult === null && matches.value.route;
+            matches = nextMatches || match.next(routeToSkip);
+            nextMatches = null;
+            if (!resume) {
+                if (matches.done || !isChildRoute(parent, matches.value.route)) {
+                    nextMatches = matches;
+                    return Promise.resolve(notFoundResult);
+                }
+            }
+            if (matches.done) return Promise.reject(getNotFoundError(context));
+            currentContext = Object.assign(currentContext ? {
+                chain: currentContext.chain ? currentContext.chain.slice(0) : []
+            } : {}, context, matches.value);
+            updateChainForRoute(currentContext, matches.value);
+            return Promise.resolve(resolve(currentContext)).then((resolution)=>{
+                if (resolution !== null && resolution !== undefined && resolution !== notFoundResult) {
+                    currentContext.result = resolution.result || resolution;
+                    return currentContext;
+                }
+                return next(resume, parent, resolution);
             });
         }
-        listeners() {
-            const butEl = this.querySelector(".rooms-list");
-            butEl.addEventListener("click", (e)=>{
-                e.preventDefault();
-                const tar = e.target;
-                (0, _state.state).data.roomId = tar.textContent;
-                (0, _state.state).accessToRoom();
-            });
+        context.next = next;
+        return Promise.resolve().then(()=>next(true, this.root)).catch((error)=>{
+            const errorMessage = generateErrorMessage(currentContext);
+            if (!error) error = new Error(errorMessage);
+            else console.warn(errorMessage);
+            error.context = error.context || currentContext;
+            // DOMException has its own code which is read-only
+            if (!(error instanceof DOMException)) error.code = error.code || 500;
+            if (this.errorHandler) {
+                currentContext.result = this.errorHandler(error);
+                return currentContext;
+            }
+            throw error;
+        });
+    }
+    /**
+   * URL constructor polyfill hook. Creates and returns an URL instance.
+   */ static __createUrl(url, base) {
+        return new URL(url, base);
+    }
+    /**
+   * If the baseUrl property is set, transforms the baseUrl and returns the full
+   * actual `base` string for using in the `new URL(path, base);` and for
+   * prepernding the paths with. The returned base ends with a trailing slash.
+   *
+   * Otherwise, returns empty string.
+   */ get __effectiveBaseUrl() {
+        return this.baseUrl ? this.constructor.__createUrl(this.baseUrl, document.baseURI || document.URL).href.replace(/[^\/]*$/, "") : "";
+    }
+    /**
+   * If the baseUrl is set, matches the pathname with the router’s baseUrl,
+   * and returns the local pathname with the baseUrl stripped out.
+   *
+   * If the pathname does not match the baseUrl, returns undefined.
+   *
+   * If the `baseUrl` is not set, returns the unmodified pathname argument.
+   */ __normalizePathname(pathname) {
+        if (!this.baseUrl) // No base URL, no need to transform the pathname.
+        return pathname;
+        const base = this.__effectiveBaseUrl;
+        const normalizedUrl = this.constructor.__createUrl(pathname, base).href;
+        if (normalizedUrl.slice(0, base.length) === base) return normalizedUrl.slice(base.length);
+    }
+}
+Resolver.pathToRegexp = pathToRegexp_1;
+/**
+ * Universal Router (https://www.kriasoft.com/universal-router/)
+ *
+ * Copyright (c) 2015-present Kriasoft.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE.txt file in the root directory of this source tree.
+ */ const { pathToRegexp } = Resolver;
+const cache = new Map();
+function cacheRoutes(routesByName, route, routes) {
+    const name = route.name || route.component;
+    if (name) {
+        if (routesByName.has(name)) routesByName.get(name).push(route);
+        else routesByName.set(name, [
+            route
+        ]);
+    }
+    if (Array.isArray(routes)) for(let i = 0; i < routes.length; i++){
+        const childRoute = routes[i];
+        childRoute.parent = route;
+        cacheRoutes(routesByName, childRoute, childRoute.__children || childRoute.children);
+    }
+}
+function getRouteByName(routesByName, routeName) {
+    const routes = routesByName.get(routeName);
+    if (routes && routes.length > 1) throw new Error(`Duplicate route with name "${routeName}".` + ` Try seting unique 'name' route properties.`);
+    return routes && routes[0];
+}
+function getRoutePath(route) {
+    let path = route.path;
+    path = Array.isArray(path) ? path[0] : path;
+    return path !== undefined ? path : "";
+}
+function generateUrls(router, options = {}) {
+    if (!(router instanceof Resolver)) throw new TypeError("An instance of Resolver is expected");
+    const routesByName = new Map();
+    return (routeName, params)=>{
+        let route = getRouteByName(routesByName, routeName);
+        if (!route) {
+            routesByName.clear(); // clear cache
+            cacheRoutes(routesByName, router.root, router.root.__children);
+            route = getRouteByName(routesByName, routeName);
+            if (!route) throw new Error(`Route "${routeName}" not found`);
         }
-        constructor(...args){
-            super(...args);
-            this.roomIds = [];
+        let regexp = cache.get(route.fullPath);
+        if (!regexp) {
+            let fullPath = getRoutePath(route);
+            let rt = route.parent;
+            while(rt){
+                const path = getRoutePath(rt);
+                if (path) fullPath = path.replace(/\/$/, "") + "/" + fullPath.replace(/^\//, "");
+                rt = rt.parent;
+            }
+            const tokens = pathToRegexp.parse(fullPath);
+            const toPath = pathToRegexp.tokensToFunction(tokens);
+            const keys = Object.create(null);
+            for(let i = 0; i < tokens.length; i++)if (!isString(tokens[i])) keys[tokens[i].name] = true;
+            regexp = {
+                toPath,
+                keys
+            };
+            cache.set(fullPath, regexp);
+            route.fullPath = fullPath;
+        }
+        let url = regexp.toPath(params, options) || "/";
+        if (options.stringifyQueryParams && params) {
+            const queryParams = {};
+            const keys = Object.keys(params);
+            for(let i = 0; i < keys.length; i++){
+                const key = keys[i];
+                if (!regexp.keys[key]) queryParams[key] = params[key];
+            }
+            const query = options.stringifyQueryParams(queryParams);
+            if (query) url += query.charAt(0) === "?" ? query : `?${query}`;
+        }
+        return url;
+    };
+}
+/**
+ * @typedef NavigationTrigger
+ * @type {object}
+ * @property {function()} activate
+ * @property {function()} inactivate
+ */ /** @type {Array<NavigationTrigger>} */ let triggers = [];
+function setNavigationTriggers(newTriggers) {
+    triggers.forEach((trigger)=>trigger.inactivate());
+    newTriggers.forEach((trigger)=>trigger.activate());
+    triggers = newTriggers;
+}
+const willAnimate = (elem)=>{
+    const name = getComputedStyle(elem).getPropertyValue("animation-name");
+    return name && name !== "none";
+};
+const waitForAnimation = (elem, cb)=>{
+    const listener = ()=>{
+        elem.removeEventListener("animationend", listener);
+        cb();
+    };
+    elem.addEventListener("animationend", listener);
+};
+function animate(elem, className) {
+    elem.classList.add(className);
+    return new Promise((resolve)=>{
+        if (willAnimate(elem)) {
+            const rect = elem.getBoundingClientRect();
+            const size = `height: ${rect.bottom - rect.top}px; width: ${rect.right - rect.left}px`;
+            elem.setAttribute("style", `position: absolute; ${size}`);
+            waitForAnimation(elem, ()=>{
+                elem.classList.remove(className);
+                elem.removeAttribute("style");
+                resolve();
+            });
+        } else {
+            elem.classList.remove(className);
+            resolve();
         }
     });
 }
+const MAX_REDIRECT_COUNT = 256;
+function isResultNotEmpty(result) {
+    return result !== null && result !== undefined;
+}
+function copyContextWithoutNext(context) {
+    const copy = Object.assign({}, context);
+    delete copy.next;
+    return copy;
+}
+function createLocation({ pathname = "", search = "", hash = "", chain = [], params = {}, redirectFrom, resolver }, route) {
+    const routes = chain.map((item)=>item.route);
+    return {
+        baseUrl: resolver && resolver.baseUrl || "",
+        pathname,
+        search,
+        hash,
+        routes,
+        route: route || routes.length && routes[routes.length - 1] || null,
+        params,
+        redirectFrom,
+        getUrl: (userParams = {})=>getPathnameForRouter(Router.pathToRegexp.compile(getMatchedPath(routes))(Object.assign({}, params, userParams)), resolver)
+    };
+}
+function createRedirect(context, pathname) {
+    const params = Object.assign({}, context.params);
+    return {
+        redirect: {
+            pathname,
+            from: context.pathname,
+            params
+        }
+    };
+}
+function renderElement(context, element) {
+    element.location = createLocation(context);
+    const index = context.chain.map((item)=>item.route).indexOf(context.route);
+    context.chain[index].element = element;
+    return element;
+}
+function runCallbackIfPossible(callback, args, thisArg) {
+    if (isFunction(callback)) return callback.apply(thisArg, args);
+}
+function amend(amendmentFunction, args, element) {
+    return (amendmentResult)=>{
+        if (amendmentResult && (amendmentResult.cancel || amendmentResult.redirect)) return amendmentResult;
+        if (element) return runCallbackIfPossible(element[amendmentFunction], args, element);
+    };
+}
+function processNewChildren(newChildren, route) {
+    if (!Array.isArray(newChildren) && !isObject(newChildren)) throw new Error(log(`Incorrect "children" value for the route ${route.path}: expected array or object, but got ${newChildren}`));
+    route.__children = [];
+    const childRoutes = toArray(newChildren);
+    for(let i = 0; i < childRoutes.length; i++){
+        ensureRoute(childRoutes[i]);
+        route.__children.push(childRoutes[i]);
+    }
+}
+function removeDomNodes(nodes) {
+    if (nodes && nodes.length) {
+        const parent = nodes[0].parentNode;
+        for(let i = 0; i < nodes.length; i++)parent.removeChild(nodes[i]);
+    }
+}
+function getPathnameForRouter(pathname, router) {
+    const base = router.__effectiveBaseUrl;
+    return base ? router.constructor.__createUrl(pathname.replace(/^\//, ""), base).pathname : pathname;
+}
+function getMatchedPath(chain) {
+    return chain.map((item)=>item.path).reduce((a, b)=>{
+        if (b.length) return a.replace(/\/$/, "") + "/" + b.replace(/^\//, "");
+        return a;
+    }, "");
+}
+/**
+ * A simple client-side router for single-page applications. It uses
+ * express-style middleware and has a first-class support for Web Components and
+ * lazy-loading. Works great in Polymer and non-Polymer apps.
+ *
+ * Use `new Router(outlet, options)` to create a new Router instance.
+ *
+ * * The `outlet` parameter is a reference to the DOM node to render
+ *   the content into.
+ *
+ * * The `options` parameter is an optional object with options. The following
+ *   keys are supported:
+ *   * `baseUrl` — the initial value for [
+ *     the `baseUrl` property
+ *   ](#/classes/Router#property-baseUrl)
+ *
+ * The Router instance is automatically subscribed to navigation events
+ * on `window`.
+ *
+ * See [Live Examples](#/classes/Router/demos/demo/index.html) for the detailed usage demo and code snippets.
+ *
+ * See also detailed API docs for the following methods, for the advanced usage:
+ *
+ * * [setOutlet](#/classes/Router#method-setOutlet) – should be used to configure the outlet.
+ * * [setTriggers](#/classes/Router#method-setTriggers) – should be used to configure the navigation events.
+ * * [setRoutes](#/classes/Router#method-setRoutes) – should be used to configure the routes.
+ *
+ * Only `setRoutes` has to be called manually, others are automatically invoked when creating a new instance.
+ *
+ * @extends Resolver
+ * @demo demo/index.html
+ * @summary JavaScript class that renders different DOM content depending on
+ *    a given path. It can re-render when triggered or automatically on
+ *    'popstate' and / or 'click' events.
+ */ class Router extends Resolver {
+    /**
+   * Creates a new Router instance with a given outlet, and
+   * automatically subscribes it to navigation events on the `window`.
+   * Using a constructor argument or a setter for outlet is equivalent:
+   *
+   * ```
+   * const router = new Router();
+   * router.setOutlet(outlet);
+   * ```
+   * @param {?Node=} outlet
+   * @param {?RouterOptions=} options
+   */ constructor(outlet, options){
+        const baseElement = document.head.querySelector("base");
+        const baseHref = baseElement && baseElement.getAttribute("href");
+        super([], Object.assign({
+            // Default options
+            baseUrl: baseHref && Resolver.__createUrl(baseHref, document.URL).pathname.replace(/[^\/]*$/, "")
+        }, options));
+        this.resolveRoute = (context)=>this.__resolveRoute(context);
+        const triggers = Router.NavigationTrigger;
+        Router.setTriggers.apply(Router, Object.keys(triggers).map((key)=>triggers[key]));
+        /**
+     * The base URL for all routes in the router instance. By default,
+     * if the base element exists in the `<head>`, vaadin-router
+     * takes the `<base href>` attribute value, resolves against current `document.URL`
+     * and gets the `pathname` from the result.
+     *
+     * @public
+     * @type {string}
+     */ this.baseUrl;
+        /**
+     * A promise that is settled after the current render cycle completes. If
+     * there is no render cycle in progress the promise is immediately settled
+     * with the last render cycle result.
+     *
+     * @public
+     * @type {!Promise<!RouterLocation>}
+     */ this.ready;
+        this.ready = Promise.resolve(outlet);
+        /**
+     * Contains read-only information about the current router location:
+     * pathname, active routes, parameters. See the
+     * [Location type declaration](#/classes/RouterLocation)
+     * for more details.
+     *
+     * @public
+     * @type {!RouterLocation}
+     */ this.location;
+        this.location = createLocation({
+            resolver: this
+        });
+        this.__lastStartedRenderId = 0;
+        this.__navigationEventHandler = this.__onNavigationEvent.bind(this);
+        this.setOutlet(outlet);
+        this.subscribe();
+        // Using WeakMap instead of WeakSet because WeakSet is not supported by IE11
+        this.__createdByRouter = new WeakMap();
+        this.__addedByRouter = new WeakMap();
+    }
+    __resolveRoute(context) {
+        const route = context.route;
+        let callbacks = Promise.resolve();
+        if (isFunction(route.children)) callbacks = callbacks.then(()=>route.children(copyContextWithoutNext(context))).then((children)=>{
+            // The route.children() callback might have re-written the
+            // route.children property instead of returning a value
+            if (!isResultNotEmpty(children) && !isFunction(route.children)) children = route.children;
+            processNewChildren(children, route);
+        });
+        const commands = {
+            redirect: (path)=>createRedirect(context, path),
+            component: (component)=>{
+                const element = document.createElement(component);
+                this.__createdByRouter.set(element, true);
+                return element;
+            }
+        };
+        return callbacks.then(()=>{
+            if (this.__isLatestRender(context)) return runCallbackIfPossible(route.action, [
+                context,
+                commands
+            ], route);
+        }).then((result)=>{
+            if (isResultNotEmpty(result)) {
+                // Actions like `() => import('my-view.js')` are not expected to
+                // end the resolution, despite the result is not empty. Checking
+                // the result with a whitelist of values that end the resolution.
+                if (result instanceof HTMLElement || result.redirect || result === notFoundResult) return result;
+            }
+            if (isString(route.redirect)) return commands.redirect(route.redirect);
+            if (route.bundle) return loadBundle(route.bundle).then(()=>{}, ()=>{
+                throw new Error(log(`Bundle not found: ${route.bundle}. Check if the file name is correct`));
+            });
+        }).then((result)=>{
+            if (isResultNotEmpty(result)) return result;
+            if (isString(route.component)) return commands.component(route.component);
+        });
+    }
+    /**
+   * Sets the router outlet (the DOM node where the content for the current
+   * route is inserted). Any content pre-existing in the router outlet is
+   * removed at the end of each render pass.
+   *
+   * NOTE: this method is automatically invoked first time when creating a new Router instance.
+   *
+   * @param {?Node} outlet the DOM node where the content for the current route
+   *     is inserted.
+   */ setOutlet(outlet) {
+        if (outlet) this.__ensureOutlet(outlet);
+        this.__outlet = outlet;
+    }
+    /**
+   * Returns the current router outlet. The initial value is `undefined`.
+   *
+   * @return {?Node} the current router outlet (or `undefined`)
+   */ getOutlet() {
+        return this.__outlet;
+    }
+    /**
+   * Sets the routing config (replacing the existing one) and triggers a
+   * navigation event so that the router outlet is refreshed according to the
+   * current `window.location` and the new routing config.
+   *
+   * Each route object may have the following properties, listed here in the processing order:
+   * * `path` – the route path (relative to the parent route if any) in the
+   * [express.js syntax](https://expressjs.com/en/guide/routing.html#route-paths").
+   *
+   * * `children` – an array of nested routes or a function that provides this
+   * array at the render time. The function can be synchronous or asynchronous:
+   * in the latter case the render is delayed until the returned promise is
+   * resolved. The `children` function is executed every time when this route is
+   * being rendered. This allows for dynamic route structures (e.g. backend-defined),
+   * but it might have a performance impact as well. In order to avoid calling
+   * the function on subsequent renders, you can override the `children` property
+   * of the route object and save the calculated array there
+   * (via `context.route.children = [ route1, route2, ...];`).
+   * Parent routes are fully resolved before resolving the children. Children
+   * 'path' values are relative to the parent ones.
+   *
+   * * `action` – the action that is executed before the route is resolved.
+   * The value for this property should be a function, accepting `context`
+   * and `commands` parameters described below. If present, this function is
+   * always invoked first, disregarding of the other properties' presence.
+   * The action can return a result directly or within a `Promise`, which
+   * resolves to the result. If the action result is an `HTMLElement` instance,
+   * a `commands.component(name)` result, a `commands.redirect(path)` result,
+   * or a `context.next()` result, the current route resolution is finished,
+   * and other route config properties are ignored.
+   * See also **Route Actions** section in [Live Examples](#/classes/Router/demos/demo/index.html).
+   *
+   * * `redirect` – other route's path to redirect to. Passes all route parameters to the redirect target.
+   * The target route should also be defined.
+   * See also **Redirects** section in [Live Examples](#/classes/Router/demos/demo/index.html).
+   *
+   * * `bundle` – string containing the path to `.js` or `.mjs` bundle to load before resolving the route,
+   * or the object with "module" and "nomodule" keys referring to different bundles.
+   * Each bundle is only loaded once. If "module" and "nomodule" are set, only one bundle is loaded,
+   * depending on whether the browser supports ES modules or not.
+   * The property is ignored when either an `action` returns the result or `redirect` property is present.
+   * Any error, e.g. 404 while loading bundle will cause route resolution to throw.
+   * See also **Code Splitting** section in [Live Examples](#/classes/Router/demos/demo/index.html).
+   *
+   * * `component` – the tag name of the Web Component to resolve the route to.
+   * The property is ignored when either an `action` returns the result or `redirect` property is present.
+   * If route contains the `component` property (or an action that return a component)
+   * and its child route also contains the `component` property, child route's component
+   * will be rendered as a light dom child of a parent component.
+   *
+   * * `name` – the string name of the route to use in the
+   * [`router.urlForName(name, params)`](#/classes/Router#method-urlForName)
+   * navigation helper method.
+   *
+   * For any route function (`action`, `children`) defined, the corresponding `route` object is available inside the callback
+   * through the `this` reference. If you need to access it, make sure you define the callback as a non-arrow function
+   * because arrow functions do not have their own `this` reference.
+   *
+   * `context` object that is passed to `action` function holds the following properties:
+   * * `context.pathname` – string with the pathname being resolved
+   *
+   * * `context.search` – search query string
+   *
+   * * `context.hash` – hash string
+   *
+   * * `context.params` – object with route parameters
+   *
+   * * `context.route` – object that holds the route that is currently being rendered.
+   *
+   * * `context.next()` – function for asynchronously getting the next route
+   * contents from the resolution chain (if any)
+   *
+   * `commands` object that is passed to `action` function has
+   * the following methods:
+   *
+   * * `commands.redirect(path)` – function that creates a redirect data
+   * for the path specified.
+   *
+   * * `commands.component(component)` – function that creates a new HTMLElement
+   * with current context. Note: the component created by this function is reused if visiting the same path twice in row.
+   *
+   *
+   * @param {!Array<!Route>|!Route} routes a single route or an array of those
+   * @param {?boolean} skipRender configure the router but skip rendering the
+   *     route corresponding to the current `window.location` values
+   *
+   * @return {!Promise<!Node>}
+   */ setRoutes(routes, skipRender = false) {
+        this.__previousContext = undefined;
+        this.__urlForName = undefined;
+        super.setRoutes(routes);
+        if (!skipRender) this.__onNavigationEvent();
+        return this.ready;
+    }
+    /**
+   * Asynchronously resolves the given pathname and renders the resolved route
+   * component into the router outlet. If no router outlet is set at the time of
+   * calling this method, or at the time when the route resolution is completed,
+   * a `TypeError` is thrown.
+   *
+   * Returns a promise that is fulfilled with the router outlet DOM Node after
+   * the route component is created and inserted into the router outlet, or
+   * rejected if no route matches the given path.
+   *
+   * If another render pass is started before the previous one is completed, the
+   * result of the previous render pass is ignored.
+   *
+   * @param {!string|!{pathname: !string, search: ?string, hash: ?string}} pathnameOrContext
+   *    the pathname to render or a context object with a `pathname` property,
+   *    optional `search` and `hash` properties, and other properties
+   *    to pass to the resolver.
+   * @param {boolean=} shouldUpdateHistory
+   *    update browser history with the rendered location
+   * @return {!Promise<!Node>}
+   */ render(pathnameOrContext, shouldUpdateHistory) {
+        const renderId = ++this.__lastStartedRenderId;
+        const context = Object.assign({
+            search: "",
+            hash: ""
+        }, isString(pathnameOrContext) ? {
+            pathname: pathnameOrContext
+        } : pathnameOrContext, {
+            __renderId: renderId
+        });
+        // Find the first route that resolves to a non-empty result
+        this.ready = this.resolve(context)// Process the result of this.resolve() and handle all special commands:
+        // (redirect / prevent / component). If the result is a 'component',
+        // then go deeper and build the entire chain of nested components matching
+        // the pathname. Also call all 'on before' callbacks along the way.
+        .then((context)=>this.__fullyResolveChain(context)).then((context)=>{
+            if (this.__isLatestRender(context)) {
+                const previousContext = this.__previousContext;
+                // Check if the render was prevented and make an early return in that case
+                if (context === previousContext) {
+                    // Replace the history with the previous context
+                    // to make sure the URL stays the same.
+                    this.__updateBrowserHistory(previousContext, true);
+                    return this.location;
+                }
+                this.location = createLocation(context);
+                if (shouldUpdateHistory) // Replace only if first render redirects, so that we don’t leave
+                // the redirecting record in the history
+                this.__updateBrowserHistory(context, renderId === 1);
+                fireRouterEvent("location-changed", {
+                    router: this,
+                    location: this.location
+                });
+                // Skip detaching/re-attaching there are no render changes
+                if (context.__skipAttach) {
+                    this.__copyUnchangedElements(context, previousContext);
+                    this.__previousContext = context;
+                    return this.location;
+                }
+                this.__addAppearingContent(context, previousContext);
+                const animationDone = this.__animateIfNeeded(context);
+                this.__runOnAfterEnterCallbacks(context);
+                this.__runOnAfterLeaveCallbacks(context, previousContext);
+                return animationDone.then(()=>{
+                    if (this.__isLatestRender(context)) {
+                        // If there is another render pass started after this one,
+                        // the 'disappearing content' would be removed when the other
+                        // render pass calls `this.__addAppearingContent()`
+                        this.__removeDisappearingContent();
+                        this.__previousContext = context;
+                        return this.location;
+                    }
+                });
+            }
+        }).catch((error)=>{
+            if (renderId === this.__lastStartedRenderId) {
+                if (shouldUpdateHistory) this.__updateBrowserHistory(context);
+                removeDomNodes(this.__outlet && this.__outlet.children);
+                this.location = createLocation(Object.assign(context, {
+                    resolver: this
+                }));
+                fireRouterEvent("error", Object.assign({
+                    router: this,
+                    error
+                }, context));
+                throw error;
+            }
+        });
+        return this.ready;
+    }
+    // `topOfTheChainContextBeforeRedirects` is a context coming from Resolver.resolve().
+    // It would contain a 'redirect' route or the first 'component' route that
+    // matched the pathname. There might be more child 'component' routes to be
+    // resolved and added into the chain. This method would find and add them.
+    // `contextBeforeRedirects` is the context containing such a child component
+    // route. It's only necessary when this method is called recursively (otherwise
+    // it's the same as the 'top of the chain' context).
+    //
+    // Apart from building the chain of child components, this method would also
+    // handle 'redirect' routes, call 'onBefore' callbacks and handle 'prevent'
+    // and 'redirect' callback results.
+    __fullyResolveChain(topOfTheChainContextBeforeRedirects, contextBeforeRedirects = topOfTheChainContextBeforeRedirects) {
+        return this.__findComponentContextAfterAllRedirects(contextBeforeRedirects)// `contextAfterRedirects` is always a context with an `HTMLElement` result
+        // In other cases the promise gets rejected and .then() is not called
+        .then((contextAfterRedirects)=>{
+            const redirectsHappened = contextAfterRedirects !== contextBeforeRedirects;
+            const topOfTheChainContextAfterRedirects = redirectsHappened ? contextAfterRedirects : topOfTheChainContextBeforeRedirects;
+            const matchedPath = getPathnameForRouter(getMatchedPath(contextAfterRedirects.chain), contextAfterRedirects.resolver);
+            const isFound = matchedPath === contextAfterRedirects.pathname;
+            // Recursive method to try matching more child and sibling routes
+            const findNextContextIfAny = (context, parent = context.route, prevResult)=>{
+                return context.next(undefined, parent, prevResult).then((nextContext)=>{
+                    if (nextContext === null || nextContext === notFoundResult) {
+                        // Next context is not found in children, ...
+                        if (isFound) // ...but original context is already fully matching - use it
+                        return context;
+                        else if (parent.parent !== null) // ...and there is no full match yet - step up to check siblings
+                        return findNextContextIfAny(context, parent.parent, nextContext);
+                        else return nextContext;
+                    }
+                    return nextContext;
+                });
+            };
+            return findNextContextIfAny(contextAfterRedirects).then((nextContext)=>{
+                if (nextContext === null || nextContext === notFoundResult) throw getNotFoundError(topOfTheChainContextAfterRedirects);
+                return nextContext && nextContext !== notFoundResult && nextContext !== contextAfterRedirects ? this.__fullyResolveChain(topOfTheChainContextAfterRedirects, nextContext) : this.__amendWithOnBeforeCallbacks(contextAfterRedirects);
+            });
+        });
+    }
+    __findComponentContextAfterAllRedirects(context) {
+        const result = context.result;
+        if (result instanceof HTMLElement) {
+            renderElement(context, result);
+            return Promise.resolve(context);
+        } else if (result.redirect) return this.__redirect(result.redirect, context.__redirectCount, context.__renderId).then((context)=>this.__findComponentContextAfterAllRedirects(context));
+        else if (result instanceof Error) return Promise.reject(result);
+        else return Promise.reject(new Error(log(`Invalid route resolution result for path "${context.pathname}". ` + `Expected redirect object or HTML element, but got: "${logValue(result)}". ` + `Double check the action return value for the route.`)));
+    }
+    __amendWithOnBeforeCallbacks(contextWithFullChain) {
+        return this.__runOnBeforeCallbacks(contextWithFullChain).then((amendedContext)=>{
+            if (amendedContext === this.__previousContext || amendedContext === contextWithFullChain) return amendedContext;
+            return this.__fullyResolveChain(amendedContext);
+        });
+    }
+    __runOnBeforeCallbacks(newContext) {
+        const previousContext = this.__previousContext || {};
+        const previousChain = previousContext.chain || [];
+        const newChain = newContext.chain;
+        let callbacks = Promise.resolve();
+        const prevent = ()=>({
+                cancel: true
+            });
+        const redirect = (pathname)=>createRedirect(newContext, pathname);
+        newContext.__divergedChainIndex = 0;
+        newContext.__skipAttach = false;
+        if (previousChain.length) {
+            for(let i = 0; i < Math.min(previousChain.length, newChain.length); i = ++newContext.__divergedChainIndex){
+                if (previousChain[i].route !== newChain[i].route || previousChain[i].path !== newChain[i].path && previousChain[i].element !== newChain[i].element || !this.__isReusableElement(previousChain[i].element, newChain[i].element)) break;
+            }
+            // Skip re-attaching and notifications if element and chain do not change
+            newContext.__skipAttach = // Same route chain
+            newChain.length === previousChain.length && newContext.__divergedChainIndex == newChain.length && // Same element
+            this.__isReusableElement(newContext.result, previousContext.result);
+            if (newContext.__skipAttach) {
+                // execute onBeforeLeave for changed segment element when skipping attach
+                for(let i = newChain.length - 1; i >= 0; i--)callbacks = this.__runOnBeforeLeaveCallbacks(callbacks, newContext, {
+                    prevent
+                }, previousChain[i]);
+                // execute onBeforeEnter for changed segment element when skipping attach
+                for(let i = 0; i < newChain.length; i++){
+                    callbacks = this.__runOnBeforeEnterCallbacks(callbacks, newContext, {
+                        prevent,
+                        redirect
+                    }, newChain[i]);
+                    previousChain[i].element.location = createLocation(newContext, previousChain[i].route);
+                }
+            } else // execute onBeforeLeave when NOT skipping attach
+            for(let i = previousChain.length - 1; i >= newContext.__divergedChainIndex; i--)callbacks = this.__runOnBeforeLeaveCallbacks(callbacks, newContext, {
+                prevent
+            }, previousChain[i]);
+        }
+        // execute onBeforeEnter when NOT skipping attach
+        if (!newContext.__skipAttach) for(let i = 0; i < newChain.length; i++){
+            if (i < newContext.__divergedChainIndex) {
+                if (i < previousChain.length && previousChain[i].element) previousChain[i].element.location = createLocation(newContext, previousChain[i].route);
+            } else {
+                callbacks = this.__runOnBeforeEnterCallbacks(callbacks, newContext, {
+                    prevent,
+                    redirect
+                }, newChain[i]);
+                if (newChain[i].element) newChain[i].element.location = createLocation(newContext, newChain[i].route);
+            }
+        }
+        return callbacks.then((amendmentResult)=>{
+            if (amendmentResult) {
+                if (amendmentResult.cancel) {
+                    this.__previousContext.__renderId = newContext.__renderId;
+                    return this.__previousContext;
+                }
+                if (amendmentResult.redirect) return this.__redirect(amendmentResult.redirect, newContext.__redirectCount, newContext.__renderId);
+            }
+            return newContext;
+        });
+    }
+    __runOnBeforeLeaveCallbacks(callbacks, newContext, commands, chainElement) {
+        const location = createLocation(newContext);
+        return callbacks.then((result)=>{
+            if (this.__isLatestRender(newContext)) {
+                const afterLeaveFunction = amend("onBeforeLeave", [
+                    location,
+                    commands,
+                    this
+                ], chainElement.element);
+                return afterLeaveFunction(result);
+            }
+        }).then((result)=>{
+            if (!(result || {}).redirect) return result;
+        });
+    }
+    __runOnBeforeEnterCallbacks(callbacks, newContext, commands, chainElement) {
+        const location = createLocation(newContext, chainElement.route);
+        return callbacks.then((result)=>{
+            if (this.__isLatestRender(newContext)) {
+                const beforeEnterFunction = amend("onBeforeEnter", [
+                    location,
+                    commands,
+                    this
+                ], chainElement.element);
+                return beforeEnterFunction(result);
+            }
+        });
+    }
+    __isReusableElement(element, otherElement) {
+        if (element && otherElement) return this.__createdByRouter.get(element) && this.__createdByRouter.get(otherElement) ? element.localName === otherElement.localName : element === otherElement;
+        return false;
+    }
+    __isLatestRender(context) {
+        return context.__renderId === this.__lastStartedRenderId;
+    }
+    __redirect(redirectData, counter, renderId) {
+        if (counter > MAX_REDIRECT_COUNT) throw new Error(log(`Too many redirects when rendering ${redirectData.from}`));
+        return this.resolve({
+            pathname: this.urlForPath(redirectData.pathname, redirectData.params),
+            redirectFrom: redirectData.from,
+            __redirectCount: (counter || 0) + 1,
+            __renderId: renderId
+        });
+    }
+    __ensureOutlet(outlet = this.__outlet) {
+        if (!(outlet instanceof Node)) throw new TypeError(log(`Expected router outlet to be a valid DOM Node (but got ${outlet})`));
+    }
+    __updateBrowserHistory({ pathname, search = "", hash = "" }, replace) {
+        if (window.location.pathname !== pathname || window.location.search !== search || window.location.hash !== hash) {
+            const changeState = replace ? "replaceState" : "pushState";
+            window.history[changeState](null, document.title, pathname + search + hash);
+            window.dispatchEvent(new PopStateEvent("popstate", {
+                state: "vaadin-router-ignore"
+            }));
+        }
+    }
+    __copyUnchangedElements(context, previousContext) {
+        // Find the deepest common parent between the last and the new component
+        // chains. Update references for the unchanged elements in the new chain
+        let deepestCommonParent = this.__outlet;
+        for(let i = 0; i < context.__divergedChainIndex; i++){
+            const unchangedElement = previousContext && previousContext.chain[i].element;
+            if (unchangedElement) {
+                if (unchangedElement.parentNode === deepestCommonParent) {
+                    context.chain[i].element = unchangedElement;
+                    deepestCommonParent = unchangedElement;
+                } else break;
+            }
+        }
+        return deepestCommonParent;
+    }
+    __addAppearingContent(context, previousContext) {
+        this.__ensureOutlet();
+        // If the previous 'entering' animation has not completed yet,
+        // stop it and remove that content from the DOM before adding new one.
+        this.__removeAppearingContent();
+        // Copy reusable elements from the previousContext to current
+        const deepestCommonParent = this.__copyUnchangedElements(context, previousContext);
+        // Keep two lists of DOM elements:
+        //  - those that should be removed once the transition animation is over
+        //  - and those that should remain
+        this.__appearingContent = [];
+        this.__disappearingContent = Array.from(deepestCommonParent.children).filter(// Only remove layout content that was added by router
+        (e)=>this.__addedByRouter.get(e) && // Do not remove the result element to avoid flickering
+            e !== context.result);
+        // Add new elements (starting after the deepest common parent) to the DOM.
+        // That way only the components that are actually different between the two
+        // locations are added to the DOM (and those that are common remain in the
+        // DOM without first removing and then adding them again).
+        let parentElement = deepestCommonParent;
+        for(let i = context.__divergedChainIndex; i < context.chain.length; i++){
+            const elementToAdd = context.chain[i].element;
+            if (elementToAdd) {
+                parentElement.appendChild(elementToAdd);
+                this.__addedByRouter.set(elementToAdd, true);
+                if (parentElement === deepestCommonParent) this.__appearingContent.push(elementToAdd);
+                parentElement = elementToAdd;
+            }
+        }
+    }
+    __removeDisappearingContent() {
+        if (this.__disappearingContent) removeDomNodes(this.__disappearingContent);
+        this.__disappearingContent = null;
+        this.__appearingContent = null;
+    }
+    __removeAppearingContent() {
+        if (this.__disappearingContent && this.__appearingContent) {
+            removeDomNodes(this.__appearingContent);
+            this.__disappearingContent = null;
+            this.__appearingContent = null;
+        }
+    }
+    __runOnAfterLeaveCallbacks(currentContext, targetContext) {
+        if (!targetContext) return;
+        // REVERSE iteration: from Z to A
+        for(let i = targetContext.chain.length - 1; i >= currentContext.__divergedChainIndex; i--){
+            if (!this.__isLatestRender(currentContext)) break;
+            const currentComponent = targetContext.chain[i].element;
+            if (!currentComponent) continue;
+            try {
+                const location = createLocation(currentContext);
+                runCallbackIfPossible(currentComponent.onAfterLeave, [
+                    location,
+                    {},
+                    targetContext.resolver
+                ], currentComponent);
+            } finally{
+                if (this.__disappearingContent.indexOf(currentComponent) > -1) removeDomNodes(currentComponent.children);
+            }
+        }
+    }
+    __runOnAfterEnterCallbacks(currentContext) {
+        // forward iteration: from A to Z
+        for(let i = currentContext.__divergedChainIndex; i < currentContext.chain.length; i++){
+            if (!this.__isLatestRender(currentContext)) break;
+            const currentComponent = currentContext.chain[i].element || {};
+            const location = createLocation(currentContext, currentContext.chain[i].route);
+            runCallbackIfPossible(currentComponent.onAfterEnter, [
+                location,
+                {},
+                currentContext.resolver
+            ], currentComponent);
+        }
+    }
+    __animateIfNeeded(context) {
+        const from = (this.__disappearingContent || [])[0];
+        const to = (this.__appearingContent || [])[0];
+        const promises = [];
+        const chain = context.chain;
+        let config;
+        for(let i = chain.length; i > 0; i--)if (chain[i - 1].route.animate) {
+            config = chain[i - 1].route.animate;
+            break;
+        }
+        if (from && to && config) {
+            const leave = isObject(config) && config.leave || "leaving";
+            const enter = isObject(config) && config.enter || "entering";
+            promises.push(animate(from, leave));
+            promises.push(animate(to, enter));
+        }
+        return Promise.all(promises).then(()=>context);
+    }
+    /**
+   * Subscribes this instance to navigation events on the `window`.
+   *
+   * NOTE: beware of resource leaks. For as long as a router instance is
+   * subscribed to navigation events, it won't be garbage collected.
+   */ subscribe() {
+        window.addEventListener("vaadin-router-go", this.__navigationEventHandler);
+    }
+    /**
+   * Removes the subscription to navigation events created in the `subscribe()`
+   * method.
+   */ unsubscribe() {
+        window.removeEventListener("vaadin-router-go", this.__navigationEventHandler);
+    }
+    __onNavigationEvent(event) {
+        const { pathname, search, hash } = event ? event.detail : window.location;
+        if (isString(this.__normalizePathname(pathname))) {
+            if (event && event.preventDefault) event.preventDefault();
+            this.render({
+                pathname,
+                search,
+                hash
+            }, true);
+        }
+    }
+    /**
+   * Configures what triggers Router navigation events:
+   *  - `POPSTATE`: popstate events on the current `window`
+   *  - `CLICK`: click events on `<a>` links leading to the current page
+   *
+   * This method is invoked with the pre-configured values when creating a new Router instance.
+   * By default, both `POPSTATE` and `CLICK` are enabled. This setup is expected to cover most of the use cases.
+   *
+   * See the `router-config.js` for the default navigation triggers config. Based on it, you can
+   * create the own one and only import the triggers you need, instead of pulling in all the code,
+   * e.g. if you want to handle `click` differently.
+   *
+   * See also **Navigation Triggers** section in [Live Examples](#/classes/Router/demos/demo/index.html).
+   *
+   * @param {...NavigationTrigger} triggers
+   */ static setTriggers(...triggers) {
+        setNavigationTriggers(triggers);
+    }
+    /**
+   * Generates a URL for the route with the given name, optionally performing
+   * substitution of parameters.
+   *
+   * The route is searched in all the Router instances subscribed to
+   * navigation events.
+   *
+   * **Note:** For child route names, only array children are considered.
+   * It is not possible to generate URLs using a name for routes set with
+   * a children function.
+   *
+   * @function urlForName
+   * @param {!string} name the route name or the route’s `component` name.
+   * @param {Params=} params Optional object with route path parameters.
+   * Named parameters are passed by name (`params[name] = value`), unnamed
+   * parameters are passed by index (`params[index] = value`).
+   *
+   * @return {string}
+   */ urlForName(name, params) {
+        if (!this.__urlForName) this.__urlForName = generateUrls(this);
+        return getPathnameForRouter(this.__urlForName(name, params), this);
+    }
+    /**
+   * Generates a URL for the given route path, optionally performing
+   * substitution of parameters.
+   *
+   * @param {!string} path string route path declared in [express.js syntax](https://expressjs.com/en/guide/routing.html#route-paths").
+   * @param {Params=} params Optional object with route path parameters.
+   * Named parameters are passed by name (`params[name] = value`), unnamed
+   * parameters are passed by index (`params[index] = value`).
+   *
+   * @return {string}
+   */ urlForPath(path, params) {
+        return getPathnameForRouter(Router.pathToRegexp.compile(path)(params), this);
+    }
+    /**
+   * Triggers navigation to a new path. Returns a boolean without waiting until
+   * the navigation is complete. Returns `true` if at least one `Router`
+   * has handled the navigation (was subscribed and had `baseUrl` matching
+   * the `path` argument), otherwise returns `false`.
+   *
+   * @param {!string|!{pathname: !string, search: (string|undefined), hash: (string|undefined)}} path
+   *   a new in-app path string, or an URL-like object with `pathname`
+   *   string property, and optional `search` and `hash` string properties.
+   * @return {boolean}
+   */ static go(path) {
+        const { pathname, search, hash } = isString(path) ? this.__createUrl(path, "http://a") // some base to omit origin
+         : path;
+        return fireRouterEvent("go", {
+            pathname,
+            search,
+            hash
+        });
+    }
+}
+const DEV_MODE_CODE_REGEXP = /\/\*[\*!]\s+vaadin-dev-mode:start([\s\S]*)vaadin-dev-mode:end\s+\*\*\//i;
+const FlowClients = window.Vaadin && window.Vaadin.Flow && window.Vaadin.Flow.clients;
+function isMinified() {
+    function test() {
+        /** vaadin-dev-mode:start
+    return false;
+    vaadin-dev-mode:end **/ return true;
+    }
+    return uncommentAndRun(test);
+}
+function isDevelopmentMode() {
+    try {
+        if (isForcedDevelopmentMode()) return true;
+        if (!isLocalhost()) return false;
+        if (FlowClients) return !isFlowProductionMode();
+        return !isMinified();
+    } catch (e) {
+        // Some error in this code, assume production so no further actions will be taken
+        return false;
+    }
+}
+function isForcedDevelopmentMode() {
+    return localStorage.getItem("vaadin.developmentmode.force");
+}
+function isLocalhost() {
+    return [
+        "localhost",
+        "127.0.0.1"
+    ].indexOf(window.location.hostname) >= 0;
+}
+function isFlowProductionMode() {
+    if (FlowClients) {
+        const productionModeApps = Object.keys(FlowClients).map((key)=>FlowClients[key]).filter((client)=>client.productionMode);
+        if (productionModeApps.length > 0) return true;
+    }
+    return false;
+}
+function uncommentAndRun(callback, args) {
+    if (typeof callback !== "function") return;
+    const match = DEV_MODE_CODE_REGEXP.exec(callback.toString());
+    if (match) try {
+        // requires CSP: script-src 'unsafe-eval'
+        callback = new Function(match[1]);
+    } catch (e) {
+        // eat the exception
+        console.log("vaadin-development-mode-detector: uncommentAndRun() failed", e);
+    }
+    return callback(args);
+}
+// A guard against polymer-modulizer removing the window.Vaadin
+// initialization above.
+window["Vaadin"] = window["Vaadin"] || {};
+/**
+ * Inspects the source code of the given `callback` function for
+ * specially-marked _commented_ code. If such commented code is found in the
+ * callback source, uncomments and runs that code instead of the callback
+ * itself. Otherwise runs the callback as is.
+ *
+ * The optional arguments are passed into the callback / uncommented code,
+ * the result is returned.
+ *
+ * See the `isMinified()` function source code in this file for an example.
+ *
+ */ const runIfDevelopmentMode = function(callback, args) {
+    if (window.Vaadin.developmentMode) return uncommentAndRun(callback, args);
+};
+if (window.Vaadin.developmentMode === undefined) window.Vaadin.developmentMode = isDevelopmentMode();
+/* This file is autogenerated from src/vaadin-usage-statistics.tpl.html */ function maybeGatherAndSendStats() {
+/** vaadin-dev-mode:start
+  (function () {
+'use strict';
 
-},{"../../src/state":"1Yeju","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"8kdFB":[function(require,module,exports) {
+var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) {
+  return typeof obj;
+} : function (obj) {
+  return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj;
+};
+
+var classCallCheck = function (instance, Constructor) {
+  if (!(instance instanceof Constructor)) {
+    throw new TypeError("Cannot call a class as a function");
+  }
+};
+
+var createClass = function () {
+  function defineProperties(target, props) {
+    for (var i = 0; i < props.length; i++) {
+      var descriptor = props[i];
+      descriptor.enumerable = descriptor.enumerable || false;
+      descriptor.configurable = true;
+      if ("value" in descriptor) descriptor.writable = true;
+      Object.defineProperty(target, descriptor.key, descriptor);
+    }
+  }
+
+  return function (Constructor, protoProps, staticProps) {
+    if (protoProps) defineProperties(Constructor.prototype, protoProps);
+    if (staticProps) defineProperties(Constructor, staticProps);
+    return Constructor;
+  };
+}();
+
+var getPolymerVersion = function getPolymerVersion() {
+  return window.Polymer && window.Polymer.version;
+};
+
+var StatisticsGatherer = function () {
+  function StatisticsGatherer(logger) {
+    classCallCheck(this, StatisticsGatherer);
+
+    this.now = new Date().getTime();
+    this.logger = logger;
+  }
+
+  createClass(StatisticsGatherer, [{
+    key: 'frameworkVersionDetectors',
+    value: function frameworkVersionDetectors() {
+      return {
+        'Flow': function Flow() {
+          if (window.Vaadin && window.Vaadin.Flow && window.Vaadin.Flow.clients) {
+            var flowVersions = Object.keys(window.Vaadin.Flow.clients).map(function (key) {
+              return window.Vaadin.Flow.clients[key];
+            }).filter(function (client) {
+              return client.getVersionInfo;
+            }).map(function (client) {
+              return client.getVersionInfo().flow;
+            });
+            if (flowVersions.length > 0) {
+              return flowVersions[0];
+            }
+          }
+        },
+        'Vaadin Framework': function VaadinFramework() {
+          if (window.vaadin && window.vaadin.clients) {
+            var frameworkVersions = Object.values(window.vaadin.clients).filter(function (client) {
+              return client.getVersionInfo;
+            }).map(function (client) {
+              return client.getVersionInfo().vaadinVersion;
+            });
+            if (frameworkVersions.length > 0) {
+              return frameworkVersions[0];
+            }
+          }
+        },
+        'AngularJs': function AngularJs() {
+          if (window.angular && window.angular.version && window.angular.version) {
+            return window.angular.version.full;
+          }
+        },
+        'Angular': function Angular() {
+          if (window.ng) {
+            var tags = document.querySelectorAll("[ng-version]");
+            if (tags.length > 0) {
+              return tags[0].getAttribute("ng-version");
+            }
+            return "Unknown";
+          }
+        },
+        'Backbone.js': function BackboneJs() {
+          if (window.Backbone) {
+            return window.Backbone.VERSION;
+          }
+        },
+        'React': function React() {
+          var reactSelector = '[data-reactroot], [data-reactid]';
+          if (!!document.querySelector(reactSelector)) {
+            // React does not publish the version by default
+            return "unknown";
+          }
+        },
+        'Ember': function Ember() {
+          if (window.Em && window.Em.VERSION) {
+            return window.Em.VERSION;
+          } else if (window.Ember && window.Ember.VERSION) {
+            return window.Ember.VERSION;
+          }
+        },
+        'jQuery': function (_jQuery) {
+          function jQuery() {
+            return _jQuery.apply(this, arguments);
+          }
+
+          jQuery.toString = function () {
+            return _jQuery.toString();
+          };
+
+          return jQuery;
+        }(function () {
+          if (typeof jQuery === 'function' && jQuery.prototype.jquery !== undefined) {
+            return jQuery.prototype.jquery;
+          }
+        }),
+        'Polymer': function Polymer() {
+          var version = getPolymerVersion();
+          if (version) {
+            return version;
+          }
+        },
+        'LitElement': function LitElement() {
+          var version = window.litElementVersions && window.litElementVersions[0];
+          if (version) {
+            return version;
+          }
+        },
+        'LitHtml': function LitHtml() {
+          var version = window.litHtmlVersions && window.litHtmlVersions[0];
+          if (version) {
+            return version;
+          }
+        },
+        'Vue.js': function VueJs() {
+          if (window.Vue) {
+            return window.Vue.version;
+          }
+        }
+      };
+    }
+  }, {
+    key: 'getUsedVaadinElements',
+    value: function getUsedVaadinElements(elements) {
+      var version = getPolymerVersion();
+      var elementClasses = void 0;
+      // NOTE: In case you edit the code here, YOU MUST UPDATE any statistics reporting code in Flow.
+      // Check all locations calling the method getEntries() in
+      // https://github.com/vaadin/flow/blob/master/flow-server/src/main/java/com/vaadin/flow/internal/UsageStatistics.java#L106
+      // Currently it is only used by BootstrapHandler.
+      if (version && version.indexOf('2') === 0) {
+        // Polymer 2: components classes are stored in window.Vaadin
+        elementClasses = Object.keys(window.Vaadin).map(function (c) {
+          return window.Vaadin[c];
+        }).filter(function (c) {
+          return c.is;
+        });
+      } else {
+        // Polymer 3: components classes are stored in window.Vaadin.registrations
+        elementClasses = window.Vaadin.registrations || [];
+      }
+      elementClasses.forEach(function (klass) {
+        var version = klass.version ? klass.version : "0.0.0";
+        elements[klass.is] = { version: version };
+      });
+    }
+  }, {
+    key: 'getUsedVaadinThemes',
+    value: function getUsedVaadinThemes(themes) {
+      ['Lumo', 'Material'].forEach(function (themeName) {
+        var theme;
+        var version = getPolymerVersion();
+        if (version && version.indexOf('2') === 0) {
+          // Polymer 2: themes are stored in window.Vaadin
+          theme = window.Vaadin[themeName];
+        } else {
+          // Polymer 3: themes are stored in custom element registry
+          theme = customElements.get('vaadin-' + themeName.toLowerCase() + '-styles');
+        }
+        if (theme && theme.version) {
+          themes[themeName] = { version: theme.version };
+        }
+      });
+    }
+  }, {
+    key: 'getFrameworks',
+    value: function getFrameworks(frameworks) {
+      var detectors = this.frameworkVersionDetectors();
+      Object.keys(detectors).forEach(function (framework) {
+        var detector = detectors[framework];
+        try {
+          var version = detector();
+          if (version) {
+            frameworks[framework] = { version: version };
+          }
+        } catch (e) {}
+      });
+    }
+  }, {
+    key: 'gather',
+    value: function gather(storage) {
+      var storedStats = storage.read();
+      var gatheredStats = {};
+      var types = ["elements", "frameworks", "themes"];
+
+      types.forEach(function (type) {
+        gatheredStats[type] = {};
+        if (!storedStats[type]) {
+          storedStats[type] = {};
+        }
+      });
+
+      var previousStats = JSON.stringify(storedStats);
+
+      this.getUsedVaadinElements(gatheredStats.elements);
+      this.getFrameworks(gatheredStats.frameworks);
+      this.getUsedVaadinThemes(gatheredStats.themes);
+
+      var now = this.now;
+      types.forEach(function (type) {
+        var keys = Object.keys(gatheredStats[type]);
+        keys.forEach(function (key) {
+          if (!storedStats[type][key] || _typeof(storedStats[type][key]) != _typeof({})) {
+            storedStats[type][key] = { firstUsed: now };
+          }
+          // Discards any previously logged version number
+          storedStats[type][key].version = gatheredStats[type][key].version;
+          storedStats[type][key].lastUsed = now;
+        });
+      });
+
+      var newStats = JSON.stringify(storedStats);
+      storage.write(newStats);
+      if (newStats != previousStats && Object.keys(storedStats).length > 0) {
+        this.logger.debug("New stats: " + newStats);
+      }
+    }
+  }]);
+  return StatisticsGatherer;
+}();
+
+var StatisticsStorage = function () {
+  function StatisticsStorage(key) {
+    classCallCheck(this, StatisticsStorage);
+
+    this.key = key;
+  }
+
+  createClass(StatisticsStorage, [{
+    key: 'read',
+    value: function read() {
+      var localStorageStatsString = localStorage.getItem(this.key);
+      try {
+        return JSON.parse(localStorageStatsString ? localStorageStatsString : '{}');
+      } catch (e) {
+        return {};
+      }
+    }
+  }, {
+    key: 'write',
+    value: function write(data) {
+      localStorage.setItem(this.key, data);
+    }
+  }, {
+    key: 'clear',
+    value: function clear() {
+      localStorage.removeItem(this.key);
+    }
+  }, {
+    key: 'isEmpty',
+    value: function isEmpty() {
+      var storedStats = this.read();
+      var empty = true;
+      Object.keys(storedStats).forEach(function (key) {
+        if (Object.keys(storedStats[key]).length > 0) {
+          empty = false;
+        }
+      });
+
+      return empty;
+    }
+  }]);
+  return StatisticsStorage;
+}();
+
+var StatisticsSender = function () {
+  function StatisticsSender(url, logger) {
+    classCallCheck(this, StatisticsSender);
+
+    this.url = url;
+    this.logger = logger;
+  }
+
+  createClass(StatisticsSender, [{
+    key: 'send',
+    value: function send(data, errorHandler) {
+      var logger = this.logger;
+
+      if (navigator.onLine === false) {
+        logger.debug("Offline, can't send");
+        errorHandler();
+        return;
+      }
+      logger.debug("Sending data to " + this.url);
+
+      var req = new XMLHttpRequest();
+      req.withCredentials = true;
+      req.addEventListener("load", function () {
+        // Stats sent, nothing more to do
+        logger.debug("Response: " + req.responseText);
+      });
+      req.addEventListener("error", function () {
+        logger.debug("Send failed");
+        errorHandler();
+      });
+      req.addEventListener("abort", function () {
+        logger.debug("Send aborted");
+        errorHandler();
+      });
+      req.open("POST", this.url);
+      req.setRequestHeader("Content-Type", "application/json");
+      req.send(data);
+    }
+  }]);
+  return StatisticsSender;
+}();
+
+var StatisticsLogger = function () {
+  function StatisticsLogger(id) {
+    classCallCheck(this, StatisticsLogger);
+
+    this.id = id;
+  }
+
+  createClass(StatisticsLogger, [{
+    key: '_isDebug',
+    value: function _isDebug() {
+      return localStorage.getItem("vaadin." + this.id + ".debug");
+    }
+  }, {
+    key: 'debug',
+    value: function debug(msg) {
+      if (this._isDebug()) {
+        console.info(this.id + ": " + msg);
+      }
+    }
+  }]);
+  return StatisticsLogger;
+}();
+
+var UsageStatistics = function () {
+  function UsageStatistics() {
+    classCallCheck(this, UsageStatistics);
+
+    this.now = new Date();
+    this.timeNow = this.now.getTime();
+    this.gatherDelay = 10; // Delay between loading this file and gathering stats
+    this.initialDelay = 24 * 60 * 60;
+
+    this.logger = new StatisticsLogger("statistics");
+    this.storage = new StatisticsStorage("vaadin.statistics.basket");
+    this.gatherer = new StatisticsGatherer(this.logger);
+    this.sender = new StatisticsSender("https://tools.vaadin.com/usage-stats/submit", this.logger);
+  }
+
+  createClass(UsageStatistics, [{
+    key: 'maybeGatherAndSend',
+    value: function maybeGatherAndSend() {
+      var _this = this;
+
+      if (localStorage.getItem(UsageStatistics.optOutKey)) {
+        return;
+      }
+      this.gatherer.gather(this.storage);
+      setTimeout(function () {
+        _this.maybeSend();
+      }, this.gatherDelay * 1000);
+    }
+  }, {
+    key: 'lottery',
+    value: function lottery() {
+      return true;
+    }
+  }, {
+    key: 'currentMonth',
+    value: function currentMonth() {
+      return this.now.getYear() * 12 + this.now.getMonth();
+    }
+  }, {
+    key: 'maybeSend',
+    value: function maybeSend() {
+      var firstUse = Number(localStorage.getItem(UsageStatistics.firstUseKey));
+      var monthProcessed = Number(localStorage.getItem(UsageStatistics.monthProcessedKey));
+
+      if (!firstUse) {
+        // Use a grace period to avoid interfering with tests, incognito mode etc
+        firstUse = this.timeNow;
+        localStorage.setItem(UsageStatistics.firstUseKey, firstUse);
+      }
+
+      if (this.timeNow < firstUse + this.initialDelay * 1000) {
+        this.logger.debug("No statistics will be sent until the initial delay of " + this.initialDelay + "s has passed");
+        return;
+      }
+      if (this.currentMonth() <= monthProcessed) {
+        this.logger.debug("This month has already been processed");
+        return;
+      }
+      localStorage.setItem(UsageStatistics.monthProcessedKey, this.currentMonth());
+      // Use random sampling
+      if (this.lottery()) {
+        this.logger.debug("Congratulations, we have a winner!");
+      } else {
+        this.logger.debug("Sorry, no stats from you this time");
+        return;
+      }
+
+      this.send();
+    }
+  }, {
+    key: 'send',
+    value: function send() {
+      // Ensure we have the latest data
+      this.gatherer.gather(this.storage);
+
+      // Read, send and clean up
+      var data = this.storage.read();
+      data["firstUse"] = Number(localStorage.getItem(UsageStatistics.firstUseKey));
+      data["usageStatisticsVersion"] = UsageStatistics.version;
+      var info = 'This request contains usage statistics gathered from the application running in development mode. \n\nStatistics gathering is automatically disabled and excluded from production builds.\n\nFor details and to opt-out, see https://github.com/vaadin/vaadin-usage-statistics.\n\n\n\n';
+      var self = this;
+      this.sender.send(info + JSON.stringify(data), function () {
+        // Revert the 'month processed' flag
+        localStorage.setItem(UsageStatistics.monthProcessedKey, self.currentMonth() - 1);
+      });
+    }
+  }], [{
+    key: 'version',
+    get: function get$1() {
+      return '2.1.2';
+    }
+  }, {
+    key: 'firstUseKey',
+    get: function get$1() {
+      return 'vaadin.statistics.firstuse';
+    }
+  }, {
+    key: 'monthProcessedKey',
+    get: function get$1() {
+      return 'vaadin.statistics.monthProcessed';
+    }
+  }, {
+    key: 'optOutKey',
+    get: function get$1() {
+      return 'vaadin.statistics.optout';
+    }
+  }]);
+  return UsageStatistics;
+}();
+
+try {
+  window.Vaadin = window.Vaadin || {};
+  window.Vaadin.usageStatsChecker = window.Vaadin.usageStatsChecker || new UsageStatistics();
+  window.Vaadin.usageStatsChecker.maybeGatherAndSend();
+} catch (e) {
+  // Intentionally ignored as this is not a problem in the app being developed
+}
+
+}());
+
+  vaadin-dev-mode:end **/ }
+const usageStatistics = function() {
+    if (typeof runIfDevelopmentMode === "function") return runIfDevelopmentMode(maybeGatherAndSendStats);
+};
+window.Vaadin = window.Vaadin || {};
+window.Vaadin.registrations = window.Vaadin.registrations || [];
+window.Vaadin.registrations.push({
+    is: "@vaadin/router",
+    version: "1.7.4"
+});
+usageStatistics();
+Router.NavigationTrigger = {
+    POPSTATE,
+    CLICK
+};
+
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"8kdFB":[function(require,module,exports) {
 /*global window, global*/ var global = arguments[3];
 var util = require("69c2299a3979223b");
 var assert = require("ddc56b415c70169e");
@@ -44594,2314 +44466,105 @@ var getPolyfill = require("f2ce5ac0488eb372");
     return polyfill;
 };
 
-},{"6e613ddb8bace1c6":"6eq5U","f2ce5ac0488eb372":"h00Nr"}],"kVZrF":[function(require,module,exports) {
+},{"6e613ddb8bace1c6":"6eq5U","f2ce5ac0488eb372":"h00Nr"}],"3Gh8t":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "Resolver", ()=>Resolver);
-parcelHelpers.export(exports, "Router", ()=>Router);
-function toArray(objectOrArray) {
-    objectOrArray = objectOrArray || [];
-    return Array.isArray(objectOrArray) ? objectOrArray : [
-        objectOrArray
-    ];
-}
-function log(msg) {
-    return `[Vaadin.Router] ${msg}`;
-}
-function logValue(value) {
-    if (typeof value !== "object") return String(value);
-    const stringType = Object.prototype.toString.call(value).match(/ (.*)\]$/)[1];
-    if (stringType === "Object" || stringType === "Array") return `${stringType} ${JSON.stringify(value)}`;
-    else return stringType;
-}
-const MODULE = "module";
-const NOMODULE = "nomodule";
-const bundleKeys = [
-    MODULE,
-    NOMODULE
-];
-function ensureBundle(src) {
-    if (!src.match(/.+\.[m]?js$/)) throw new Error(log(`Unsupported type for bundle "${src}": .js or .mjs expected.`));
-}
-function ensureRoute(route) {
-    if (!route || !isString(route.path)) throw new Error(log(`Expected route config to be an object with a "path" string property, or an array of such objects`));
-    const bundle = route.bundle;
-    const stringKeys = [
-        "component",
-        "redirect",
-        "bundle"
-    ];
-    if (!isFunction(route.action) && !Array.isArray(route.children) && !isFunction(route.children) && !isObject(bundle) && !stringKeys.some((key)=>isString(route[key]))) throw new Error(log(`Expected route config "${route.path}" to include either "${stringKeys.join('", "')}" ` + `or "action" function but none found.`));
-    if (bundle) {
-        if (isString(bundle)) ensureBundle(bundle);
-        else if (!bundleKeys.some((key)=>key in bundle)) throw new Error(log('Expected route bundle to include either "' + NOMODULE + '" or "' + MODULE + '" keys, or both'));
-        else bundleKeys.forEach((key)=>key in bundle && ensureBundle(bundle[key]));
-    }
-    if (route.redirect) [
-        "bundle",
-        "component"
-    ].forEach((overriddenProp)=>{
-        if (overriddenProp in route) console.warn(log(`Route config "${route.path}" has both "redirect" and "${overriddenProp}" properties, ` + `and "redirect" will always override the latter. Did you mean to only use "${overriddenProp}"?`));
-    });
-}
-function ensureRoutes(routes) {
-    toArray(routes).forEach((route)=>ensureRoute(route));
-}
-function loadScript(src, key) {
-    let script = document.head.querySelector('script[src="' + src + '"][async]');
-    if (!script) {
-        script = document.createElement("script");
-        script.setAttribute("src", src);
-        if (key === MODULE) script.setAttribute("type", MODULE);
-        else if (key === NOMODULE) script.setAttribute(NOMODULE, "");
-        script.async = true;
-    }
-    return new Promise((resolve, reject)=>{
-        script.onreadystatechange = script.onload = (e)=>{
-            script.__dynamicImportLoaded = true;
-            resolve(e);
-        };
-        script.onerror = (e)=>{
-            if (script.parentNode) script.parentNode.removeChild(script);
-            reject(e);
-        };
-        if (script.parentNode === null) document.head.appendChild(script);
-        else if (script.__dynamicImportLoaded) resolve();
-    });
-}
-function loadBundle(bundle) {
-    if (isString(bundle)) return loadScript(bundle);
-    else return Promise.race(bundleKeys.filter((key)=>key in bundle).map((key)=>loadScript(bundle[key], key)));
-}
-function fireRouterEvent(type, detail) {
-    return !window.dispatchEvent(new CustomEvent(`vaadin-router-${type}`, {
-        cancelable: type === "go",
-        detail
-    }));
-}
-function isObject(o) {
-    // guard against null passing the typeof check
-    return typeof o === "object" && !!o;
-}
-function isFunction(f) {
-    return typeof f === "function";
-}
-function isString(s) {
-    return typeof s === "string";
-}
-function getNotFoundError(context) {
-    const error = new Error(log(`Page not found (${context.pathname})`));
-    error.context = context;
-    error.code = 404;
-    return error;
-}
-const notFoundResult = new class NotFoundResult {
-}();
-/* istanbul ignore next: coverage is calculated in Chrome, this code is for IE */ function getAnchorOrigin(anchor) {
-    // IE11: on HTTP and HTTPS the default port is not included into
-    // window.location.origin, so won't include it here either.
-    const port = anchor.port;
-    const protocol = anchor.protocol;
-    const defaultHttp = protocol === "http:" && port === "80";
-    const defaultHttps = protocol === "https:" && port === "443";
-    const host = defaultHttp || defaultHttps ? anchor.hostname // does not include the port number (e.g. www.example.org)
-     : anchor.host; // does include the port number (e.g. www.example.org:80)
-    return `${protocol}//${host}`;
-}
-// The list of checks is not complete:
-//  - SVG support is missing
-//  - the 'rel' attribute is not considered
-function vaadinRouterGlobalClickHandler(event) {
-    // ignore the click if the default action is prevented
-    if (event.defaultPrevented) return;
-    // ignore the click if not with the primary mouse button
-    if (event.button !== 0) return;
-    // ignore the click if a modifier key is pressed
-    if (event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
-    // find the <a> element that the click is at (or within)
-    let anchor = event.target;
-    const path = event.composedPath ? event.composedPath() : event.path || [];
-    // FIXME(web-padawan): `Symbol.iterator` used by webcomponentsjs is broken for arrays
-    // example to check: `for...of` loop here throws the "Not yet implemented" error
-    for(let i = 0; i < path.length; i++){
-        const target = path[i];
-        if (target.nodeName && target.nodeName.toLowerCase() === "a") {
-            anchor = target;
-            break;
+parcelHelpers.export(exports, "funcRoomId", ()=>funcRoomId);
+var _state = require("../../src/state");
+function funcRoomId() {
+    customElements.define("rooms-el", class Results extends HTMLElement {
+        connectedCallback() {
+            this.render();
+            this.rooms();
+            this.listeners();
         }
-    }
-    while(anchor && anchor.nodeName.toLowerCase() !== "a")anchor = anchor.parentNode;
-    // ignore the click if not at an <a> element
-    if (!anchor || anchor.nodeName.toLowerCase() !== "a") return;
-    // ignore the click if the <a> element has a non-default target
-    if (anchor.target && anchor.target.toLowerCase() !== "_self") return;
-    // ignore the click if the <a> element has the 'download' attribute
-    if (anchor.hasAttribute("download")) return;
-    // ignore the click if the <a> element has the 'router-ignore' attribute
-    if (anchor.hasAttribute("router-ignore")) return;
-    // ignore the click if the target URL is a fragment on the current page
-    if (anchor.pathname === window.location.pathname && anchor.hash !== "") return;
-    // ignore the click if the target is external to the app
-    // In IE11 HTMLAnchorElement does not have the `origin` property
-    const origin = anchor.origin || getAnchorOrigin(anchor);
-    if (origin !== window.location.origin) return;
-    // if none of the above, convert the click into a navigation event
-    const { pathname, search, hash } = anchor;
-    if (fireRouterEvent("go", {
-        pathname,
-        search,
-        hash
-    })) {
-        event.preventDefault();
-        // for a click event, the scroll is reset to the top position.
-        if (event && event.type === "click") window.scrollTo(0, 0);
-    }
-}
-/**
- * A navigation trigger for Vaadin Router that translated clicks on `<a>` links
- * into Vaadin Router navigation events.
- *
- * Only regular clicks on in-app links are translated (primary mouse button, no
- * modifier keys, the target href is within the app's URL space).
- *
- * @memberOf Router.NavigationTrigger
- * @type {NavigationTrigger}
- */ const CLICK = {
-    activate () {
-        window.document.addEventListener("click", vaadinRouterGlobalClickHandler);
-    },
-    inactivate () {
-        window.document.removeEventListener("click", vaadinRouterGlobalClickHandler);
-    }
-};
-// PopStateEvent constructor shim
-const isIE = /Trident/.test(navigator.userAgent);
-/* istanbul ignore next: coverage is calculated in Chrome, this code is for IE */ if (isIE && !isFunction(window.PopStateEvent)) {
-    window.PopStateEvent = function(inType, params) {
-        params = params || {};
-        var e = document.createEvent("Event");
-        e.initEvent(inType, Boolean(params.bubbles), Boolean(params.cancelable));
-        e.state = params.state || null;
-        return e;
-    };
-    window.PopStateEvent.prototype = window.Event.prototype;
-}
-function vaadinRouterGlobalPopstateHandler(event) {
-    if (event.state === "vaadin-router-ignore") return;
-    const { pathname, search, hash } = window.location;
-    fireRouterEvent("go", {
-        pathname,
-        search,
-        hash
-    });
-}
-/**
- * A navigation trigger for Vaadin Router that translates popstate events into
- * Vaadin Router navigation events.
- *
- * @memberOf Router.NavigationTrigger
- * @type {NavigationTrigger}
- */ const POPSTATE = {
-    activate () {
-        window.addEventListener("popstate", vaadinRouterGlobalPopstateHandler);
-    },
-    inactivate () {
-        window.removeEventListener("popstate", vaadinRouterGlobalPopstateHandler);
-    }
-};
-/**
- * Expose `pathToRegexp`.
- */ var pathToRegexp_1 = pathToRegexp$1;
-var parse_1 = parse;
-var compile_1 = compile;
-var tokensToFunction_1 = tokensToFunction;
-var tokensToRegExp_1 = tokensToRegExp;
-/**
- * Default configs.
- */ var DEFAULT_DELIMITER = "/";
-var DEFAULT_DELIMITERS = "./";
-/**
- * The main path matching regexp utility.
- *
- * @type {RegExp}
- */ var PATH_REGEXP = new RegExp([
-    // Match escaped characters that would otherwise appear in future matches.
-    // This allows the user to escape special characters that won't transform.
-    "(\\\\.)",
-    // Match Express-style parameters and un-named parameters with a prefix
-    // and optional suffixes. Matches appear as:
-    //
-    // ":test(\\d+)?" => ["test", "\d+", undefined, "?"]
-    // "(\\d+)"  => [undefined, undefined, "\d+", undefined]
-    "(?:\\:(\\w+)(?:\\(((?:\\\\.|[^\\\\()])+)\\))?|\\(((?:\\\\.|[^\\\\()])+)\\))([+*?])?"
-].join("|"), "g");
-/**
- * Parse a string for the raw tokens.
- *
- * @param  {string}  str
- * @param  {Object=} options
- * @return {!Array}
- */ function parse(str, options) {
-    var tokens = [];
-    var key = 0;
-    var index = 0;
-    var path = "";
-    var defaultDelimiter = options && options.delimiter || DEFAULT_DELIMITER;
-    var delimiters = options && options.delimiters || DEFAULT_DELIMITERS;
-    var pathEscaped = false;
-    var res;
-    while((res = PATH_REGEXP.exec(str)) !== null){
-        var m = res[0];
-        var escaped = res[1];
-        var offset = res.index;
-        path += str.slice(index, offset);
-        index = offset + m.length;
-        // Ignore already escaped sequences.
-        if (escaped) {
-            path += escaped[1];
-            pathEscaped = true;
-            continue;
-        }
-        var prev = "";
-        var next = str[index];
-        var name = res[2];
-        var capture = res[3];
-        var group = res[4];
-        var modifier = res[5];
-        if (!pathEscaped && path.length) {
-            var k = path.length - 1;
-            if (delimiters.indexOf(path[k]) > -1) {
-                prev = path[k];
-                path = path.slice(0, k);
-            }
-        }
-        // Push the current path onto the tokens.
-        if (path) {
-            tokens.push(path);
-            path = "";
-            pathEscaped = false;
-        }
-        var partial = prev !== "" && next !== undefined && next !== prev;
-        var repeat = modifier === "+" || modifier === "*";
-        var optional = modifier === "?" || modifier === "*";
-        var delimiter = prev || defaultDelimiter;
-        var pattern = capture || group;
-        tokens.push({
-            name: name || key++,
-            prefix: prev,
-            delimiter: delimiter,
-            optional: optional,
-            repeat: repeat,
-            partial: partial,
-            pattern: pattern ? escapeGroup(pattern) : "[^" + escapeString(delimiter) + "]+?"
-        });
-    }
-    // Push any remaining characters.
-    if (path || index < str.length) tokens.push(path + str.substr(index));
-    return tokens;
-}
-/**
- * Compile a string to a template function for the path.
- *
- * @param  {string}             str
- * @param  {Object=}            options
- * @return {!function(Object=, Object=)}
- */ function compile(str, options) {
-    return tokensToFunction(parse(str, options));
-}
-/**
- * Expose a method for transforming tokens into the path function.
- */ function tokensToFunction(tokens) {
-    // Compile all the tokens into regexps.
-    var matches = new Array(tokens.length);
-    // Compile all the patterns before compilation.
-    for(var i = 0; i < tokens.length; i++)if (typeof tokens[i] === "object") matches[i] = new RegExp("^(?:" + tokens[i].pattern + ")$");
-    return function(data, options) {
-        var path = "";
-        var encode = options && options.encode || encodeURIComponent;
-        for(var i = 0; i < tokens.length; i++){
-            var token = tokens[i];
-            if (typeof token === "string") {
-                path += token;
-                continue;
-            }
-            var value = data ? data[token.name] : undefined;
-            var segment;
-            if (Array.isArray(value)) {
-                if (!token.repeat) throw new TypeError('Expected "' + token.name + '" to not repeat, but got array');
-                if (value.length === 0) {
-                    if (token.optional) continue;
-                    throw new TypeError('Expected "' + token.name + '" to not be empty');
+        render() {
+            this.roomIds = (0, _state.state).data.rooms;
+            const div = document.createElement("div");
+            div.innerHTML = `                
+            <div class="window__text">
+            <div class="window-title">Salas Creadas con Este Nombre</div>                
+            <div class="rooms-list"></div>  
+            <button class="new-room-button">nueva sala</button>                            
+            </div>                     
+            `;
+            const style = document.createElement("style");
+            style.textContent = `
+            .window {
+                backdrop-filter: blur(10px);
+                display: flex;
+                position: absolute;
+                color: red;
+                /* background-color: rgb(0, 0, 0); */
+                /* opacity: .4; */
+                    top: 5%;
+                    left: 5%;
+                    right: 5%;
+                    bottom: 5%;
+                    text-align: center;
+                    align-items: center;
+                    justify-content: center;
+                    flex-direction: column;
+                    font-family: 'Odibee Sans';
+                    font-weight:400;
+                    gap: 30px;
+                    border: solid black
                 }
-                for(var j = 0; j < value.length; j++){
-                    segment = encode(value[j], token);
-                    if (!matches[i].test(segment)) throw new TypeError('Expected all "' + token.name + '" to match "' + token.pattern + '"');
-                    path += (j === 0 ? token.prefix : token.delimiter) + segment;
+                .window-title {
+                    font-size:30px;
                 }
-                continue;
-            }
-            if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-                segment = encode(String(value), token);
-                if (!matches[i].test(segment)) throw new TypeError('Expected "' + token.name + '" to match "' + token.pattern + '", but got "' + segment + '"');
-                path += token.prefix + segment;
-                continue;
-            }
-            if (token.optional) {
-                // Prepend partial segment prefixes.
-                if (token.partial) path += token.prefix;
-                continue;
-            }
-            throw new TypeError('Expected "' + token.name + '" to be ' + (token.repeat ? "an array" : "a string"));
+                .room-button, .new-room-button {
+                    width: 322px;height: 67px;
+                    border-radius: 10px;
+                    border: 10px solid #001997;
+                    background: #006CFC;         
+                    color: #D8FCFC;
+                    text-align: center;
+                    font-family: 'Odibee Sans';
+                    font-size: 25px;
+                    font-weight: 400;
+                    line-height: normal;
+                    letter-spacing: 2.25px;
+                }                 
+                .rooms-list {
+                    display:flex;
+                    flex-direction: column;
+                    height: 100;
+                }                
+                `;
+            div.classList.add("window");
+            this.appendChild(div);
+            this.appendChild(style);
         }
-        return path;
-    };
-}
-/**
- * Escape a regular expression string.
- *
- * @param  {string} str
- * @return {string}
- */ function escapeString(str) {
-    return str.replace(/([.+*?=^!:${}()[\]|/\\])/g, "\\$1");
-}
-/**
- * Escape the capturing group by escaping special characters and meaning.
- *
- * @param  {string} group
- * @return {string}
- */ function escapeGroup(group) {
-    return group.replace(/([=!:$/()])/g, "\\$1");
-}
-/**
- * Get the flags for a regexp from the options.
- *
- * @param  {Object} options
- * @return {string}
- */ function flags(options) {
-    return options && options.sensitive ? "" : "i";
-}
-/**
- * Pull out keys from a regexp.
- *
- * @param  {!RegExp} path
- * @param  {Array=}  keys
- * @return {!RegExp}
- */ function regexpToRegexp(path, keys) {
-    if (!keys) return path;
-    // Use a negative lookahead to match only capturing groups.
-    var groups = path.source.match(/\((?!\?)/g);
-    if (groups) for(var i = 0; i < groups.length; i++)keys.push({
-        name: i,
-        prefix: null,
-        delimiter: null,
-        optional: false,
-        repeat: false,
-        partial: false,
-        pattern: null
-    });
-    return path;
-}
-/**
- * Transform an array into a regexp.
- *
- * @param  {!Array}  path
- * @param  {Array=}  keys
- * @param  {Object=} options
- * @return {!RegExp}
- */ function arrayToRegexp(path, keys, options) {
-    var parts = [];
-    for(var i = 0; i < path.length; i++)parts.push(pathToRegexp$1(path[i], keys, options).source);
-    return new RegExp("(?:" + parts.join("|") + ")", flags(options));
-}
-/**
- * Create a path regexp from string input.
- *
- * @param  {string}  path
- * @param  {Array=}  keys
- * @param  {Object=} options
- * @return {!RegExp}
- */ function stringToRegexp(path, keys, options) {
-    return tokensToRegExp(parse(path, options), keys, options);
-}
-/**
- * Expose a function for taking tokens and returning a RegExp.
- *
- * @param  {!Array}  tokens
- * @param  {Array=}  keys
- * @param  {Object=} options
- * @return {!RegExp}
- */ function tokensToRegExp(tokens, keys, options) {
-    options = options || {};
-    var strict = options.strict;
-    var start = options.start !== false;
-    var end = options.end !== false;
-    var delimiter = escapeString(options.delimiter || DEFAULT_DELIMITER);
-    var delimiters = options.delimiters || DEFAULT_DELIMITERS;
-    var endsWith = [].concat(options.endsWith || []).map(escapeString).concat("$").join("|");
-    var route = start ? "^" : "";
-    var isEndDelimited = tokens.length === 0;
-    // Iterate over the tokens and create our regexp string.
-    for(var i = 0; i < tokens.length; i++){
-        var token = tokens[i];
-        if (typeof token === "string") {
-            route += escapeString(token);
-            isEndDelimited = i === tokens.length - 1 && delimiters.indexOf(token[token.length - 1]) > -1;
-        } else {
-            var capture = token.repeat ? "(?:" + token.pattern + ")(?:" + escapeString(token.delimiter) + "(?:" + token.pattern + "))*" : token.pattern;
-            if (keys) keys.push(token);
-            if (token.optional) {
-                if (token.partial) route += escapeString(token.prefix) + "(" + capture + ")?";
-                else route += "(?:" + escapeString(token.prefix) + "(" + capture + "))?";
-            } else route += escapeString(token.prefix) + "(" + capture + ")";
-        }
-    }
-    if (end) {
-        if (!strict) route += "(?:" + delimiter + ")?";
-        route += endsWith === "$" ? "$" : "(?=" + endsWith + ")";
-    } else {
-        if (!strict) route += "(?:" + delimiter + "(?=" + endsWith + "))?";
-        if (!isEndDelimited) route += "(?=" + delimiter + "|" + endsWith + ")";
-    }
-    return new RegExp(route, flags(options));
-}
-/**
- * Normalize the given path string, returning a regular expression.
- *
- * An empty array can be passed in for the keys, which will hold the
- * placeholder key descriptions. For example, using `/user/:id`, `keys` will
- * contain `[{ name: 'id', delimiter: '/', optional: false, repeat: false }]`.
- *
- * @param  {(string|RegExp|Array)} path
- * @param  {Array=}                keys
- * @param  {Object=}               options
- * @return {!RegExp}
- */ function pathToRegexp$1(path, keys, options) {
-    if (path instanceof RegExp) return regexpToRegexp(path, keys);
-    if (Array.isArray(path)) return arrayToRegexp(/** @type {!Array} */ path, keys, options);
-    return stringToRegexp(/** @type {string} */ path, keys, options);
-}
-pathToRegexp_1.parse = parse_1;
-pathToRegexp_1.compile = compile_1;
-pathToRegexp_1.tokensToFunction = tokensToFunction_1;
-pathToRegexp_1.tokensToRegExp = tokensToRegExp_1;
-/**
- * Universal Router (https://www.kriasoft.com/universal-router/)
- *
- * Copyright (c) 2015-present Kriasoft.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE.txt file in the root directory of this source tree.
- */ const { hasOwnProperty } = Object.prototype;
-const cache$1 = new Map();
-// see https://github.com/pillarjs/path-to-regexp/issues/148
-cache$1.set("|false", {
-    keys: [],
-    pattern: /(?:)/
-});
-function decodeParam(val) {
-    try {
-        return decodeURIComponent(val);
-    } catch (err) {
-        return val;
-    }
-}
-function matchPath(routepath, path, exact, parentKeys, parentParams) {
-    exact = !!exact;
-    const cacheKey = `${routepath}|${exact}`;
-    let regexp = cache$1.get(cacheKey);
-    if (!regexp) {
-        const keys = [];
-        regexp = {
-            keys,
-            pattern: pathToRegexp_1(routepath, keys, {
-                end: exact,
-                strict: routepath === ""
-            })
-        };
-        cache$1.set(cacheKey, regexp);
-    }
-    const m = regexp.pattern.exec(path);
-    if (!m) return null;
-    const params = Object.assign({}, parentParams);
-    for(let i = 1; i < m.length; i++){
-        const key = regexp.keys[i - 1];
-        const prop = key.name;
-        const value = m[i];
-        if (value !== undefined || !hasOwnProperty.call(params, prop)) {
-            if (key.repeat) params[prop] = value ? value.split(key.delimiter).map(decodeParam) : [];
-            else params[prop] = value ? decodeParam(value) : value;
-        }
-    }
-    return {
-        path: m[0],
-        keys: (parentKeys || []).concat(regexp.keys),
-        params
-    };
-}
-/**
- * Universal Router (https://www.kriasoft.com/universal-router/)
- *
- * Copyright (c) 2015-present Kriasoft.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE.txt file in the root directory of this source tree.
- */ /**
- * Traverses the routes tree and matches its nodes to the given pathname from
- * the root down to the leaves. Each match consumes a part of the pathname and
- * the matching process continues for as long as there is a matching child
- * route for the remaining part of the pathname.
- *
- * The returned value is a lazily evaluated iterator.
- *
- * The leading "/" in a route path matters only for the root of the routes
- * tree (or if all parent routes are ""). In all other cases a leading "/" in
- * a child route path has no significance.
- *
- * The trailing "/" in a _route path_ matters only for the leaves of the
- * routes tree. A leaf route with a trailing "/" matches only a pathname that
- * also has a trailing "/".
- *
- * The trailing "/" in a route path does not affect matching of child routes
- * in any way.
- *
- * The trailing "/" in a _pathname_ generally does not matter (except for
- * the case of leaf nodes described above).
- *
- * The "" and "/" routes have special treatment:
- *  1. as a single route
- *     the "" and "/" routes match only the "" and "/" pathnames respectively
- *  2. as a parent in the routes tree
- *     the "" route matches any pathname without consuming any part of it
- *     the "/" route matches any absolute pathname consuming its leading "/"
- *  3. as a leaf in the routes tree
- *     the "" and "/" routes match only if the entire pathname is consumed by
- *         the parent routes chain. In this case "" and "/" are equivalent.
- *  4. several directly nested "" or "/" routes
- *     - directly nested "" or "/" routes are 'squashed' (i.e. nesting two
- *       "/" routes does not require a double "/" in the pathname to match)
- *     - if there are only "" in the parent routes chain, no part of the
- *       pathname is consumed, and the leading "/" in the child routes' paths
- *       remains significant
- *
- * Side effect:
- *   - the routes tree { path: '' } matches only the '' pathname
- *   - the routes tree { path: '', children: [ { path: '' } ] } matches any
- *     pathname (for the tree root)
- *
- * Prefix matching can be enabled also by `children: true`.
- */ function matchRoute(route, pathname, ignoreLeadingSlash, parentKeys, parentParams) {
-    let match;
-    let childMatches;
-    let childIndex = 0;
-    let routepath = route.path || "";
-    if (routepath.charAt(0) === "/") {
-        if (ignoreLeadingSlash) routepath = routepath.substr(1);
-        ignoreLeadingSlash = true;
-    }
-    return {
-        next (routeToSkip) {
-            if (route === routeToSkip) return {
-                done: true
-            };
-            const children = route.__children = route.__children || route.children;
-            if (!match) {
-                match = matchPath(routepath, pathname, !children, parentKeys, parentParams);
-                if (match) return {
-                    done: false,
-                    value: {
-                        route,
-                        keys: match.keys,
-                        params: match.params,
-                        path: match.path
-                    }
-                };
-            }
-            if (match && children) while(childIndex < children.length){
-                if (!childMatches) {
-                    const childRoute = children[childIndex];
-                    childRoute.parent = route;
-                    let matchedLength = match.path.length;
-                    if (matchedLength > 0 && pathname.charAt(matchedLength) === "/") matchedLength += 1;
-                    childMatches = matchRoute(childRoute, pathname.substr(matchedLength), ignoreLeadingSlash, match.keys, match.params);
-                }
-                const childMatch = childMatches.next(routeToSkip);
-                if (!childMatch.done) return {
-                    done: false,
-                    value: childMatch.value
-                };
-                childMatches = null;
-                childIndex++;
-            }
-            return {
-                done: true
-            };
-        }
-    };
-}
-/**
- * Universal Router (https://www.kriasoft.com/universal-router/)
- *
- * Copyright (c) 2015-present Kriasoft.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE.txt file in the root directory of this source tree.
- */ function resolveRoute(context) {
-    if (isFunction(context.route.action)) return context.route.action(context);
-    return undefined;
-}
-/**
- * Universal Router (https://www.kriasoft.com/universal-router/)
- *
- * Copyright (c) 2015-present Kriasoft.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE.txt file in the root directory of this source tree.
- */ function isChildRoute(parentRoute, childRoute) {
-    let route = childRoute;
-    while(route){
-        route = route.parent;
-        if (route === parentRoute) return true;
-    }
-    return false;
-}
-function generateErrorMessage(currentContext) {
-    let errorMessage = `Path '${currentContext.pathname}' is not properly resolved due to an error.`;
-    const routePath = (currentContext.route || {}).path;
-    if (routePath) errorMessage += ` Resolution had failed on route: '${routePath}'`;
-    return errorMessage;
-}
-function updateChainForRoute(context, match) {
-    const { route, path } = match;
-    if (route && !route.__synthetic) {
-        const item = {
-            path,
-            route
-        };
-        if (!context.chain) context.chain = [];
-        else // Discard old items
-        if (route.parent) {
-            let i = context.chain.length;
-            while(i-- && context.chain[i].route && context.chain[i].route !== route.parent)context.chain.pop();
-        }
-        context.chain.push(item);
-    }
-}
-/**
- */ class Resolver {
-    constructor(routes, options = {}){
-        if (Object(routes) !== routes) throw new TypeError("Invalid routes");
-        this.baseUrl = options.baseUrl || "";
-        this.errorHandler = options.errorHandler;
-        this.resolveRoute = options.resolveRoute || resolveRoute;
-        this.context = Object.assign({
-            resolver: this
-        }, options.context);
-        this.root = Array.isArray(routes) ? {
-            path: "",
-            __children: routes,
-            parent: null,
-            __synthetic: true
-        } : routes;
-        this.root.parent = null;
-    }
-    /**
-   * Returns the current list of routes (as a shallow copy). Adding / removing
-   * routes to / from the returned array does not affect the routing config,
-   * but modifying the route objects does.
-   *
-   * @return {!Array<!Router.Route>}
-   */ getRoutes() {
-        return [
-            ...this.root.__children
-        ];
-    }
-    /**
-   * Sets the routing config (replacing the existing one).
-   *
-   * @param {!Array<!Router.Route>|!Router.Route} routes a single route or an array of those
-   *    (the array is shallow copied)
-   */ setRoutes(routes) {
-        ensureRoutes(routes);
-        const newRoutes = [
-            ...toArray(routes)
-        ];
-        this.root.__children = newRoutes;
-    }
-    /**
-   * Appends one or several routes to the routing config and returns the
-   * effective routing config after the operation.
-   *
-   * @param {!Array<!Router.Route>|!Router.Route} routes a single route or an array of those
-   *    (the array is shallow copied)
-   * @return {!Array<!Router.Route>}
-   * @protected
-   */ addRoutes(routes) {
-        ensureRoutes(routes);
-        this.root.__children.push(...toArray(routes));
-        return this.getRoutes();
-    }
-    /**
-   * Removes all existing routes from the routing config.
-   */ removeRoutes() {
-        this.setRoutes([]);
-    }
-    /**
-   * Asynchronously resolves the given pathname, i.e. finds all routes matching
-   * the pathname and tries resolving them one after another in the order they
-   * are listed in the routes config until the first non-null result.
-   *
-   * Returns a promise that is fulfilled with the return value of an object that consists of the first
-   * route handler result that returns something other than `null` or `undefined` and context used to get this result.
-   *
-   * If no route handlers return a non-null result, or if no route matches the
-   * given pathname the returned promise is rejected with a 'page not found'
-   * `Error`.
-   *
-   * @param {!string|!{pathname: !string}} pathnameOrContext the pathname to
-   *    resolve or a context object with a `pathname` property and other
-   *    properties to pass to the route resolver functions.
-   * @return {!Promise<any>}
-   */ resolve(pathnameOrContext) {
-        const context = Object.assign({}, this.context, isString(pathnameOrContext) ? {
-            pathname: pathnameOrContext
-        } : pathnameOrContext);
-        const match = matchRoute(this.root, this.__normalizePathname(context.pathname), this.baseUrl);
-        const resolve = this.resolveRoute;
-        let matches = null;
-        let nextMatches = null;
-        let currentContext = context;
-        function next(resume, parent = matches.value.route, prevResult) {
-            const routeToSkip = prevResult === null && matches.value.route;
-            matches = nextMatches || match.next(routeToSkip);
-            nextMatches = null;
-            if (!resume) {
-                if (matches.done || !isChildRoute(parent, matches.value.route)) {
-                    nextMatches = matches;
-                    return Promise.resolve(notFoundResult);
-                }
-            }
-            if (matches.done) return Promise.reject(getNotFoundError(context));
-            currentContext = Object.assign(currentContext ? {
-                chain: currentContext.chain ? currentContext.chain.slice(0) : []
-            } : {}, context, matches.value);
-            updateChainForRoute(currentContext, matches.value);
-            return Promise.resolve(resolve(currentContext)).then((resolution)=>{
-                if (resolution !== null && resolution !== undefined && resolution !== notFoundResult) {
-                    currentContext.result = resolution.result || resolution;
-                    return currentContext;
-                }
-                return next(resume, parent, resolution);
+        rooms() {
+            this.roomIds.map((r)=>{
+                const div = document.createElement("button");
+                div.innerHTML = `${r.toString()}`;
+                div.classList.add("room-button");
+                return this.querySelector(".rooms-list").appendChild(div);
             });
         }
-        context.next = next;
-        return Promise.resolve().then(()=>next(true, this.root)).catch((error)=>{
-            const errorMessage = generateErrorMessage(currentContext);
-            if (!error) error = new Error(errorMessage);
-            else console.warn(errorMessage);
-            error.context = error.context || currentContext;
-            // DOMException has its own code which is read-only
-            if (!(error instanceof DOMException)) error.code = error.code || 500;
-            if (this.errorHandler) {
-                currentContext.result = this.errorHandler(error);
-                return currentContext;
-            }
-            throw error;
-        });
-    }
-    /**
-   * URL constructor polyfill hook. Creates and returns an URL instance.
-   */ static __createUrl(url, base) {
-        return new URL(url, base);
-    }
-    /**
-   * If the baseUrl property is set, transforms the baseUrl and returns the full
-   * actual `base` string for using in the `new URL(path, base);` and for
-   * prepernding the paths with. The returned base ends with a trailing slash.
-   *
-   * Otherwise, returns empty string.
-   */ get __effectiveBaseUrl() {
-        return this.baseUrl ? this.constructor.__createUrl(this.baseUrl, document.baseURI || document.URL).href.replace(/[^\/]*$/, "") : "";
-    }
-    /**
-   * If the baseUrl is set, matches the pathname with the router’s baseUrl,
-   * and returns the local pathname with the baseUrl stripped out.
-   *
-   * If the pathname does not match the baseUrl, returns undefined.
-   *
-   * If the `baseUrl` is not set, returns the unmodified pathname argument.
-   */ __normalizePathname(pathname) {
-        if (!this.baseUrl) // No base URL, no need to transform the pathname.
-        return pathname;
-        const base = this.__effectiveBaseUrl;
-        const normalizedUrl = this.constructor.__createUrl(pathname, base).href;
-        if (normalizedUrl.slice(0, base.length) === base) return normalizedUrl.slice(base.length);
-    }
-}
-Resolver.pathToRegexp = pathToRegexp_1;
-/**
- * Universal Router (https://www.kriasoft.com/universal-router/)
- *
- * Copyright (c) 2015-present Kriasoft.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE.txt file in the root directory of this source tree.
- */ const { pathToRegexp } = Resolver;
-const cache = new Map();
-function cacheRoutes(routesByName, route, routes) {
-    const name = route.name || route.component;
-    if (name) {
-        if (routesByName.has(name)) routesByName.get(name).push(route);
-        else routesByName.set(name, [
-            route
-        ]);
-    }
-    if (Array.isArray(routes)) for(let i = 0; i < routes.length; i++){
-        const childRoute = routes[i];
-        childRoute.parent = route;
-        cacheRoutes(routesByName, childRoute, childRoute.__children || childRoute.children);
-    }
-}
-function getRouteByName(routesByName, routeName) {
-    const routes = routesByName.get(routeName);
-    if (routes && routes.length > 1) throw new Error(`Duplicate route with name "${routeName}".` + ` Try seting unique 'name' route properties.`);
-    return routes && routes[0];
-}
-function getRoutePath(route) {
-    let path = route.path;
-    path = Array.isArray(path) ? path[0] : path;
-    return path !== undefined ? path : "";
-}
-function generateUrls(router, options = {}) {
-    if (!(router instanceof Resolver)) throw new TypeError("An instance of Resolver is expected");
-    const routesByName = new Map();
-    return (routeName, params)=>{
-        let route = getRouteByName(routesByName, routeName);
-        if (!route) {
-            routesByName.clear(); // clear cache
-            cacheRoutes(routesByName, router.root, router.root.__children);
-            route = getRouteByName(routesByName, routeName);
-            if (!route) throw new Error(`Route "${routeName}" not found`);
-        }
-        let regexp = cache.get(route.fullPath);
-        if (!regexp) {
-            let fullPath = getRoutePath(route);
-            let rt = route.parent;
-            while(rt){
-                const path = getRoutePath(rt);
-                if (path) fullPath = path.replace(/\/$/, "") + "/" + fullPath.replace(/^\//, "");
-                rt = rt.parent;
-            }
-            const tokens = pathToRegexp.parse(fullPath);
-            const toPath = pathToRegexp.tokensToFunction(tokens);
-            const keys = Object.create(null);
-            for(let i = 0; i < tokens.length; i++)if (!isString(tokens[i])) keys[tokens[i].name] = true;
-            regexp = {
-                toPath,
-                keys
-            };
-            cache.set(fullPath, regexp);
-            route.fullPath = fullPath;
-        }
-        let url = regexp.toPath(params, options) || "/";
-        if (options.stringifyQueryParams && params) {
-            const queryParams = {};
-            const keys = Object.keys(params);
-            for(let i = 0; i < keys.length; i++){
-                const key = keys[i];
-                if (!regexp.keys[key]) queryParams[key] = params[key];
-            }
-            const query = options.stringifyQueryParams(queryParams);
-            if (query) url += query.charAt(0) === "?" ? query : `?${query}`;
-        }
-        return url;
-    };
-}
-/**
- * @typedef NavigationTrigger
- * @type {object}
- * @property {function()} activate
- * @property {function()} inactivate
- */ /** @type {Array<NavigationTrigger>} */ let triggers = [];
-function setNavigationTriggers(newTriggers) {
-    triggers.forEach((trigger)=>trigger.inactivate());
-    newTriggers.forEach((trigger)=>trigger.activate());
-    triggers = newTriggers;
-}
-const willAnimate = (elem)=>{
-    const name = getComputedStyle(elem).getPropertyValue("animation-name");
-    return name && name !== "none";
-};
-const waitForAnimation = (elem, cb)=>{
-    const listener = ()=>{
-        elem.removeEventListener("animationend", listener);
-        cb();
-    };
-    elem.addEventListener("animationend", listener);
-};
-function animate(elem, className) {
-    elem.classList.add(className);
-    return new Promise((resolve)=>{
-        if (willAnimate(elem)) {
-            const rect = elem.getBoundingClientRect();
-            const size = `height: ${rect.bottom - rect.top}px; width: ${rect.right - rect.left}px`;
-            elem.setAttribute("style", `position: absolute; ${size}`);
-            waitForAnimation(elem, ()=>{
-                elem.classList.remove(className);
-                elem.removeAttribute("style");
-                resolve();
+        listeners() {
+            const butEl = this.querySelector(".rooms-list");
+            butEl.addEventListener("click", (e)=>{
+                e.preventDefault();
+                const tar = e.target;
+                (0, _state.state).data.roomId = tar.textContent;
+                (0, _state.state).accessToRoom();
             });
-        } else {
-            elem.classList.remove(className);
-            resolve();
+            const newButEl = this.querySelector(".new-room-button");
+            newButEl.addEventListener("click", ()=>{
+                (0, _state.state).askNewRoom();
+            });
+        }
+        constructor(...args){
+            super(...args);
+            this.roomIds = [];
         }
     });
 }
-const MAX_REDIRECT_COUNT = 256;
-function isResultNotEmpty(result) {
-    return result !== null && result !== undefined;
-}
-function copyContextWithoutNext(context) {
-    const copy = Object.assign({}, context);
-    delete copy.next;
-    return copy;
-}
-function createLocation({ pathname = "", search = "", hash = "", chain = [], params = {}, redirectFrom, resolver }, route) {
-    const routes = chain.map((item)=>item.route);
-    return {
-        baseUrl: resolver && resolver.baseUrl || "",
-        pathname,
-        search,
-        hash,
-        routes,
-        route: route || routes.length && routes[routes.length - 1] || null,
-        params,
-        redirectFrom,
-        getUrl: (userParams = {})=>getPathnameForRouter(Router.pathToRegexp.compile(getMatchedPath(routes))(Object.assign({}, params, userParams)), resolver)
-    };
-}
-function createRedirect(context, pathname) {
-    const params = Object.assign({}, context.params);
-    return {
-        redirect: {
-            pathname,
-            from: context.pathname,
-            params
-        }
-    };
-}
-function renderElement(context, element) {
-    element.location = createLocation(context);
-    const index = context.chain.map((item)=>item.route).indexOf(context.route);
-    context.chain[index].element = element;
-    return element;
-}
-function runCallbackIfPossible(callback, args, thisArg) {
-    if (isFunction(callback)) return callback.apply(thisArg, args);
-}
-function amend(amendmentFunction, args, element) {
-    return (amendmentResult)=>{
-        if (amendmentResult && (amendmentResult.cancel || amendmentResult.redirect)) return amendmentResult;
-        if (element) return runCallbackIfPossible(element[amendmentFunction], args, element);
-    };
-}
-function processNewChildren(newChildren, route) {
-    if (!Array.isArray(newChildren) && !isObject(newChildren)) throw new Error(log(`Incorrect "children" value for the route ${route.path}: expected array or object, but got ${newChildren}`));
-    route.__children = [];
-    const childRoutes = toArray(newChildren);
-    for(let i = 0; i < childRoutes.length; i++){
-        ensureRoute(childRoutes[i]);
-        route.__children.push(childRoutes[i]);
-    }
-}
-function removeDomNodes(nodes) {
-    if (nodes && nodes.length) {
-        const parent = nodes[0].parentNode;
-        for(let i = 0; i < nodes.length; i++)parent.removeChild(nodes[i]);
-    }
-}
-function getPathnameForRouter(pathname, router) {
-    const base = router.__effectiveBaseUrl;
-    return base ? router.constructor.__createUrl(pathname.replace(/^\//, ""), base).pathname : pathname;
-}
-function getMatchedPath(chain) {
-    return chain.map((item)=>item.path).reduce((a, b)=>{
-        if (b.length) return a.replace(/\/$/, "") + "/" + b.replace(/^\//, "");
-        return a;
-    }, "");
-}
-/**
- * A simple client-side router for single-page applications. It uses
- * express-style middleware and has a first-class support for Web Components and
- * lazy-loading. Works great in Polymer and non-Polymer apps.
- *
- * Use `new Router(outlet, options)` to create a new Router instance.
- *
- * * The `outlet` parameter is a reference to the DOM node to render
- *   the content into.
- *
- * * The `options` parameter is an optional object with options. The following
- *   keys are supported:
- *   * `baseUrl` — the initial value for [
- *     the `baseUrl` property
- *   ](#/classes/Router#property-baseUrl)
- *
- * The Router instance is automatically subscribed to navigation events
- * on `window`.
- *
- * See [Live Examples](#/classes/Router/demos/demo/index.html) for the detailed usage demo and code snippets.
- *
- * See also detailed API docs for the following methods, for the advanced usage:
- *
- * * [setOutlet](#/classes/Router#method-setOutlet) – should be used to configure the outlet.
- * * [setTriggers](#/classes/Router#method-setTriggers) – should be used to configure the navigation events.
- * * [setRoutes](#/classes/Router#method-setRoutes) – should be used to configure the routes.
- *
- * Only `setRoutes` has to be called manually, others are automatically invoked when creating a new instance.
- *
- * @extends Resolver
- * @demo demo/index.html
- * @summary JavaScript class that renders different DOM content depending on
- *    a given path. It can re-render when triggered or automatically on
- *    'popstate' and / or 'click' events.
- */ class Router extends Resolver {
-    /**
-   * Creates a new Router instance with a given outlet, and
-   * automatically subscribes it to navigation events on the `window`.
-   * Using a constructor argument or a setter for outlet is equivalent:
-   *
-   * ```
-   * const router = new Router();
-   * router.setOutlet(outlet);
-   * ```
-   * @param {?Node=} outlet
-   * @param {?RouterOptions=} options
-   */ constructor(outlet, options){
-        const baseElement = document.head.querySelector("base");
-        const baseHref = baseElement && baseElement.getAttribute("href");
-        super([], Object.assign({
-            // Default options
-            baseUrl: baseHref && Resolver.__createUrl(baseHref, document.URL).pathname.replace(/[^\/]*$/, "")
-        }, options));
-        this.resolveRoute = (context)=>this.__resolveRoute(context);
-        const triggers = Router.NavigationTrigger;
-        Router.setTriggers.apply(Router, Object.keys(triggers).map((key)=>triggers[key]));
-        /**
-     * The base URL for all routes in the router instance. By default,
-     * if the base element exists in the `<head>`, vaadin-router
-     * takes the `<base href>` attribute value, resolves against current `document.URL`
-     * and gets the `pathname` from the result.
-     *
-     * @public
-     * @type {string}
-     */ this.baseUrl;
-        /**
-     * A promise that is settled after the current render cycle completes. If
-     * there is no render cycle in progress the promise is immediately settled
-     * with the last render cycle result.
-     *
-     * @public
-     * @type {!Promise<!RouterLocation>}
-     */ this.ready;
-        this.ready = Promise.resolve(outlet);
-        /**
-     * Contains read-only information about the current router location:
-     * pathname, active routes, parameters. See the
-     * [Location type declaration](#/classes/RouterLocation)
-     * for more details.
-     *
-     * @public
-     * @type {!RouterLocation}
-     */ this.location;
-        this.location = createLocation({
-            resolver: this
-        });
-        this.__lastStartedRenderId = 0;
-        this.__navigationEventHandler = this.__onNavigationEvent.bind(this);
-        this.setOutlet(outlet);
-        this.subscribe();
-        // Using WeakMap instead of WeakSet because WeakSet is not supported by IE11
-        this.__createdByRouter = new WeakMap();
-        this.__addedByRouter = new WeakMap();
-    }
-    __resolveRoute(context) {
-        const route = context.route;
-        let callbacks = Promise.resolve();
-        if (isFunction(route.children)) callbacks = callbacks.then(()=>route.children(copyContextWithoutNext(context))).then((children)=>{
-            // The route.children() callback might have re-written the
-            // route.children property instead of returning a value
-            if (!isResultNotEmpty(children) && !isFunction(route.children)) children = route.children;
-            processNewChildren(children, route);
-        });
-        const commands = {
-            redirect: (path)=>createRedirect(context, path),
-            component: (component)=>{
-                const element = document.createElement(component);
-                this.__createdByRouter.set(element, true);
-                return element;
-            }
-        };
-        return callbacks.then(()=>{
-            if (this.__isLatestRender(context)) return runCallbackIfPossible(route.action, [
-                context,
-                commands
-            ], route);
-        }).then((result)=>{
-            if (isResultNotEmpty(result)) {
-                // Actions like `() => import('my-view.js')` are not expected to
-                // end the resolution, despite the result is not empty. Checking
-                // the result with a whitelist of values that end the resolution.
-                if (result instanceof HTMLElement || result.redirect || result === notFoundResult) return result;
-            }
-            if (isString(route.redirect)) return commands.redirect(route.redirect);
-            if (route.bundle) return loadBundle(route.bundle).then(()=>{}, ()=>{
-                throw new Error(log(`Bundle not found: ${route.bundle}. Check if the file name is correct`));
-            });
-        }).then((result)=>{
-            if (isResultNotEmpty(result)) return result;
-            if (isString(route.component)) return commands.component(route.component);
-        });
-    }
-    /**
-   * Sets the router outlet (the DOM node where the content for the current
-   * route is inserted). Any content pre-existing in the router outlet is
-   * removed at the end of each render pass.
-   *
-   * NOTE: this method is automatically invoked first time when creating a new Router instance.
-   *
-   * @param {?Node} outlet the DOM node where the content for the current route
-   *     is inserted.
-   */ setOutlet(outlet) {
-        if (outlet) this.__ensureOutlet(outlet);
-        this.__outlet = outlet;
-    }
-    /**
-   * Returns the current router outlet. The initial value is `undefined`.
-   *
-   * @return {?Node} the current router outlet (or `undefined`)
-   */ getOutlet() {
-        return this.__outlet;
-    }
-    /**
-   * Sets the routing config (replacing the existing one) and triggers a
-   * navigation event so that the router outlet is refreshed according to the
-   * current `window.location` and the new routing config.
-   *
-   * Each route object may have the following properties, listed here in the processing order:
-   * * `path` – the route path (relative to the parent route if any) in the
-   * [express.js syntax](https://expressjs.com/en/guide/routing.html#route-paths").
-   *
-   * * `children` – an array of nested routes or a function that provides this
-   * array at the render time. The function can be synchronous or asynchronous:
-   * in the latter case the render is delayed until the returned promise is
-   * resolved. The `children` function is executed every time when this route is
-   * being rendered. This allows for dynamic route structures (e.g. backend-defined),
-   * but it might have a performance impact as well. In order to avoid calling
-   * the function on subsequent renders, you can override the `children` property
-   * of the route object and save the calculated array there
-   * (via `context.route.children = [ route1, route2, ...];`).
-   * Parent routes are fully resolved before resolving the children. Children
-   * 'path' values are relative to the parent ones.
-   *
-   * * `action` – the action that is executed before the route is resolved.
-   * The value for this property should be a function, accepting `context`
-   * and `commands` parameters described below. If present, this function is
-   * always invoked first, disregarding of the other properties' presence.
-   * The action can return a result directly or within a `Promise`, which
-   * resolves to the result. If the action result is an `HTMLElement` instance,
-   * a `commands.component(name)` result, a `commands.redirect(path)` result,
-   * or a `context.next()` result, the current route resolution is finished,
-   * and other route config properties are ignored.
-   * See also **Route Actions** section in [Live Examples](#/classes/Router/demos/demo/index.html).
-   *
-   * * `redirect` – other route's path to redirect to. Passes all route parameters to the redirect target.
-   * The target route should also be defined.
-   * See also **Redirects** section in [Live Examples](#/classes/Router/demos/demo/index.html).
-   *
-   * * `bundle` – string containing the path to `.js` or `.mjs` bundle to load before resolving the route,
-   * or the object with "module" and "nomodule" keys referring to different bundles.
-   * Each bundle is only loaded once. If "module" and "nomodule" are set, only one bundle is loaded,
-   * depending on whether the browser supports ES modules or not.
-   * The property is ignored when either an `action` returns the result or `redirect` property is present.
-   * Any error, e.g. 404 while loading bundle will cause route resolution to throw.
-   * See also **Code Splitting** section in [Live Examples](#/classes/Router/demos/demo/index.html).
-   *
-   * * `component` – the tag name of the Web Component to resolve the route to.
-   * The property is ignored when either an `action` returns the result or `redirect` property is present.
-   * If route contains the `component` property (or an action that return a component)
-   * and its child route also contains the `component` property, child route's component
-   * will be rendered as a light dom child of a parent component.
-   *
-   * * `name` – the string name of the route to use in the
-   * [`router.urlForName(name, params)`](#/classes/Router#method-urlForName)
-   * navigation helper method.
-   *
-   * For any route function (`action`, `children`) defined, the corresponding `route` object is available inside the callback
-   * through the `this` reference. If you need to access it, make sure you define the callback as a non-arrow function
-   * because arrow functions do not have their own `this` reference.
-   *
-   * `context` object that is passed to `action` function holds the following properties:
-   * * `context.pathname` – string with the pathname being resolved
-   *
-   * * `context.search` – search query string
-   *
-   * * `context.hash` – hash string
-   *
-   * * `context.params` – object with route parameters
-   *
-   * * `context.route` – object that holds the route that is currently being rendered.
-   *
-   * * `context.next()` – function for asynchronously getting the next route
-   * contents from the resolution chain (if any)
-   *
-   * `commands` object that is passed to `action` function has
-   * the following methods:
-   *
-   * * `commands.redirect(path)` – function that creates a redirect data
-   * for the path specified.
-   *
-   * * `commands.component(component)` – function that creates a new HTMLElement
-   * with current context. Note: the component created by this function is reused if visiting the same path twice in row.
-   *
-   *
-   * @param {!Array<!Route>|!Route} routes a single route or an array of those
-   * @param {?boolean} skipRender configure the router but skip rendering the
-   *     route corresponding to the current `window.location` values
-   *
-   * @return {!Promise<!Node>}
-   */ setRoutes(routes, skipRender = false) {
-        this.__previousContext = undefined;
-        this.__urlForName = undefined;
-        super.setRoutes(routes);
-        if (!skipRender) this.__onNavigationEvent();
-        return this.ready;
-    }
-    /**
-   * Asynchronously resolves the given pathname and renders the resolved route
-   * component into the router outlet. If no router outlet is set at the time of
-   * calling this method, or at the time when the route resolution is completed,
-   * a `TypeError` is thrown.
-   *
-   * Returns a promise that is fulfilled with the router outlet DOM Node after
-   * the route component is created and inserted into the router outlet, or
-   * rejected if no route matches the given path.
-   *
-   * If another render pass is started before the previous one is completed, the
-   * result of the previous render pass is ignored.
-   *
-   * @param {!string|!{pathname: !string, search: ?string, hash: ?string}} pathnameOrContext
-   *    the pathname to render or a context object with a `pathname` property,
-   *    optional `search` and `hash` properties, and other properties
-   *    to pass to the resolver.
-   * @param {boolean=} shouldUpdateHistory
-   *    update browser history with the rendered location
-   * @return {!Promise<!Node>}
-   */ render(pathnameOrContext, shouldUpdateHistory) {
-        const renderId = ++this.__lastStartedRenderId;
-        const context = Object.assign({
-            search: "",
-            hash: ""
-        }, isString(pathnameOrContext) ? {
-            pathname: pathnameOrContext
-        } : pathnameOrContext, {
-            __renderId: renderId
-        });
-        // Find the first route that resolves to a non-empty result
-        this.ready = this.resolve(context)// Process the result of this.resolve() and handle all special commands:
-        // (redirect / prevent / component). If the result is a 'component',
-        // then go deeper and build the entire chain of nested components matching
-        // the pathname. Also call all 'on before' callbacks along the way.
-        .then((context)=>this.__fullyResolveChain(context)).then((context)=>{
-            if (this.__isLatestRender(context)) {
-                const previousContext = this.__previousContext;
-                // Check if the render was prevented and make an early return in that case
-                if (context === previousContext) {
-                    // Replace the history with the previous context
-                    // to make sure the URL stays the same.
-                    this.__updateBrowserHistory(previousContext, true);
-                    return this.location;
-                }
-                this.location = createLocation(context);
-                if (shouldUpdateHistory) // Replace only if first render redirects, so that we don’t leave
-                // the redirecting record in the history
-                this.__updateBrowserHistory(context, renderId === 1);
-                fireRouterEvent("location-changed", {
-                    router: this,
-                    location: this.location
-                });
-                // Skip detaching/re-attaching there are no render changes
-                if (context.__skipAttach) {
-                    this.__copyUnchangedElements(context, previousContext);
-                    this.__previousContext = context;
-                    return this.location;
-                }
-                this.__addAppearingContent(context, previousContext);
-                const animationDone = this.__animateIfNeeded(context);
-                this.__runOnAfterEnterCallbacks(context);
-                this.__runOnAfterLeaveCallbacks(context, previousContext);
-                return animationDone.then(()=>{
-                    if (this.__isLatestRender(context)) {
-                        // If there is another render pass started after this one,
-                        // the 'disappearing content' would be removed when the other
-                        // render pass calls `this.__addAppearingContent()`
-                        this.__removeDisappearingContent();
-                        this.__previousContext = context;
-                        return this.location;
-                    }
-                });
-            }
-        }).catch((error)=>{
-            if (renderId === this.__lastStartedRenderId) {
-                if (shouldUpdateHistory) this.__updateBrowserHistory(context);
-                removeDomNodes(this.__outlet && this.__outlet.children);
-                this.location = createLocation(Object.assign(context, {
-                    resolver: this
-                }));
-                fireRouterEvent("error", Object.assign({
-                    router: this,
-                    error
-                }, context));
-                throw error;
-            }
-        });
-        return this.ready;
-    }
-    // `topOfTheChainContextBeforeRedirects` is a context coming from Resolver.resolve().
-    // It would contain a 'redirect' route or the first 'component' route that
-    // matched the pathname. There might be more child 'component' routes to be
-    // resolved and added into the chain. This method would find and add them.
-    // `contextBeforeRedirects` is the context containing such a child component
-    // route. It's only necessary when this method is called recursively (otherwise
-    // it's the same as the 'top of the chain' context).
-    //
-    // Apart from building the chain of child components, this method would also
-    // handle 'redirect' routes, call 'onBefore' callbacks and handle 'prevent'
-    // and 'redirect' callback results.
-    __fullyResolveChain(topOfTheChainContextBeforeRedirects, contextBeforeRedirects = topOfTheChainContextBeforeRedirects) {
-        return this.__findComponentContextAfterAllRedirects(contextBeforeRedirects)// `contextAfterRedirects` is always a context with an `HTMLElement` result
-        // In other cases the promise gets rejected and .then() is not called
-        .then((contextAfterRedirects)=>{
-            const redirectsHappened = contextAfterRedirects !== contextBeforeRedirects;
-            const topOfTheChainContextAfterRedirects = redirectsHappened ? contextAfterRedirects : topOfTheChainContextBeforeRedirects;
-            const matchedPath = getPathnameForRouter(getMatchedPath(contextAfterRedirects.chain), contextAfterRedirects.resolver);
-            const isFound = matchedPath === contextAfterRedirects.pathname;
-            // Recursive method to try matching more child and sibling routes
-            const findNextContextIfAny = (context, parent = context.route, prevResult)=>{
-                return context.next(undefined, parent, prevResult).then((nextContext)=>{
-                    if (nextContext === null || nextContext === notFoundResult) {
-                        // Next context is not found in children, ...
-                        if (isFound) // ...but original context is already fully matching - use it
-                        return context;
-                        else if (parent.parent !== null) // ...and there is no full match yet - step up to check siblings
-                        return findNextContextIfAny(context, parent.parent, nextContext);
-                        else return nextContext;
-                    }
-                    return nextContext;
-                });
-            };
-            return findNextContextIfAny(contextAfterRedirects).then((nextContext)=>{
-                if (nextContext === null || nextContext === notFoundResult) throw getNotFoundError(topOfTheChainContextAfterRedirects);
-                return nextContext && nextContext !== notFoundResult && nextContext !== contextAfterRedirects ? this.__fullyResolveChain(topOfTheChainContextAfterRedirects, nextContext) : this.__amendWithOnBeforeCallbacks(contextAfterRedirects);
-            });
-        });
-    }
-    __findComponentContextAfterAllRedirects(context) {
-        const result = context.result;
-        if (result instanceof HTMLElement) {
-            renderElement(context, result);
-            return Promise.resolve(context);
-        } else if (result.redirect) return this.__redirect(result.redirect, context.__redirectCount, context.__renderId).then((context)=>this.__findComponentContextAfterAllRedirects(context));
-        else if (result instanceof Error) return Promise.reject(result);
-        else return Promise.reject(new Error(log(`Invalid route resolution result for path "${context.pathname}". ` + `Expected redirect object or HTML element, but got: "${logValue(result)}". ` + `Double check the action return value for the route.`)));
-    }
-    __amendWithOnBeforeCallbacks(contextWithFullChain) {
-        return this.__runOnBeforeCallbacks(contextWithFullChain).then((amendedContext)=>{
-            if (amendedContext === this.__previousContext || amendedContext === contextWithFullChain) return amendedContext;
-            return this.__fullyResolveChain(amendedContext);
-        });
-    }
-    __runOnBeforeCallbacks(newContext) {
-        const previousContext = this.__previousContext || {};
-        const previousChain = previousContext.chain || [];
-        const newChain = newContext.chain;
-        let callbacks = Promise.resolve();
-        const prevent = ()=>({
-                cancel: true
-            });
-        const redirect = (pathname)=>createRedirect(newContext, pathname);
-        newContext.__divergedChainIndex = 0;
-        newContext.__skipAttach = false;
-        if (previousChain.length) {
-            for(let i = 0; i < Math.min(previousChain.length, newChain.length); i = ++newContext.__divergedChainIndex){
-                if (previousChain[i].route !== newChain[i].route || previousChain[i].path !== newChain[i].path && previousChain[i].element !== newChain[i].element || !this.__isReusableElement(previousChain[i].element, newChain[i].element)) break;
-            }
-            // Skip re-attaching and notifications if element and chain do not change
-            newContext.__skipAttach = // Same route chain
-            newChain.length === previousChain.length && newContext.__divergedChainIndex == newChain.length && // Same element
-            this.__isReusableElement(newContext.result, previousContext.result);
-            if (newContext.__skipAttach) {
-                // execute onBeforeLeave for changed segment element when skipping attach
-                for(let i = newChain.length - 1; i >= 0; i--)callbacks = this.__runOnBeforeLeaveCallbacks(callbacks, newContext, {
-                    prevent
-                }, previousChain[i]);
-                // execute onBeforeEnter for changed segment element when skipping attach
-                for(let i = 0; i < newChain.length; i++){
-                    callbacks = this.__runOnBeforeEnterCallbacks(callbacks, newContext, {
-                        prevent,
-                        redirect
-                    }, newChain[i]);
-                    previousChain[i].element.location = createLocation(newContext, previousChain[i].route);
-                }
-            } else // execute onBeforeLeave when NOT skipping attach
-            for(let i = previousChain.length - 1; i >= newContext.__divergedChainIndex; i--)callbacks = this.__runOnBeforeLeaveCallbacks(callbacks, newContext, {
-                prevent
-            }, previousChain[i]);
-        }
-        // execute onBeforeEnter when NOT skipping attach
-        if (!newContext.__skipAttach) for(let i = 0; i < newChain.length; i++){
-            if (i < newContext.__divergedChainIndex) {
-                if (i < previousChain.length && previousChain[i].element) previousChain[i].element.location = createLocation(newContext, previousChain[i].route);
-            } else {
-                callbacks = this.__runOnBeforeEnterCallbacks(callbacks, newContext, {
-                    prevent,
-                    redirect
-                }, newChain[i]);
-                if (newChain[i].element) newChain[i].element.location = createLocation(newContext, newChain[i].route);
-            }
-        }
-        return callbacks.then((amendmentResult)=>{
-            if (amendmentResult) {
-                if (amendmentResult.cancel) {
-                    this.__previousContext.__renderId = newContext.__renderId;
-                    return this.__previousContext;
-                }
-                if (amendmentResult.redirect) return this.__redirect(amendmentResult.redirect, newContext.__redirectCount, newContext.__renderId);
-            }
-            return newContext;
-        });
-    }
-    __runOnBeforeLeaveCallbacks(callbacks, newContext, commands, chainElement) {
-        const location = createLocation(newContext);
-        return callbacks.then((result)=>{
-            if (this.__isLatestRender(newContext)) {
-                const afterLeaveFunction = amend("onBeforeLeave", [
-                    location,
-                    commands,
-                    this
-                ], chainElement.element);
-                return afterLeaveFunction(result);
-            }
-        }).then((result)=>{
-            if (!(result || {}).redirect) return result;
-        });
-    }
-    __runOnBeforeEnterCallbacks(callbacks, newContext, commands, chainElement) {
-        const location = createLocation(newContext, chainElement.route);
-        return callbacks.then((result)=>{
-            if (this.__isLatestRender(newContext)) {
-                const beforeEnterFunction = amend("onBeforeEnter", [
-                    location,
-                    commands,
-                    this
-                ], chainElement.element);
-                return beforeEnterFunction(result);
-            }
-        });
-    }
-    __isReusableElement(element, otherElement) {
-        if (element && otherElement) return this.__createdByRouter.get(element) && this.__createdByRouter.get(otherElement) ? element.localName === otherElement.localName : element === otherElement;
-        return false;
-    }
-    __isLatestRender(context) {
-        return context.__renderId === this.__lastStartedRenderId;
-    }
-    __redirect(redirectData, counter, renderId) {
-        if (counter > MAX_REDIRECT_COUNT) throw new Error(log(`Too many redirects when rendering ${redirectData.from}`));
-        return this.resolve({
-            pathname: this.urlForPath(redirectData.pathname, redirectData.params),
-            redirectFrom: redirectData.from,
-            __redirectCount: (counter || 0) + 1,
-            __renderId: renderId
-        });
-    }
-    __ensureOutlet(outlet = this.__outlet) {
-        if (!(outlet instanceof Node)) throw new TypeError(log(`Expected router outlet to be a valid DOM Node (but got ${outlet})`));
-    }
-    __updateBrowserHistory({ pathname, search = "", hash = "" }, replace) {
-        if (window.location.pathname !== pathname || window.location.search !== search || window.location.hash !== hash) {
-            const changeState = replace ? "replaceState" : "pushState";
-            window.history[changeState](null, document.title, pathname + search + hash);
-            window.dispatchEvent(new PopStateEvent("popstate", {
-                state: "vaadin-router-ignore"
-            }));
-        }
-    }
-    __copyUnchangedElements(context, previousContext) {
-        // Find the deepest common parent between the last and the new component
-        // chains. Update references for the unchanged elements in the new chain
-        let deepestCommonParent = this.__outlet;
-        for(let i = 0; i < context.__divergedChainIndex; i++){
-            const unchangedElement = previousContext && previousContext.chain[i].element;
-            if (unchangedElement) {
-                if (unchangedElement.parentNode === deepestCommonParent) {
-                    context.chain[i].element = unchangedElement;
-                    deepestCommonParent = unchangedElement;
-                } else break;
-            }
-        }
-        return deepestCommonParent;
-    }
-    __addAppearingContent(context, previousContext) {
-        this.__ensureOutlet();
-        // If the previous 'entering' animation has not completed yet,
-        // stop it and remove that content from the DOM before adding new one.
-        this.__removeAppearingContent();
-        // Copy reusable elements from the previousContext to current
-        const deepestCommonParent = this.__copyUnchangedElements(context, previousContext);
-        // Keep two lists of DOM elements:
-        //  - those that should be removed once the transition animation is over
-        //  - and those that should remain
-        this.__appearingContent = [];
-        this.__disappearingContent = Array.from(deepestCommonParent.children).filter(// Only remove layout content that was added by router
-        (e)=>this.__addedByRouter.get(e) && // Do not remove the result element to avoid flickering
-            e !== context.result);
-        // Add new elements (starting after the deepest common parent) to the DOM.
-        // That way only the components that are actually different between the two
-        // locations are added to the DOM (and those that are common remain in the
-        // DOM without first removing and then adding them again).
-        let parentElement = deepestCommonParent;
-        for(let i = context.__divergedChainIndex; i < context.chain.length; i++){
-            const elementToAdd = context.chain[i].element;
-            if (elementToAdd) {
-                parentElement.appendChild(elementToAdd);
-                this.__addedByRouter.set(elementToAdd, true);
-                if (parentElement === deepestCommonParent) this.__appearingContent.push(elementToAdd);
-                parentElement = elementToAdd;
-            }
-        }
-    }
-    __removeDisappearingContent() {
-        if (this.__disappearingContent) removeDomNodes(this.__disappearingContent);
-        this.__disappearingContent = null;
-        this.__appearingContent = null;
-    }
-    __removeAppearingContent() {
-        if (this.__disappearingContent && this.__appearingContent) {
-            removeDomNodes(this.__appearingContent);
-            this.__disappearingContent = null;
-            this.__appearingContent = null;
-        }
-    }
-    __runOnAfterLeaveCallbacks(currentContext, targetContext) {
-        if (!targetContext) return;
-        // REVERSE iteration: from Z to A
-        for(let i = targetContext.chain.length - 1; i >= currentContext.__divergedChainIndex; i--){
-            if (!this.__isLatestRender(currentContext)) break;
-            const currentComponent = targetContext.chain[i].element;
-            if (!currentComponent) continue;
-            try {
-                const location = createLocation(currentContext);
-                runCallbackIfPossible(currentComponent.onAfterLeave, [
-                    location,
-                    {},
-                    targetContext.resolver
-                ], currentComponent);
-            } finally{
-                if (this.__disappearingContent.indexOf(currentComponent) > -1) removeDomNodes(currentComponent.children);
-            }
-        }
-    }
-    __runOnAfterEnterCallbacks(currentContext) {
-        // forward iteration: from A to Z
-        for(let i = currentContext.__divergedChainIndex; i < currentContext.chain.length; i++){
-            if (!this.__isLatestRender(currentContext)) break;
-            const currentComponent = currentContext.chain[i].element || {};
-            const location = createLocation(currentContext, currentContext.chain[i].route);
-            runCallbackIfPossible(currentComponent.onAfterEnter, [
-                location,
-                {},
-                currentContext.resolver
-            ], currentComponent);
-        }
-    }
-    __animateIfNeeded(context) {
-        const from = (this.__disappearingContent || [])[0];
-        const to = (this.__appearingContent || [])[0];
-        const promises = [];
-        const chain = context.chain;
-        let config;
-        for(let i = chain.length; i > 0; i--)if (chain[i - 1].route.animate) {
-            config = chain[i - 1].route.animate;
-            break;
-        }
-        if (from && to && config) {
-            const leave = isObject(config) && config.leave || "leaving";
-            const enter = isObject(config) && config.enter || "entering";
-            promises.push(animate(from, leave));
-            promises.push(animate(to, enter));
-        }
-        return Promise.all(promises).then(()=>context);
-    }
-    /**
-   * Subscribes this instance to navigation events on the `window`.
-   *
-   * NOTE: beware of resource leaks. For as long as a router instance is
-   * subscribed to navigation events, it won't be garbage collected.
-   */ subscribe() {
-        window.addEventListener("vaadin-router-go", this.__navigationEventHandler);
-    }
-    /**
-   * Removes the subscription to navigation events created in the `subscribe()`
-   * method.
-   */ unsubscribe() {
-        window.removeEventListener("vaadin-router-go", this.__navigationEventHandler);
-    }
-    __onNavigationEvent(event) {
-        const { pathname, search, hash } = event ? event.detail : window.location;
-        if (isString(this.__normalizePathname(pathname))) {
-            if (event && event.preventDefault) event.preventDefault();
-            this.render({
-                pathname,
-                search,
-                hash
-            }, true);
-        }
-    }
-    /**
-   * Configures what triggers Router navigation events:
-   *  - `POPSTATE`: popstate events on the current `window`
-   *  - `CLICK`: click events on `<a>` links leading to the current page
-   *
-   * This method is invoked with the pre-configured values when creating a new Router instance.
-   * By default, both `POPSTATE` and `CLICK` are enabled. This setup is expected to cover most of the use cases.
-   *
-   * See the `router-config.js` for the default navigation triggers config. Based on it, you can
-   * create the own one and only import the triggers you need, instead of pulling in all the code,
-   * e.g. if you want to handle `click` differently.
-   *
-   * See also **Navigation Triggers** section in [Live Examples](#/classes/Router/demos/demo/index.html).
-   *
-   * @param {...NavigationTrigger} triggers
-   */ static setTriggers(...triggers) {
-        setNavigationTriggers(triggers);
-    }
-    /**
-   * Generates a URL for the route with the given name, optionally performing
-   * substitution of parameters.
-   *
-   * The route is searched in all the Router instances subscribed to
-   * navigation events.
-   *
-   * **Note:** For child route names, only array children are considered.
-   * It is not possible to generate URLs using a name for routes set with
-   * a children function.
-   *
-   * @function urlForName
-   * @param {!string} name the route name or the route’s `component` name.
-   * @param {Params=} params Optional object with route path parameters.
-   * Named parameters are passed by name (`params[name] = value`), unnamed
-   * parameters are passed by index (`params[index] = value`).
-   *
-   * @return {string}
-   */ urlForName(name, params) {
-        if (!this.__urlForName) this.__urlForName = generateUrls(this);
-        return getPathnameForRouter(this.__urlForName(name, params), this);
-    }
-    /**
-   * Generates a URL for the given route path, optionally performing
-   * substitution of parameters.
-   *
-   * @param {!string} path string route path declared in [express.js syntax](https://expressjs.com/en/guide/routing.html#route-paths").
-   * @param {Params=} params Optional object with route path parameters.
-   * Named parameters are passed by name (`params[name] = value`), unnamed
-   * parameters are passed by index (`params[index] = value`).
-   *
-   * @return {string}
-   */ urlForPath(path, params) {
-        return getPathnameForRouter(Router.pathToRegexp.compile(path)(params), this);
-    }
-    /**
-   * Triggers navigation to a new path. Returns a boolean without waiting until
-   * the navigation is complete. Returns `true` if at least one `Router`
-   * has handled the navigation (was subscribed and had `baseUrl` matching
-   * the `path` argument), otherwise returns `false`.
-   *
-   * @param {!string|!{pathname: !string, search: (string|undefined), hash: (string|undefined)}} path
-   *   a new in-app path string, or an URL-like object with `pathname`
-   *   string property, and optional `search` and `hash` string properties.
-   * @return {boolean}
-   */ static go(path) {
-        const { pathname, search, hash } = isString(path) ? this.__createUrl(path, "http://a") // some base to omit origin
-         : path;
-        return fireRouterEvent("go", {
-            pathname,
-            search,
-            hash
-        });
-    }
-}
-const DEV_MODE_CODE_REGEXP = /\/\*[\*!]\s+vaadin-dev-mode:start([\s\S]*)vaadin-dev-mode:end\s+\*\*\//i;
-const FlowClients = window.Vaadin && window.Vaadin.Flow && window.Vaadin.Flow.clients;
-function isMinified() {
-    function test() {
-        /** vaadin-dev-mode:start
-    return false;
-    vaadin-dev-mode:end **/ return true;
-    }
-    return uncommentAndRun(test);
-}
-function isDevelopmentMode() {
-    try {
-        if (isForcedDevelopmentMode()) return true;
-        if (!isLocalhost()) return false;
-        if (FlowClients) return !isFlowProductionMode();
-        return !isMinified();
-    } catch (e) {
-        // Some error in this code, assume production so no further actions will be taken
-        return false;
-    }
-}
-function isForcedDevelopmentMode() {
-    return localStorage.getItem("vaadin.developmentmode.force");
-}
-function isLocalhost() {
-    return [
-        "localhost",
-        "127.0.0.1"
-    ].indexOf(window.location.hostname) >= 0;
-}
-function isFlowProductionMode() {
-    if (FlowClients) {
-        const productionModeApps = Object.keys(FlowClients).map((key)=>FlowClients[key]).filter((client)=>client.productionMode);
-        if (productionModeApps.length > 0) return true;
-    }
-    return false;
-}
-function uncommentAndRun(callback, args) {
-    if (typeof callback !== "function") return;
-    const match = DEV_MODE_CODE_REGEXP.exec(callback.toString());
-    if (match) try {
-        // requires CSP: script-src 'unsafe-eval'
-        callback = new Function(match[1]);
-    } catch (e) {
-        // eat the exception
-        console.log("vaadin-development-mode-detector: uncommentAndRun() failed", e);
-    }
-    return callback(args);
-}
-// A guard against polymer-modulizer removing the window.Vaadin
-// initialization above.
-window["Vaadin"] = window["Vaadin"] || {};
-/**
- * Inspects the source code of the given `callback` function for
- * specially-marked _commented_ code. If such commented code is found in the
- * callback source, uncomments and runs that code instead of the callback
- * itself. Otherwise runs the callback as is.
- *
- * The optional arguments are passed into the callback / uncommented code,
- * the result is returned.
- *
- * See the `isMinified()` function source code in this file for an example.
- *
- */ const runIfDevelopmentMode = function(callback, args) {
-    if (window.Vaadin.developmentMode) return uncommentAndRun(callback, args);
-};
-if (window.Vaadin.developmentMode === undefined) window.Vaadin.developmentMode = isDevelopmentMode();
-/* This file is autogenerated from src/vaadin-usage-statistics.tpl.html */ function maybeGatherAndSendStats() {
-/** vaadin-dev-mode:start
-  (function () {
-'use strict';
 
-var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) {
-  return typeof obj;
-} : function (obj) {
-  return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj;
-};
-
-var classCallCheck = function (instance, Constructor) {
-  if (!(instance instanceof Constructor)) {
-    throw new TypeError("Cannot call a class as a function");
-  }
-};
-
-var createClass = function () {
-  function defineProperties(target, props) {
-    for (var i = 0; i < props.length; i++) {
-      var descriptor = props[i];
-      descriptor.enumerable = descriptor.enumerable || false;
-      descriptor.configurable = true;
-      if ("value" in descriptor) descriptor.writable = true;
-      Object.defineProperty(target, descriptor.key, descriptor);
-    }
-  }
-
-  return function (Constructor, protoProps, staticProps) {
-    if (protoProps) defineProperties(Constructor.prototype, protoProps);
-    if (staticProps) defineProperties(Constructor, staticProps);
-    return Constructor;
-  };
-}();
-
-var getPolymerVersion = function getPolymerVersion() {
-  return window.Polymer && window.Polymer.version;
-};
-
-var StatisticsGatherer = function () {
-  function StatisticsGatherer(logger) {
-    classCallCheck(this, StatisticsGatherer);
-
-    this.now = new Date().getTime();
-    this.logger = logger;
-  }
-
-  createClass(StatisticsGatherer, [{
-    key: 'frameworkVersionDetectors',
-    value: function frameworkVersionDetectors() {
-      return {
-        'Flow': function Flow() {
-          if (window.Vaadin && window.Vaadin.Flow && window.Vaadin.Flow.clients) {
-            var flowVersions = Object.keys(window.Vaadin.Flow.clients).map(function (key) {
-              return window.Vaadin.Flow.clients[key];
-            }).filter(function (client) {
-              return client.getVersionInfo;
-            }).map(function (client) {
-              return client.getVersionInfo().flow;
-            });
-            if (flowVersions.length > 0) {
-              return flowVersions[0];
-            }
-          }
-        },
-        'Vaadin Framework': function VaadinFramework() {
-          if (window.vaadin && window.vaadin.clients) {
-            var frameworkVersions = Object.values(window.vaadin.clients).filter(function (client) {
-              return client.getVersionInfo;
-            }).map(function (client) {
-              return client.getVersionInfo().vaadinVersion;
-            });
-            if (frameworkVersions.length > 0) {
-              return frameworkVersions[0];
-            }
-          }
-        },
-        'AngularJs': function AngularJs() {
-          if (window.angular && window.angular.version && window.angular.version) {
-            return window.angular.version.full;
-          }
-        },
-        'Angular': function Angular() {
-          if (window.ng) {
-            var tags = document.querySelectorAll("[ng-version]");
-            if (tags.length > 0) {
-              return tags[0].getAttribute("ng-version");
-            }
-            return "Unknown";
-          }
-        },
-        'Backbone.js': function BackboneJs() {
-          if (window.Backbone) {
-            return window.Backbone.VERSION;
-          }
-        },
-        'React': function React() {
-          var reactSelector = '[data-reactroot], [data-reactid]';
-          if (!!document.querySelector(reactSelector)) {
-            // React does not publish the version by default
-            return "unknown";
-          }
-        },
-        'Ember': function Ember() {
-          if (window.Em && window.Em.VERSION) {
-            return window.Em.VERSION;
-          } else if (window.Ember && window.Ember.VERSION) {
-            return window.Ember.VERSION;
-          }
-        },
-        'jQuery': function (_jQuery) {
-          function jQuery() {
-            return _jQuery.apply(this, arguments);
-          }
-
-          jQuery.toString = function () {
-            return _jQuery.toString();
-          };
-
-          return jQuery;
-        }(function () {
-          if (typeof jQuery === 'function' && jQuery.prototype.jquery !== undefined) {
-            return jQuery.prototype.jquery;
-          }
-        }),
-        'Polymer': function Polymer() {
-          var version = getPolymerVersion();
-          if (version) {
-            return version;
-          }
-        },
-        'LitElement': function LitElement() {
-          var version = window.litElementVersions && window.litElementVersions[0];
-          if (version) {
-            return version;
-          }
-        },
-        'LitHtml': function LitHtml() {
-          var version = window.litHtmlVersions && window.litHtmlVersions[0];
-          if (version) {
-            return version;
-          }
-        },
-        'Vue.js': function VueJs() {
-          if (window.Vue) {
-            return window.Vue.version;
-          }
-        }
-      };
-    }
-  }, {
-    key: 'getUsedVaadinElements',
-    value: function getUsedVaadinElements(elements) {
-      var version = getPolymerVersion();
-      var elementClasses = void 0;
-      // NOTE: In case you edit the code here, YOU MUST UPDATE any statistics reporting code in Flow.
-      // Check all locations calling the method getEntries() in
-      // https://github.com/vaadin/flow/blob/master/flow-server/src/main/java/com/vaadin/flow/internal/UsageStatistics.java#L106
-      // Currently it is only used by BootstrapHandler.
-      if (version && version.indexOf('2') === 0) {
-        // Polymer 2: components classes are stored in window.Vaadin
-        elementClasses = Object.keys(window.Vaadin).map(function (c) {
-          return window.Vaadin[c];
-        }).filter(function (c) {
-          return c.is;
-        });
-      } else {
-        // Polymer 3: components classes are stored in window.Vaadin.registrations
-        elementClasses = window.Vaadin.registrations || [];
-      }
-      elementClasses.forEach(function (klass) {
-        var version = klass.version ? klass.version : "0.0.0";
-        elements[klass.is] = { version: version };
-      });
-    }
-  }, {
-    key: 'getUsedVaadinThemes',
-    value: function getUsedVaadinThemes(themes) {
-      ['Lumo', 'Material'].forEach(function (themeName) {
-        var theme;
-        var version = getPolymerVersion();
-        if (version && version.indexOf('2') === 0) {
-          // Polymer 2: themes are stored in window.Vaadin
-          theme = window.Vaadin[themeName];
-        } else {
-          // Polymer 3: themes are stored in custom element registry
-          theme = customElements.get('vaadin-' + themeName.toLowerCase() + '-styles');
-        }
-        if (theme && theme.version) {
-          themes[themeName] = { version: theme.version };
-        }
-      });
-    }
-  }, {
-    key: 'getFrameworks',
-    value: function getFrameworks(frameworks) {
-      var detectors = this.frameworkVersionDetectors();
-      Object.keys(detectors).forEach(function (framework) {
-        var detector = detectors[framework];
-        try {
-          var version = detector();
-          if (version) {
-            frameworks[framework] = { version: version };
-          }
-        } catch (e) {}
-      });
-    }
-  }, {
-    key: 'gather',
-    value: function gather(storage) {
-      var storedStats = storage.read();
-      var gatheredStats = {};
-      var types = ["elements", "frameworks", "themes"];
-
-      types.forEach(function (type) {
-        gatheredStats[type] = {};
-        if (!storedStats[type]) {
-          storedStats[type] = {};
-        }
-      });
-
-      var previousStats = JSON.stringify(storedStats);
-
-      this.getUsedVaadinElements(gatheredStats.elements);
-      this.getFrameworks(gatheredStats.frameworks);
-      this.getUsedVaadinThemes(gatheredStats.themes);
-
-      var now = this.now;
-      types.forEach(function (type) {
-        var keys = Object.keys(gatheredStats[type]);
-        keys.forEach(function (key) {
-          if (!storedStats[type][key] || _typeof(storedStats[type][key]) != _typeof({})) {
-            storedStats[type][key] = { firstUsed: now };
-          }
-          // Discards any previously logged version number
-          storedStats[type][key].version = gatheredStats[type][key].version;
-          storedStats[type][key].lastUsed = now;
-        });
-      });
-
-      var newStats = JSON.stringify(storedStats);
-      storage.write(newStats);
-      if (newStats != previousStats && Object.keys(storedStats).length > 0) {
-        this.logger.debug("New stats: " + newStats);
-      }
-    }
-  }]);
-  return StatisticsGatherer;
-}();
-
-var StatisticsStorage = function () {
-  function StatisticsStorage(key) {
-    classCallCheck(this, StatisticsStorage);
-
-    this.key = key;
-  }
-
-  createClass(StatisticsStorage, [{
-    key: 'read',
-    value: function read() {
-      var localStorageStatsString = localStorage.getItem(this.key);
-      try {
-        return JSON.parse(localStorageStatsString ? localStorageStatsString : '{}');
-      } catch (e) {
-        return {};
-      }
-    }
-  }, {
-    key: 'write',
-    value: function write(data) {
-      localStorage.setItem(this.key, data);
-    }
-  }, {
-    key: 'clear',
-    value: function clear() {
-      localStorage.removeItem(this.key);
-    }
-  }, {
-    key: 'isEmpty',
-    value: function isEmpty() {
-      var storedStats = this.read();
-      var empty = true;
-      Object.keys(storedStats).forEach(function (key) {
-        if (Object.keys(storedStats[key]).length > 0) {
-          empty = false;
-        }
-      });
-
-      return empty;
-    }
-  }]);
-  return StatisticsStorage;
-}();
-
-var StatisticsSender = function () {
-  function StatisticsSender(url, logger) {
-    classCallCheck(this, StatisticsSender);
-
-    this.url = url;
-    this.logger = logger;
-  }
-
-  createClass(StatisticsSender, [{
-    key: 'send',
-    value: function send(data, errorHandler) {
-      var logger = this.logger;
-
-      if (navigator.onLine === false) {
-        logger.debug("Offline, can't send");
-        errorHandler();
-        return;
-      }
-      logger.debug("Sending data to " + this.url);
-
-      var req = new XMLHttpRequest();
-      req.withCredentials = true;
-      req.addEventListener("load", function () {
-        // Stats sent, nothing more to do
-        logger.debug("Response: " + req.responseText);
-      });
-      req.addEventListener("error", function () {
-        logger.debug("Send failed");
-        errorHandler();
-      });
-      req.addEventListener("abort", function () {
-        logger.debug("Send aborted");
-        errorHandler();
-      });
-      req.open("POST", this.url);
-      req.setRequestHeader("Content-Type", "application/json");
-      req.send(data);
-    }
-  }]);
-  return StatisticsSender;
-}();
-
-var StatisticsLogger = function () {
-  function StatisticsLogger(id) {
-    classCallCheck(this, StatisticsLogger);
-
-    this.id = id;
-  }
-
-  createClass(StatisticsLogger, [{
-    key: '_isDebug',
-    value: function _isDebug() {
-      return localStorage.getItem("vaadin." + this.id + ".debug");
-    }
-  }, {
-    key: 'debug',
-    value: function debug(msg) {
-      if (this._isDebug()) {
-        console.info(this.id + ": " + msg);
-      }
-    }
-  }]);
-  return StatisticsLogger;
-}();
-
-var UsageStatistics = function () {
-  function UsageStatistics() {
-    classCallCheck(this, UsageStatistics);
-
-    this.now = new Date();
-    this.timeNow = this.now.getTime();
-    this.gatherDelay = 10; // Delay between loading this file and gathering stats
-    this.initialDelay = 24 * 60 * 60;
-
-    this.logger = new StatisticsLogger("statistics");
-    this.storage = new StatisticsStorage("vaadin.statistics.basket");
-    this.gatherer = new StatisticsGatherer(this.logger);
-    this.sender = new StatisticsSender("https://tools.vaadin.com/usage-stats/submit", this.logger);
-  }
-
-  createClass(UsageStatistics, [{
-    key: 'maybeGatherAndSend',
-    value: function maybeGatherAndSend() {
-      var _this = this;
-
-      if (localStorage.getItem(UsageStatistics.optOutKey)) {
-        return;
-      }
-      this.gatherer.gather(this.storage);
-      setTimeout(function () {
-        _this.maybeSend();
-      }, this.gatherDelay * 1000);
-    }
-  }, {
-    key: 'lottery',
-    value: function lottery() {
-      return true;
-    }
-  }, {
-    key: 'currentMonth',
-    value: function currentMonth() {
-      return this.now.getYear() * 12 + this.now.getMonth();
-    }
-  }, {
-    key: 'maybeSend',
-    value: function maybeSend() {
-      var firstUse = Number(localStorage.getItem(UsageStatistics.firstUseKey));
-      var monthProcessed = Number(localStorage.getItem(UsageStatistics.monthProcessedKey));
-
-      if (!firstUse) {
-        // Use a grace period to avoid interfering with tests, incognito mode etc
-        firstUse = this.timeNow;
-        localStorage.setItem(UsageStatistics.firstUseKey, firstUse);
-      }
-
-      if (this.timeNow < firstUse + this.initialDelay * 1000) {
-        this.logger.debug("No statistics will be sent until the initial delay of " + this.initialDelay + "s has passed");
-        return;
-      }
-      if (this.currentMonth() <= monthProcessed) {
-        this.logger.debug("This month has already been processed");
-        return;
-      }
-      localStorage.setItem(UsageStatistics.monthProcessedKey, this.currentMonth());
-      // Use random sampling
-      if (this.lottery()) {
-        this.logger.debug("Congratulations, we have a winner!");
-      } else {
-        this.logger.debug("Sorry, no stats from you this time");
-        return;
-      }
-
-      this.send();
-    }
-  }, {
-    key: 'send',
-    value: function send() {
-      // Ensure we have the latest data
-      this.gatherer.gather(this.storage);
-
-      // Read, send and clean up
-      var data = this.storage.read();
-      data["firstUse"] = Number(localStorage.getItem(UsageStatistics.firstUseKey));
-      data["usageStatisticsVersion"] = UsageStatistics.version;
-      var info = 'This request contains usage statistics gathered from the application running in development mode. \n\nStatistics gathering is automatically disabled and excluded from production builds.\n\nFor details and to opt-out, see https://github.com/vaadin/vaadin-usage-statistics.\n\n\n\n';
-      var self = this;
-      this.sender.send(info + JSON.stringify(data), function () {
-        // Revert the 'month processed' flag
-        localStorage.setItem(UsageStatistics.monthProcessedKey, self.currentMonth() - 1);
-      });
-    }
-  }], [{
-    key: 'version',
-    get: function get$1() {
-      return '2.1.2';
-    }
-  }, {
-    key: 'firstUseKey',
-    get: function get$1() {
-      return 'vaadin.statistics.firstuse';
-    }
-  }, {
-    key: 'monthProcessedKey',
-    get: function get$1() {
-      return 'vaadin.statistics.monthProcessed';
-    }
-  }, {
-    key: 'optOutKey',
-    get: function get$1() {
-      return 'vaadin.statistics.optout';
-    }
-  }]);
-  return UsageStatistics;
-}();
-
-try {
-  window.Vaadin = window.Vaadin || {};
-  window.Vaadin.usageStatsChecker = window.Vaadin.usageStatsChecker || new UsageStatistics();
-  window.Vaadin.usageStatsChecker.maybeGatherAndSend();
-} catch (e) {
-  // Intentionally ignored as this is not a problem in the app being developed
-}
-
-}());
-
-  vaadin-dev-mode:end **/ }
-const usageStatistics = function() {
-    if (typeof runIfDevelopmentMode === "function") return runIfDevelopmentMode(maybeGatherAndSendStats);
-};
-window.Vaadin = window.Vaadin || {};
-window.Vaadin.registrations = window.Vaadin.registrations || [];
-window.Vaadin.registrations.push({
-    is: "@vaadin/router",
-    version: "1.7.4"
-});
-usageStatistics();
-Router.NavigationTrigger = {
-    POPSTATE,
-    CLICK
-};
-
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"eBUGN":[function(require,module,exports) {
+},{"../../src/state":"1Yeju","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"eBUGN":[function(require,module,exports) {
 var _index = require("./comps/welcome/index");
 var _index1 = require("./comps/game-room/index");
 var _index2 = require("./comps/new-game/index");
@@ -47206,7 +44869,7 @@ customElements.define("new-game-el", class Welcome extends HTMLElement {
             const playerName = form.name.value;
             (0, _state.state).setPlayerName(playerName);
             (0, _state.state).data.ownerName = true;
-            (0, _state.state).roomId();
+            (0, _state.state).signUp();
         });
     }
     render() {
@@ -47234,7 +44897,6 @@ customElements.define("new-game-el", class Welcome extends HTMLElement {
       </div>
       <rooms-el></rooms-el>
       `;
-        // -------------------------------------------------------
         const style = document.createElement("style");
         style.textContent = `
             *{ box-sizing: border box;}
@@ -47282,7 +44944,6 @@ customElements.define("new-game-el", class Welcome extends HTMLElement {
       .button:hover {  background: #00449d; }      
       .button:active {  background: #009048; }
       `;
-        // ----------------------------------------------------------       
         div.classList.add("inner-root");
         this.appendChild(div);
         this.appendChild(style);
@@ -47298,60 +44959,60 @@ var _router = require("@vaadin/router");
 var _state = require("../../src/state");
 customElements.define("inst-el", class Instructions extends HTMLElement {
     connectedCallback() {
-        console.log();
         const st = (0, _state.state).data;
         if (st.ownerName == true) {
-            st.gameStatus[0].player = st.playerName;
-            st.gameStatus[0].playerOnline = true;
+            st.gameStatus.player = st.playerName;
+            st.gameStatus.playerOnline = true;
+            if (st.gameStatus.rivalOnline == true) st.gameStatus.rivalOnline = false;
+            (0, _state.state).pushGame(st.gameStatus);
         }
-        this.addDiv1();
+        if (st.ownerName == false) {
+            st.gameStatus.rival = st.rivalName;
+            st.gameStatus.rivalOnline = true;
+        // state.pushGame(st.gameStatus)
+        }
         this.addStyle();
+        this.addDiv1();
+        if (st.gameStatus.playerOnline && st.gameStatus.rivalOnline) {
+            this.addDiv2();
+            this.addStyle();
+        }
         (0, _state.state).subscribe(()=>{
             console.log("subscribe de instructions");
-            if (st.ownerName == false) {
-                st.gameStatus[0].rival = st.rivalName;
-                st.gameStatus[0].rivalOnline = true;
-            }
-            console.log(st.gameStatus);
             const otherPlayerInfo = st.gameStatus;
-            if (st.gameStatus[0].player == "") {
-                if (st.ownerName == false) {
-                    console.log(otherPlayerInfo);
-                    st.gameStatus[0].player = st.playerName;
-                    st.gameStatus[0].playerOnline = otherPlayerInfo[0].playerOnline;
-                    st.playerName = otherPlayerInfo[0].player;
+            if (st.ownerName == false) {
+                if (st.gameStatus.player == "") st.gameStatus.player = st.playerName;
+                st.gameStatus.playerOnline = otherPlayerInfo.playerOnline;
+                st.playerName = otherPlayerInfo.player;
+            }
+            if (st.ownerName == true) {
+                if (st.gameStatus.rival == "") st.gameStatus.rival = st.gameStatus.rival;
+                st.gameStatus.rivalOnline = otherPlayerInfo.rivalOnline;
+                st.rivalName = otherPlayerInfo.rival;
+            }
+            if (location.pathname == "/instructions") {
+                this.addHeader();
+                console.log(st.gameStatus.playerStatus);
+                const rivalOnlineStatus = st.gameStatus.rivalOnline;
+                if (rivalOnlineStatus == true) {
+                    console.log(rivalOnlineStatus);
+                    this.addDiv2();
+                    this.addStyle();
+                }
+                if (st.ownerName == true && st.gameStatus.playerStatus == true) {
+                    this.addDiv3();
+                    this.addStyle();
+                }
+                if (st.ownerName == false && st.gameStatus.rivalStatus == true) {
+                    this.addDiv3();
+                    this.addStyle();
+                }
+                if (st.gameStatus.playerStatus == true && st.gameStatus.rivalStatus == true) {
+                    (0, _router.Router).go("/game");
+                    console.log("Se ejecuta el /game");
                 }
             }
-            if (st.gameStatus[0].rival == "") {
-                if (st.ownerName == true) {
-                    console.log(otherPlayerInfo);
-                    st.gameStatus[0].rival = st.rivalName;
-                    st.gameStatus[0].rivalOnline = otherPlayerInfo[0].rivalOnline;
-                    st.rivalName = otherPlayerInfo[0].rival;
-                }
-            }
-            this.addHeader();
-            const playerOnlineStatus = st.gameStatus[0].playerOnline;
-            const rivalOnlineStatus = st.gameStatus[0].rivalOnline;
-            if (rivalOnlineStatus == true) {
-                this.addDiv2();
-                this.addStyle();
-            }
-            if (st.ownerName == true && st.gameStatus[0].playerStatus == true) {
-                this.addDiv3();
-                this.addStyle();
-            }
-            if (st.ownerName == false && st.gameStatus[0].rivalStatus == true) {
-                this.addDiv3();
-                this.addStyle();
-            }
-            if (st.gameStatus[0].playerStatus == true && st.gameStatus[0].rivalStatus == true) (0, _router.Router).go("/game");
         });
-        console.log((0, _state.state).data.gameStatus[0]);
-        if ((0, _state.state).data.playerName !== "") {
-            (0, _state.state).pushGame((0, _state.state).data.gameStatus);
-            console.log("se ejecuta el pushGame");
-        }
         if ((0, _state.state).data.ownerName == false && (0, _state.state).data.playerName !== "") (0, _state.state).pushGame((0, _state.state).data.gameStatus);
     }
     addHeader() {
@@ -47374,7 +45035,6 @@ customElements.define("inst-el", class Instructions extends HTMLElement {
             palyerEl.innerHTML = `${playerPageName}:${playerPoints}`;
             rivalEl.innerHTML = `${rivalPageName}:${rivalPoints}`;
         } else if (st.ownerName == false) {
-            console.log(playerPageName);
             rivalEl.innerHTML = `${playerPageName}:${playerPoints}`;
             palyerEl.innerHTML = `${rivalPageName}:${rivalPoints}`;
         }
@@ -47441,13 +45101,13 @@ customElements.define("inst-el", class Instructions extends HTMLElement {
         div1.classList.add("inner-root");
         this.appendChild(div1);
         this.addHeader();
+    // if (state.data.ownerName == false) { if (state.data.gameStatus.playerOnline) { this.addDiv2(); } }
     }
     addDiv2() {
         console.log("addDiv2");
         const stonePicURL = require("bc3027b16a50e5fd");
         const paperPicURL = require("3df831f5e754144f");
         const scissorsPicURL = require("99486f88cb0ea89e");
-        console.log((0, _state.state).data.rivalName);
         const div2 = document.createElement("div");
         div2.innerHTML = `
     <header class="header">
@@ -47465,8 +45125,11 @@ customElements.define("inst-el", class Instructions extends HTMLElement {
     <img src=${scissorsPicURL} class="img">
     </div>
     `;
-        this.firstChild.remove();
-        this.firstChild.remove();
+        console.log(this.childNodes.length);
+        if (this.childNodes.length > 0) {
+            this.firstChild.remove();
+            this.firstChild.remove();
+        }
         div2.classList.add("inner-root");
         this.appendChild(div2);
         this.addHeader();
@@ -47474,9 +45137,8 @@ customElements.define("inst-el", class Instructions extends HTMLElement {
         boton.addEventListener("click", function(e) {
             e.preventDefault();
             const gameSttus = (0, _state.state).data.gameStatus;
-            console.log(gameSttus);
-            if ((0, _state.state).data.ownerName == true) gameSttus[0].playerStatus = true;
-            if ((0, _state.state).data.ownerName == false) gameSttus[0].rivalStatus = true;
+            if ((0, _state.state).data.ownerName == true) gameSttus.playerStatus = true;
+            if ((0, _state.state).data.ownerName == false) gameSttus.rivalStatus = true;
             (0, _state.state).pushGame(gameSttus);
         });
     }
@@ -47486,6 +45148,9 @@ customElements.define("inst-el", class Instructions extends HTMLElement {
         const paperPicURL = require("3df831f5e754144f");
         const scissorsPicURL = require("99486f88cb0ea89e");
         const div3 = document.createElement("div");
+        let player;
+        if ((0, _state.state).data.ownerName == true) player = (0, _state.state).data.gameStatus.rival;
+        if ((0, _state.state).data.ownerName == false) player = (0, _state.state).data.gameStatus.player;
         div3.innerHTML = `
     <header class="header">
     <div class="players">
@@ -47494,7 +45159,7 @@ customElements.define("inst-el", class Instructions extends HTMLElement {
     </div>
     <div class="room-id"><div>Sala</div>${(0, _state.state).data.roomId}</div>
     </header>
-    <h3 class="title">Esperando a que ${(0, _state.state).data.gameStatus[0].rival} presione jugar...</h3>
+    <h3 class="title">Esperando a que ${player} presione jugar...</h3>
     <div class="hands">
     <img src=${stonePicURL} class="img">
     <img src=${paperPicURL} class="img">
@@ -47510,12 +45175,55 @@ customElements.define("inst-el", class Instructions extends HTMLElement {
 });
 
 },{"../../src/state":"1Yeju","bc3027b16a50e5fd":"2zoGe","3df831f5e754144f":"dZ6rN","99486f88cb0ea89e":"2NxtY","bd2726b461f130e4":"7RiZ9","@vaadin/router":"kVZrF"}],"gW4Uh":[function(require,module,exports) {
-var _router = require("@vaadin/router");
 var _results = require("../../results");
+var _state = require("../../src/state");
 customElements.define("game-el", class Game extends HTMLElement {
     connectedCallback() {
         this.render();
         this.timer();
+        this.handSelector();
+        (0, _state.state).subscribe(()=>{
+            console.log("GAME SUBSCRIBE");
+            const stHands = (0, _state.state).data.gameStatus.hands;
+            let playerHand = (0, _state.state).data.gameStatus.hands.player;
+            let rivalHand = (0, _state.state).data.gameStatus.hands.rival;
+            playerHand = stHands.player;
+            rivalHand = stHands.rival;
+            console.log(playerHand, rivalHand);
+        });
+    }
+    handSelector() {
+        const stoneButton = this.querySelector(".hands__button-stone");
+        stoneButton?.addEventListener("click", (e)=>{
+            console.log("stone");
+            if ((0, _state.state).data.ownerName == true) (0, _state.state).data.gameStatus.hands.player = "stone";
+            if ((0, _state.state).data.ownerName == false) (0, _state.state).data.gameStatus.hands.rival = "stone";
+            console.log((0, _state.state).data.gameStatus.hands);
+            (0, _state.state).pushGame((0, _state.state).data.gameStatus);
+        });
+        const paperButton = this.querySelector(".hands__button-paper");
+        paperButton?.addEventListener("click", (e)=>{
+            console.log("paper");
+            if ((0, _state.state).data.ownerName == true) {
+                console.log((0, _state.state).data.gameStatus);
+                console.log((0, _state.state).data.gameStatus.hands);
+                (0, _state.state).data.gameStatus.hands.player = "paper";
+            }
+            if ((0, _state.state).data.ownerName == false) {
+                console.log((0, _state.state).data.gameStatus);
+                console.log((0, _state.state).data.gameStatus.hands);
+                (0, _state.state).data.gameStatus.hands.rival = "paper";
+            }
+            console.log((0, _state.state).data.gameStatus);
+            (0, _state.state).pushGame((0, _state.state).data.gameStatus);
+        });
+        const scissorsButton = this.querySelector(".hands__button-scissors");
+        scissorsButton?.addEventListener("click", (e)=>{
+            if ((0, _state.state).data.ownerName == true) (0, _state.state).data.gameStatus.hands.player = "scissors";
+            if ((0, _state.state).data.ownerName == false) (0, _state.state).data.gameStatus.hands.rival = "scissors";
+            console.log((0, _state.state).data.gameStatus);
+            (0, _state.state).pushGame((0, _state.state).data.gameStatus);
+        });
     }
     render() {
         const stonePicURL = require("70d1433477695b87");
@@ -47594,38 +45302,44 @@ customElements.define("game-el", class Game extends HTMLElement {
     timer() {
         const circularProgress = this?.querySelector(".circular-counter");
         const progressValue = this?.querySelector(".number");
-        let progressStartValue = 4, progressEndValue = 0;
+        let progressStartValue = 6, progressEndValue = 0;
         let progress = setInterval(()=>{
             progressStartValue--;
-            if (progressStartValue == progressEndValue && this.hands.player == "") {
-                const windowEl = this.querySelector(".window");
-                windowEl.style.display = "flex";
+            if (progressStartValue == progressEndValue) {
+                let playerHand = (0, _state.state).data.gameStatus.hands.player;
+                let rivalHand = (0, _state.state).data.gameStatus.hands.rival;
+                if (playerHand && rivalHand !== "") this.addHand();
+                else {
+                    const windowEl = this.querySelector(".window");
+                    windowEl.style.display = "flex";
+                }
                 clearInterval(progress);
-            } else if (progressStartValue == progressEndValue && this.hands.player !== "") {
-                clearInterval(progress);
-                this.hands.status = "ready";
-                console.log(this.hands.status);
-                console.log("se imprime si pasa el status en el timer");
-                this.addHand();
             }
+            //  else if (progressStartValue == progressEndValue && state.data.gameStatus.hands.player !== "") {
+            //   clearInterval(progress);
+            //   this.hands.status = "ready"
+            //   console.log(this.hands.status);
+            //   if (playerHand && rivalHand !== "") { };
+            //   state.roomCleaner()
+            // };
             progressValue.textContent = `${progressStartValue}`;
             circularProgress.style.background = `conic-gradient(blue ${progressStartValue * 90}deg, red 0deg) `;
         }, 1000);
-        const stoneButton = this.querySelector(".hands__button-stone");
-        stoneButton?.addEventListener("click", (e)=>{
-            this.hands.player = "stone";
-        });
-        const paperButton = this.querySelector(".hands__button-paper");
-        paperButton?.addEventListener("click", (e)=>{
-            this.hands.player = "paper";
-        });
-        const scissorsButton = this.querySelector(".hands__button-scissors");
-        scissorsButton?.addEventListener("click", (e)=>{
-            this.hands.player = "scissors";
-        });
         const windowButton = this.querySelector(".window__button");
         windowButton?.addEventListener("click", ()=>{
-            (0, _router.Router).go("/instructions");
+            const st = (0, _state.state).data;
+            const status = st.ownerName;
+            if (status) {
+                st.results = true;
+                st.gameStatus.playerStatus = false;
+                (0, _state.state).pushGame(st.gameStatus);
+            // state.roomCleaner();
+            }
+            if (status == false) {
+                st.results = true;
+                st.gameStatus.rivalStatus = false;
+                (0, _state.state).pushGame(st.gameStatus);
+            }
         });
     }
     addHand() {
@@ -47640,29 +45354,57 @@ customElements.define("game-el", class Game extends HTMLElement {
         var classEl = {};
         var rivalImg = {};
         var rivalClassEl = {};
-        if (this.hands.player == "stone") {
-            img = stonePicURL;
-            classEl = "stone";
+        if ((0, _state.state).data.ownerName == true) {
+            if ((0, _state.state).data.gameStatus.hands.player == "stone") {
+                img = stonePicURL;
+                classEl = "stone";
+            }
+            if ((0, _state.state).data.gameStatus.hands.player == "paper") {
+                img = paperPicURL;
+                classEl = "paper";
+            }
+            if ((0, _state.state).data.gameStatus.hands.player == "scissors") {
+                img = scissorsPicURL;
+                classEl = "scissors";
+            }
+            if ((0, _state.state).data.gameStatus.hands.rival == "stone") {
+                rivalImg = stonePicURL;
+                rivalClassEl = "rival-stone";
+            }
+            if ((0, _state.state).data.gameStatus.hands.rival == "paper") {
+                rivalImg = paperPicURL;
+                rivalClassEl = "rival-paper";
+            }
+            if ((0, _state.state).data.gameStatus.hands.rival == "scissors") {
+                rivalImg = scissorsPicURL;
+                rivalClassEl = "rival-scissors";
+            }
         }
-        if (this.hands.player == "paper") {
-            img = paperPicURL;
-            classEl = "paper";
-        }
-        if (this.hands.player == "scissors") {
-            img = scissorsPicURL;
-            classEl = "scissors";
-        }
-        if (this.hands.rival == "stone") {
-            rivalImg = stonePicURL;
-            rivalClassEl = "rival-stone";
-        }
-        if (this.hands.rival == "paper") {
-            rivalImg = paperPicURL;
-            rivalClassEl = "rival-paper";
-        }
-        if (this.hands.rival == "scissors") {
-            rivalImg = scissorsPicURL;
-            rivalClassEl = "rival-scissors";
+        if ((0, _state.state).data.ownerName == false) {
+            if ((0, _state.state).data.gameStatus.hands.rival == "stone") {
+                img = stonePicURL;
+                classEl = "stone";
+            }
+            if ((0, _state.state).data.gameStatus.hands.rival == "paper") {
+                img = paperPicURL;
+                classEl = "paper";
+            }
+            if ((0, _state.state).data.gameStatus.hands.rival == "scissors") {
+                img = scissorsPicURL;
+                classEl = "scissors";
+            }
+            if ((0, _state.state).data.gameStatus.hands.player == "stone") {
+                rivalImg = stonePicURL;
+                rivalClassEl = "rival-stone";
+            }
+            if ((0, _state.state).data.gameStatus.hands.player == "paper") {
+                rivalImg = paperPicURL;
+                rivalClassEl = "rival-paper";
+            }
+            if ((0, _state.state).data.gameStatus.hands.player == "scissors") {
+                rivalImg = scissorsPicURL;
+                rivalClassEl = "rival-scissors";
+            }
         }
         const div = document.createElement("div");
         div.innerHTML = `
@@ -47671,40 +45413,39 @@ customElements.define("game-el", class Game extends HTMLElement {
       <div class="player-hand"><img src=${img} class=${classEl}></div>
       </div>           
       <results-el></results-el>       
-  `;
+      `;
         const style = document.createElement("style");
         style.textContent = `
       * { box-sizing: border box; }
       body { margin: 0; }
-.inner-root {                
-    background-image: url(${backgroundURL});
-    min-width: 375px; min-height: 667px; display: flex; align-items: center; flex-direction: column;
-    justify-content: space-between;
-  }
-.hands{min-width: 375px; min-height: 667px; display: flex; flex-direction: column; justify-content:space-between; align-items: center;}
-.rival-hand { display: flex; align-items: center; justify-content: center; min-width: 375px; }
-.${rivalClassEl} { width: 180px; height: 280px; text-align: center; transform: rotate(180deg); }
-.player-hand { display: flex; align-items: center; justify-content: center; min-width: 375px; }
-.${classEl} { text-align: center; width: 180px; height: 280px; }        
-`;
+      .inner-root {                
+      background-image: url(${backgroundURL});
+     min-width: 375px; min-height: 667px; display: flex; align-items: center; flex-direction: column;
+     justify-content: space-between;
+     }
+     .hands{min-width: 375px; min-height: 667px; display: flex; flex-direction: column; justify-content:space-between; align-items: center;}
+     .rival-hand { display: flex; align-items: center; justify-content: center; min-width: 375px; }
+     .${rivalClassEl} { width: 180px; height: 280px; text-align: center; transform: rotate(180deg); }
+     .player-hand { display: flex; align-items: center; justify-content: center; min-width: 375px; }
+     .${classEl} { text-align: center; width: 180px; height: 280px; }        
+     `;
         div.classList.add("inner-root");
         this.appendChild(div);
         this.appendChild(style);
         setTimeout(()=>{
+            console.log("timeOut Result");
             (0, _results.result)();
         }, 3000);
     }
     constructor(...args){
         super(...args);
         this.hands = {
-            player: "",
-            rival: "paper",
             status: ""
         };
     }
 });
 
-},{"@vaadin/router":"kVZrF","../../results":"dN0bM","70d1433477695b87":"2zoGe","57b99d1a0d7772bf":"dZ6rN","6e35cbe0285a9b06":"2NxtY","6b1a1dab8c611463":"7RiZ9"}],"dN0bM":[function(require,module,exports) {
+},{"../../results":"dN0bM","70d1433477695b87":"2zoGe","57b99d1a0d7772bf":"dZ6rN","6e35cbe0285a9b06":"2NxtY","6b1a1dab8c611463":"7RiZ9","../../src/state":"1Yeju"}],"dN0bM":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "result", ()=>result);
@@ -47712,10 +45453,11 @@ var _state = require("../src/state");
 function result() {
     customElements.define("results-el", class Results extends HTMLElement {
         connectedCallback() {
-            this.points();
             this.render();
+            this.points();
         }
         points() {
+            console.log("points de result");
             const pointsStone = [
                 {
                     hand: "stone",
@@ -47758,70 +45500,89 @@ function result() {
                     result: "Empate\uD83D\uDE01"
                 }
             ];
-            function resultsText() {
-                const rivalResult = (0, _state.state).data.rivalNumber;
-                const playerResult = (0, _state.state).data.playerNumber;
-                if (playerResult == "stone") {
-                    for (const r of pointsStone)if (r.hand == rivalResult) {
-                        const finalText = r.result;
-                        return finalText;
-                    }
-                }
-                if (playerResult == "paper") {
-                    for (const r of pointsPaper)if (r.hand == rivalResult) {
-                        const finalText = r.result;
-                        return finalText;
-                    }
-                }
-                if (playerResult == "scissors") {
-                    for (const r of pointsScissors)if (r.hand == rivalResult) {
-                        const finalText = r.result;
-                        return finalText;
-                    }
+            let rivalResult;
+            let playerResult;
+            if ((0, _state.state).data.ownerName == true) {
+                playerResult = (0, _state.state).data.gameStatus.hands.player;
+                rivalResult = (0, _state.state).data.gameStatus.hands.rival;
+            } else if ((0, _state.state).data.ownerName == false) {
+                playerResult = (0, _state.state).data.gameStatus.hands.rival;
+                rivalResult = (0, _state.state).data.gameStatus.hands.player;
+            }
+            if (playerResult == "stone") {
+                for (const r of pointsStone)if (r.hand == rivalResult) {
+                    const finalText = r.result;
+                    const windowResEl = this.querySelector(".window__result");
+                    windowResEl.textContent = finalText;
                 }
             }
-            const resultsTexts1 = resultsText();
-            // ----------------------------------------------------------------            
-            var data = (0, _state.state).getState();
-            console.log(data);
-            // ----------------------------------------------------------------
-            function pointsFunc() {
-                if (resultsTexts1 == "Ganaste!\uD83D\uDE03") {
-                    var player = data.player++;
-                    console.log("player", player);
-                    return player;
-                } else if (resultsTexts1 == "Perdiste\uD83D\uDE43") {
-                    var rival = data.rival++;
-                    console.log("rival", rival);
-                    return rival;
-                } else if (resultsTexts1 == "Empate\uD83D\uDE01") {
-                    var draw = data.player;
-                    console.log("draw", draw);
-                    return draw;
+            if (playerResult == "paper") {
+                for (const r of pointsPaper)if (r.hand == rivalResult) {
+                    const finalText = r.result;
+                    const windowResEl = this.querySelector(".window__result");
+                    windowResEl.textContent = finalText;
                 }
             }
-            const result = pointsFunc();
-            console.log("funci\xf3n", result);
-            // ----------------------------------------------------------------     
-            data = (0, _state.state).getState();
-            const playerPoints1 = data.player;
-            const rivalPoints1 = data.rival;
-            console.log("player final", playerPoints1);
-            console.log("rival final", rivalPoints1);
-            console.log("data", data);
-            (0, _state.state).setState({
-                ...data,
-                player: playerPoints1,
-                rival: rivalPoints1
-            });
+            if (playerResult == "scissors") {
+                for (const r of pointsScissors)if (r.hand == rivalResult) {
+                    const finalText = r.result;
+                    const windowResEl = this.querySelector(".window__result");
+                    windowResEl.textContent = finalText;
+                }
+            }
+            const resultsTexts = this.querySelector(".window__result").textContent;
+            const st = (0, _state.state).data;
+            var player;
+            var rival;
+            console.log(st.playerNumber);
+            console.log(st.rivalNumber);
+            if ((0, _state.state).data.ownerName == true) {
+                player = st.playerNumber;
+                rival = st.rivalNumber;
+            }
+            if ((0, _state.state).data.ownerName == false) {
+                rival = st.playerNumber;
+                player = st.rivalNumber;
+            }
+            if (resultsTexts == "Ganaste!\uD83D\uDE03") {
+                console.log(player);
+                player++;
+                console.log("player", player);
+            } else if (resultsTexts == "Perdiste\uD83D\uDE43") {
+                console.log(rival);
+                rival++;
+                console.log("rival", rival);
+            } else if (resultsTexts == "Empate\uD83D\uDE01") {
+                var draw;
+                console.log("draw", draw);
+            }
+            if ((0, _state.state).data.ownerName == true) {
+                st.playerNumber = player;
+                st.rivalNumber = rival;
+            }
+            if ((0, _state.state).data.ownerName == false) {
+                st.rivalNumber = player;
+                st.playerNumber = rival;
+            }
+            console.log("c\xe1lculo de puntos");
+            (0, _state.state).pushGame((0, _state.state).data.gameStatus);
+            let playerPoints;
+            let rivalPoints;
+            playerPoints = (0, _state.state).data.playerNumber.toString(), rivalPoints = (0, _state.state).data.rivalNumber.toString();
+            const pointsRivalEl = this.querySelector(".points__rival");
+            const pointsPlayerEl = this.querySelector(".points__player");
+            if ((0, _state.state).data.ownerName == true) pointsRivalEl.textContent = `Rival:${rivalPoints}`, pointsPlayerEl.textContent = `Vos:${playerPoints}`;
+            if ((0, _state.state).data.ownerName == false) pointsRivalEl.textContent = `Rival:${playerPoints}`, pointsPlayerEl.textContent = `Vos:${rivalPoints}`;
+        // setTimeout(() => { console.log("roomCleaner result"); state.roomCleaner(); }, 3000);
         }
         render() {
+            console.log("render results");
             const div = document.createElement("div");
             div.innerHTML = `                
                 <div class="window__text">
-                <div class="window__result">${resultsTexts}</div>                
-                <div class="points__rival">M\xe1quina:${rivalPoints}</div>                
-                <div class="points__player">Vos:${playerPoints}</div>                
+                <div class="window__result"></div>                
+                <div class="points__rival"></div>                
+                <div class="points__player"></div>                
                 </div>
                 <button class="window__button">Reintentar</button>                      
                 `;
@@ -47870,8 +45631,20 @@ function result() {
             this.appendChild(style);
             const button = this.querySelector(".window__button");
             button?.addEventListener("click", ()=>{
-                history.pushState({}, "", "/instructions");
-                location.reload();
+                const st = (0, _state.state).data;
+                const status = st.ownerName;
+                if (status) {
+                    st.results = true;
+                    st.gameStatus.playerOnline = false;
+                    st.gameStatus.playerStatus = false;
+                    st.gameStatus.hands.player = "", (0, _state.state).pushGame(st.gameStatus);
+                }
+                if (status == false) {
+                    st.results = true;
+                    st.gameStatus.rivalOnline = false;
+                    st.gameStatus.rivalStatus = false;
+                    st.gameStatus.hands.rival = "", (0, _state.state).pushGame(st.gameStatus);
+                }
             });
         }
     });

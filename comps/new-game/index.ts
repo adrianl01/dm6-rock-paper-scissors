@@ -1,7 +1,5 @@
 import { Router } from "@vaadin/router";
 import { state } from "../../src/state";
-import { funcRoomId } from "../room-id";
-
 customElements.define(
     "new-game-el",
     class Welcome extends HTMLElement {
@@ -16,7 +14,7 @@ customElements.define(
                 const playerName = form.name.value;
                 state.setPlayerName(playerName);
                 state.data.ownerName = true;
-                state.roomId();
+                state.signUp();
             })
         }
         render() {
@@ -44,7 +42,6 @@ customElements.define(
       </div>
       <rooms-el></rooms-el>
       `;
-            // -------------------------------------------------------
             const style = document.createElement("style");
             style.textContent = `
             *{ box-sizing: border box;}
@@ -92,7 +89,6 @@ customElements.define(
       .button:hover {  background: #00449d; }      
       .button:active {  background: #009048; }
       `;
-            // ----------------------------------------------------------       
             div.classList.add("inner-root"); this.appendChild(div); this.appendChild(style);
             const boton = this.querySelector(".welcome-button");
             boton?.addEventListener("click", function () {

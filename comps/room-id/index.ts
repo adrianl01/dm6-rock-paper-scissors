@@ -14,7 +14,8 @@ function funcRoomId() {
             div.innerHTML = `                
             <div class="window__text">
             <div class="window-title">Salas Creadas con Este Nombre</div>                
-            <div class="rooms-list"></div>                              
+            <div class="rooms-list"></div>  
+            <button class="new-room-button">nueva sala</button>                            
             </div>                     
             `
             const style = document.createElement("style");
@@ -42,7 +43,7 @@ function funcRoomId() {
                 .window-title {
                     font-size:30px;
                 }
-                .room-button {
+                .room-button, .new-room-button {
                     width: 322px;height: 67px;
                     border-radius: 10px;
                     border: 10px solid #001997;
@@ -81,6 +82,8 @@ function funcRoomId() {
                 state.data.roomId = tar.textContent;
                 state.accessToRoom();
             })
+            const newButEl = this.querySelector(".new-room-button");
+            newButEl.addEventListener("click", () => { state.askNewRoom() });
         }
     });
 }

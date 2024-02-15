@@ -1,18 +1,66 @@
 import { Router } from "@vaadin/router";
 import { result } from "../../results";
+import { state } from "../../src/state";
 type Hand = {
-  player: string,
-  rival: string,
-  status: string
-}
+  status?: string
+};
 customElements.define(
   "game-el",
   class Game extends HTMLElement {
-    hands: Hand = { player: "", rival: "paper", status: "" };
+    hands: Hand = { status: "" };
     connectedCallback() {
       this.render();
       this.timer();
+      this.handSelector();
+      state.subscribe(() => {
+        console.log("GAME SUBSCRIBE");
+        const stHands = state.data.gameStatus.hands;
+        let playerHand = state.data.gameStatus.hands.player; let rivalHand = state.data.gameStatus.hands.rival;
+        playerHand = stHands.player; rivalHand = stHands.rival;
+        console.log(playerHand, rivalHand);
+      })
     }
+    handSelector() {
+      const stoneButton = this.querySelector(".hands__button-stone");
+      stoneButton?.addEventListener("click", (e) => {
+        console.log("stone");
+        if (state.data.ownerName == true) {
+          state.data.gameStatus.hands.player = "stone";
+        };
+        if (state.data.ownerName == false) {
+          state.data.gameStatus.hands.rival = "stone";
+        };
+        console.log(state.data.gameStatus.hands)
+        state.pushGame(state.data.gameStatus);
+      });
+      const paperButton = this.querySelector(".hands__button-paper");
+      paperButton?.addEventListener("click", (e) => {
+        console.log("paper");
+        if (state.data.ownerName == true) {
+          console.log(state.data.gameStatus)
+          console.log(state.data.gameStatus.hands)
+          state.data.gameStatus.hands.player = "paper";
+        };
+        if (state.data.ownerName == false) {
+          console.log(state.data.gameStatus)
+          console.log(state.data.gameStatus.hands)
+          state.data.gameStatus.hands.rival = "paper";
+        };
+        console.log(state.data.gameStatus)
+        state.pushGame(state.data.gameStatus);
+      });
+      const scissorsButton = this.querySelector(".hands__button-scissors");
+      scissorsButton?.addEventListener("click", (e) => {
+        if (state.data.ownerName == true) {
+          state.data.gameStatus.hands.player = "scissors";
+        };
+        if (state.data.ownerName == false) {
+          state.data.gameStatus.hands.rival = "scissors";
+        };
+        console.log(state.data.gameStatus)
+        state.pushGame(state.data.gameStatus);
+      });
+    };
     render() {
       const stonePicURL = require("url:../../piedra.svg");
       const paperPicURL = require("url:../../papel.svg");
@@ -84,38 +132,52 @@ customElements.define(
           .scissors:active {width: 100px;height: 150px;}          
           `;
       div.classList.add("inner-root"); this.appendChild(div); this.appendChild(style);
-    }
+    };
     timer() {
       const circularProgress = this?.querySelector(".circular-counter") as any;
       const progressValue = this?.querySelector(".number") as any;
 
-      let progressStartValue = 4, progressEndValue = 0;
+      let progressStartValue = 6, progressEndValue = 0;
       let progress = setInterval(() => {
         progressStartValue--;
-        if (progressStartValue == progressEndValue && this.hands.player == "") {
-          const windowEl = this.querySelector(".window") as HTMLElement;
-          windowEl.style.display = "flex"
+        if (progressStartValue == progressEndValue) {
+          let playerHand = state.data.gameStatus.hands.player
+          let rivalHand = state.data.gameStatus.hands.rival
+          if (playerHand && rivalHand !== "") {
+            this.addHand();
+          } else {
+            const windowEl = this.querySelector(".window") as HTMLElement;
+            windowEl.style.display = "flex"
+          }
           clearInterval(progress)
-        } else if (progressStartValue == progressEndValue && this.hands.player !== "") {
-          clearInterval(progress);
-          this.hands.status = "ready"
-          console.log(this.hands.status)
-          console.log("se imprime si pasa el status en el timer")
-          this.addHand()
         }
-        progressValue.textContent = `${progressStartValue}`
-        circularProgress.style.background = `conic-gradient(blue ${progressStartValue * 90}deg, red 0deg) `
-      }, 1000)
+        //  else if (progressStartValue == progressEndValue && state.data.gameStatus.hands.player !== "") {
+        //   clearInterval(progress);
+        //   this.hands.status = "ready"
+        //   console.log(this.hands.status);
 
-      const stoneButton = this.querySelector(".hands__button-stone");
-      stoneButton?.addEventListener("click", (e) => { this.hands.player = "stone" })
-      const paperButton = this.querySelector(".hands__button-paper");
-      paperButton?.addEventListener("click", (e) => { this.hands.player = "paper" })
-      const scissorsButton = this.querySelector(".hands__button-scissors");
-      scissorsButton?.addEventListener("click", (e) => { this.hands.player = "scissors" })
+        //   if (playerHand && rivalHand !== "") { };
+        //   state.roomCleaner()
+        // };
+        progressValue.textContent = `${progressStartValue}`;
+        circularProgress.style.background = `conic-gradient(blue ${progressStartValue * 90}deg, red 0deg) `;
+      }, 1000);
       const windowButton = this.querySelector(".window__button");
-      windowButton?.addEventListener("click", () => { Router.go("/instructions") })
-    }
+      windowButton?.addEventListener("click", () => {
+        const st = state.data; const status = st.ownerName;
+        if (status) {
+          st.results = true;
+          st.gameStatus.playerStatus = false;
+          state.pushGame(st.gameStatus);
+          // state.roomCleaner();
+        }
+        if (status == false) {
+          st.results = true;
+          st.gameStatus.rivalStatus = false;
+          state.pushGame(st.gameStatus);
+        };
+      })
+    };
     addHand() {
       console.log("addHand")
       this.firstChild.remove(); this.firstChild.remove()
@@ -123,14 +185,24 @@ customElements.define(
       const paperPicURL = require("url:../../papel.svg");
       const scissorsPicURL = require("url:../../tijera.svg");
       const backgroundURL = require("url:../../fondo.png");
-      var img = {}; var classEl = {}
-      var rivalImg = {}; var rivalClassEl = {}
-      if (this.hands.player == "stone") { img = stonePicURL; classEl = "stone" }
-      if (this.hands.player == "paper") { img = paperPicURL; classEl = "paper" }
-      if (this.hands.player == "scissors") { img = scissorsPicURL; classEl = "scissors" }
-      if (this.hands.rival == "stone") { rivalImg = stonePicURL; rivalClassEl = "rival-stone" }
-      if (this.hands.rival == "paper") { rivalImg = paperPicURL; rivalClassEl = "rival-paper" }
-      if (this.hands.rival == "scissors") { rivalImg = scissorsPicURL; rivalClassEl = "rival-scissors" }
+      var img = {}; var classEl = {};
+      var rivalImg = {}; var rivalClassEl = {};
+      if (state.data.ownerName == true) {
+        if (state.data.gameStatus.hands.player == "stone") { img = stonePicURL; classEl = "stone" };
+        if (state.data.gameStatus.hands.player == "paper") { img = paperPicURL; classEl = "paper" };
+        if (state.data.gameStatus.hands.player == "scissors") { img = scissorsPicURL; classEl = "scissors" };
+        if (state.data.gameStatus.hands.rival == "stone") { rivalImg = stonePicURL; rivalClassEl = "rival-stone" };
+        if (state.data.gameStatus.hands.rival == "paper") { rivalImg = paperPicURL; rivalClassEl = "rival-paper" };
+        if (state.data.gameStatus.hands.rival == "scissors") { rivalImg = scissorsPicURL; rivalClassEl = "rival-scissors" };
+      }
+      if (state.data.ownerName == false) {
+        if (state.data.gameStatus.hands.rival == "stone") { img = stonePicURL; classEl = "stone" };
+        if (state.data.gameStatus.hands.rival == "paper") { img = paperPicURL; classEl = "paper" };
+        if (state.data.gameStatus.hands.rival == "scissors") { img = scissorsPicURL; classEl = "scissors" };
+        if (state.data.gameStatus.hands.player == "stone") { rivalImg = stonePicURL; rivalClassEl = "rival-stone" };
+        if (state.data.gameStatus.hands.player == "paper") { rivalImg = paperPicURL; rivalClassEl = "rival-paper" };
+        if (state.data.gameStatus.hands.player == "scissors") { rivalImg = scissorsPicURL; rivalClassEl = "rival-scissors" };
+      }
 
       const div = document.createElement("div");
       div.innerHTML = `
@@ -139,25 +211,25 @@ customElements.define(
       <div class="player-hand"><img src=${img} class=${classEl}></div>
       </div>           
       <results-el></results-el>       
-  `;
+      `;
       const style = document.createElement("style");
       style.textContent = `
       * { box-sizing: border box; }
       body { margin: 0; }
-.inner-root {                
-    background-image: url(${backgroundURL});
-    min-width: 375px; min-height: 667px; display: flex; align-items: center; flex-direction: column;
-    justify-content: space-between;
-  }
-.hands{min-width: 375px; min-height: 667px; display: flex; flex-direction: column; justify-content:space-between; align-items: center;}
-.rival-hand { display: flex; align-items: center; justify-content: center; min-width: 375px; }
-.${rivalClassEl} { width: 180px; height: 280px; text-align: center; transform: rotate(180deg); }
-.player-hand { display: flex; align-items: center; justify-content: center; min-width: 375px; }
-.${classEl} { text-align: center; width: 180px; height: 280px; }        
-`;
+      .inner-root {                
+      background-image: url(${backgroundURL});
+     min-width: 375px; min-height: 667px; display: flex; align-items: center; flex-direction: column;
+     justify-content: space-between;
+     }
+     .hands{min-width: 375px; min-height: 667px; display: flex; flex-direction: column; justify-content:space-between; align-items: center;}
+     .rival-hand { display: flex; align-items: center; justify-content: center; min-width: 375px; }
+     .${rivalClassEl} { width: 180px; height: 280px; text-align: center; transform: rotate(180deg); }
+     .player-hand { display: flex; align-items: center; justify-content: center; min-width: 375px; }
+     .${classEl} { text-align: center; width: 180px; height: 280px; }        
+     `;
       div.classList.add("inner-root"); this.appendChild(div); this.appendChild(style);
-      setTimeout(() => { result() }, 3000)
-    }
+      setTimeout(() => { console.log("timeOut Result"); result(); }, 3000);
+    };
   }
 );
 

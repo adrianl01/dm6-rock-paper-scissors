@@ -2,51 +2,45 @@ import { Router } from "@vaadin/router"; import { state } from "../../src/state"
 
 customElements.define("inst-el", class Instructions extends HTMLElement {
   connectedCallback() {
-    console.log()
-    const st = state.data
+    const st = state.data;
     if (st.ownerName == true) {
-      st.gameStatus[0].player = st.playerName
-      st.gameStatus[0].playerOnline = true
+      st.gameStatus.player = st.playerName;
+      st.gameStatus.playerOnline = true;
+      if (st.gameStatus.rivalOnline == true) { st.gameStatus.rivalOnline = false };
+      state.pushGame(st.gameStatus)
     }
-    this.addDiv1(); this.addStyle();
+    if (st.ownerName == false) {
+      st.gameStatus.rival = st.rivalName
+      st.gameStatus.rivalOnline = true
+      // state.pushGame(st.gameStatus)
+    }
+    this.addStyle(); this.addDiv1();
+    if (st.gameStatus.playerOnline && st.gameStatus.rivalOnline) { this.addDiv2(); this.addStyle(); }
     state.subscribe(() => {
       console.log("subscribe de instructions")
-      if (st.ownerName == false) {
-        st.gameStatus[0].rival = st.rivalName
-        st.gameStatus[0].rivalOnline = true
-      }
-      console.log(st.gameStatus)
       const otherPlayerInfo = st.gameStatus as any
-      if (st.gameStatus[0].player == "") {
-        if (st.ownerName == false) {
-          console.log(otherPlayerInfo);
-          st.gameStatus[0].player = st.playerName
-          st.gameStatus[0].playerOnline = otherPlayerInfo[0].playerOnline
-          st.playerName = otherPlayerInfo[0].player
-        }
+      if (st.ownerName == false) {
+        if (st.gameStatus.player == "") { st.gameStatus.player = st.playerName }
+        st.gameStatus.playerOnline = otherPlayerInfo.playerOnline
+        st.playerName = otherPlayerInfo.player
       }
-
-      if (st.gameStatus[0].rival == "") {
-        if (st.ownerName == true) {
-          console.log(otherPlayerInfo);
-          st.gameStatus[0].rival = st.rivalName
-          st.gameStatus[0].rivalOnline = otherPlayerInfo[0].rivalOnline
-          st.rivalName = otherPlayerInfo[0].rival
+      if (st.ownerName == true) {
+        if (st.gameStatus.rival == "") { st.gameStatus.rival = st.gameStatus.rival };
+        st.gameStatus.rivalOnline = otherPlayerInfo.rivalOnline;
+        st.rivalName = otherPlayerInfo.rival;
+      };
+      if (location.pathname == "/instructions") {
+        this.addHeader();
+        console.log(st.gameStatus.playerStatus)
+        const rivalOnlineStatus = st.gameStatus.rivalOnline;
+        if (rivalOnlineStatus == true) { console.log(rivalOnlineStatus); this.addDiv2(); this.addStyle(); }
+        if (st.ownerName == true && st.gameStatus.playerStatus == true) { this.addDiv3(); this.addStyle(); }
+        if (st.ownerName == false && st.gameStatus.rivalStatus == true) { this.addDiv3(); this.addStyle(); }
+        if (st.gameStatus.playerStatus == true && st.gameStatus.rivalStatus == true) {
+          Router.go("/game"); console.log("Se ejecuta el /game")
         }
-      }
-      this.addHeader();
-      const playerOnlineStatus = st.gameStatus[0].playerOnline
-      const rivalOnlineStatus = st.gameStatus[0].rivalOnline
-      if (rivalOnlineStatus == true) { this.addDiv2(); this.addStyle(); }
-      if (st.ownerName == true && st.gameStatus[0].playerStatus == true) { this.addDiv3(); this.addStyle(); }
-      if (st.ownerName == false && st.gameStatus[0].rivalStatus == true) { this.addDiv3(); this.addStyle(); }
-      if (st.gameStatus[0].playerStatus == true && st.gameStatus[0].rivalStatus == true) { Router.go("/game") }
+      } else { };
     })
-    console.log(state.data.gameStatus[0]);
-    if (state.data.playerName !== "") {
-      state.pushGame(state.data.gameStatus);
-      console.log("se ejecuta el pushGame");
-    }
     if (state.data.ownerName == false && state.data.playerName !== "") { state.pushGame(state.data.gameStatus) }
   }
   addHeader() {
@@ -64,7 +58,6 @@ customElements.define("inst-el", class Instructions extends HTMLElement {
       palyerEl.innerHTML = `${playerPageName}:${playerPoints}`;
       rivalEl.innerHTML = `${rivalPageName}:${rivalPoints}`
     } else if (st.ownerName == false) {
-      console.log(playerPageName)
       rivalEl.innerHTML = `${playerPageName}:${playerPoints}`;
       palyerEl.innerHTML = `${rivalPageName}:${rivalPoints}`
     }
@@ -129,12 +122,12 @@ customElements.define("inst-el", class Instructions extends HTMLElement {
           `;
     div1.classList.add("inner-root"); this.appendChild(div1);
     this.addHeader();
+    // if (state.data.ownerName == false) { if (state.data.gameStatus.playerOnline) { this.addDiv2(); } }
   }
   addDiv2() {
     console.log("addDiv2")
     const stonePicURL = require("url:../../piedra.svg"); const paperPicURL = require("url:../../papel.svg");
     const scissorsPicURL = require("url:../../tijera.svg");
-    console.log(state.data.rivalName)
     const div2 = document.createElement("div");
     div2.innerHTML = `
     <header class="header">
@@ -152,16 +145,17 @@ customElements.define("inst-el", class Instructions extends HTMLElement {
     <img src=${scissorsPicURL} class="img">
     </div>
     `;
-    this.firstChild.remove(); this.firstChild.remove(); div2.classList.add("inner-root"); this.appendChild(div2);
+    console.log(this.childNodes.length);
+    if (this.childNodes.length > 0) { this.firstChild.remove(); this.firstChild.remove(); }
+    div2.classList.add("inner-root"); this.appendChild(div2);
     this.addHeader();
     const boton = this.querySelector(".button") as HTMLButtonElement;
     boton.addEventListener("click", function (e) {
       e.preventDefault();
       const gameSttus = state.data.gameStatus;
-      console.log(gameSttus);
-      if (state.data.ownerName == true) { gameSttus[0].playerStatus = true };
-      if (state.data.ownerName == false) { gameSttus[0].rivalStatus = true };
-      state.pushGame(gameSttus);
+      if (state.data.ownerName == true) { gameSttus.playerStatus = true };
+      if (state.data.ownerName == false) { gameSttus.rivalStatus = true };
+      state.pushGame(gameSttus)
     });
   }
   addDiv3() {
@@ -169,6 +163,9 @@ customElements.define("inst-el", class Instructions extends HTMLElement {
     const stonePicURL = require("url:../../piedra.svg"); const paperPicURL = require("url:../../papel.svg");
     const scissorsPicURL = require("url:../../tijera.svg");
     const div3 = document.createElement("div");
+    let player
+    if (state.data.ownerName == true) { player = state.data.gameStatus.rival }
+    if (state.data.ownerName == false) { player = state.data.gameStatus.player }
     div3.innerHTML = `
     <header class="header">
     <div class="players">
@@ -177,7 +174,7 @@ customElements.define("inst-el", class Instructions extends HTMLElement {
     </div>
     <div class="room-id"><div>Sala</div>${state.data.roomId}</div>
     </header>
-    <h3 class="title">Esperando a que ${state.data.gameStatus[0].rival} presione jugar...</h3>
+    <h3 class="title">Esperando a que ${player} presione jugar...</h3>
     <div class="hands">
     <img src=${stonePicURL} class="img">
     <img src=${paperPicURL} class="img">

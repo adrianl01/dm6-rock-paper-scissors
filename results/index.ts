@@ -1,84 +1,87 @@
 import { state } from "../src/state";
-
 function result() {
     customElements.define("results-el", class Results extends HTMLElement {
-        connectedCallback() { this.points(); this.render(); }
+        connectedCallback() { this.render(); this.points(); }
         points() {
-            const pointsStone = [{ hand: "stone", result: "Empate😁" }, { hand: "paper", result: "Perdiste🙃" }, { hand: "scissors", result: "Ganaste!😃" }]
-            const pointsPaper = [{ hand: "stone", result: "Ganaste!😃" }, { hand: "paper", result: "Empate😁" }, { hand: "scissors", result: "Perdiste🙃" }]
-            const pointsScissors = [{ hand: "stone", result: "Perdiste🙃" }, { hand: "paper", result: "Ganaste!😃" }, { hand: "scissors", result: "Empate😁" }]
-            function resultsText() {
-                const rivalResult = state.data.rivalNumber
-                const playerResult = state.data.playerNumber
-                if (playerResult == "stone") {
-                    for (const r of pointsStone) {
-                        if (r.hand == rivalResult) {
-                            const finalText = r.result
-                            return finalText
-                        }
+            console.log("points de result");
+            const pointsStone = [{ hand: "stone", result: "Empate😁" }, { hand: "paper", result: "Perdiste🙃" }, { hand: "scissors", result: "Ganaste!😃" }];
+            const pointsPaper = [{ hand: "stone", result: "Ganaste!😃" }, { hand: "paper", result: "Empate😁" }, { hand: "scissors", result: "Perdiste🙃" }];
+            const pointsScissors = [{ hand: "stone", result: "Perdiste🙃" }, { hand: "paper", result: "Ganaste!😃" }, { hand: "scissors", result: "Empate😁" }];
+            let rivalResult; let playerResult;
+            if (state.data.ownerName == true) {
+                playerResult = state.data.gameStatus.hands.player;
+                rivalResult = state.data.gameStatus.hands.rival;
+            } else if (state.data.ownerName == false) {
+                playerResult = state.data.gameStatus.hands.rival;
+                rivalResult = state.data.gameStatus.hands.player;
+            };
+            if (playerResult == "stone") {
+                for (const r of pointsStone) {
+                    if (r.hand == rivalResult) {
+                        const finalText = r.result;
+                        const windowResEl = this.querySelector(".window__result");
+                        windowResEl.textContent = finalText;
                     }
                 }
-                if (playerResult == "paper") {
-                    for (const r of pointsPaper) {
-                        if (r.hand == rivalResult) {
-                            const finalText = r.result
-                            return finalText
-                        }
+            };
+            if (playerResult == "paper") {
+                for (const r of pointsPaper) {
+                    if (r.hand == rivalResult) {
+                        const finalText = r.result;
+                        const windowResEl = this.querySelector(".window__result");
+                        windowResEl.textContent = finalText;
                     }
                 }
-                if (playerResult == "scissors") {
-                    for (const r of pointsScissors) {
-                        if (r.hand == rivalResult) {
-                            const finalText = r.result
-                            return finalText
-                        }
+            };
+            if (playerResult == "scissors") {
+                for (const r of pointsScissors) {
+                    if (r.hand == rivalResult) {
+                        const finalText = r.result;
+                        const windowResEl = this.querySelector(".window__result");
+                        windowResEl.textContent = finalText;
                     }
                 }
+            };
+            const resultsTexts = this.querySelector(".window__result").textContent;
+            const st = state.data;
+            var player: number; var rival: number;
+            console.log(st.playerNumber); console.log(st.rivalNumber);
+            if (state.data.ownerName == true) { player = st.playerNumber; rival = st.rivalNumber; };
+            if (state.data.ownerName == false) { rival = st.playerNumber; player = st.rivalNumber; };
+            if (resultsTexts == "Ganaste!😃") {
+                console.log(player);
+                player++
+                console.log("player", player)
+
+            } else if (resultsTexts == "Perdiste🙃") {
+                console.log(rival);
+                rival++
+                console.log("rival", rival)
+            } else if (resultsTexts == "Empate😁") {
+                var draw
+                console.log("draw", draw)
             }
-            const resultsTexts = resultsText()
-            // ----------------------------------------------------------------            
-            var data = state.getState();
-            console.log(data)
-            // ----------------------------------------------------------------
-            function pointsFunc() {
-                if (resultsTexts == "Ganaste!😃") {
-                    var player = data.player++
-                    console.log("player", player)
-                    return player
-                } else if (resultsTexts == "Perdiste🙃") {
-                    var rival = data.rival++
-                    console.log("rival", rival)
-                    return rival
-                } else if (resultsTexts == "Empate😁") {
-                    var draw = data.player
-                    console.log("draw", draw)
-                    return draw
-                }
-            }
-            const result = pointsFunc()
+            if (state.data.ownerName == true) { st.playerNumber = player; st.rivalNumber = rival; };
+            if (state.data.ownerName == false) { st.rivalNumber = player; st.playerNumber = rival; };
+            console.log("cálculo de puntos")
+            state.pushGame(state.data.gameStatus)
+            let playerPoints: string; let rivalPoints: string;
+            playerPoints = state.data.playerNumber.toString(), rivalPoints = state.data.rivalNumber.toString();
+            const pointsRivalEl = this.querySelector(".points__rival");
+            const pointsPlayerEl = this.querySelector(".points__player");
 
-            console.log("función", result)
-            // ----------------------------------------------------------------     
-            data = state.getState()
-            const playerPoints = data.player
-            const rivalPoints = data.rival
-            console.log("player final", playerPoints)
-            console.log("rival final", rivalPoints)
-            console.log("data", data)
-
-            state.setState({
-                ...data,
-                player: playerPoints,
-                rival: rivalPoints
-            })
-        } render() {
-
+            if (state.data.ownerName == true) { pointsRivalEl.textContent = `Rival:${rivalPoints}`, pointsPlayerEl.textContent = `Vos:${playerPoints}` };
+            if (state.data.ownerName == false) { pointsRivalEl.textContent = `Rival:${playerPoints}`, pointsPlayerEl.textContent = `Vos:${rivalPoints}` };
+            // setTimeout(() => { console.log("roomCleaner result"); state.roomCleaner(); }, 3000);
+        }
+        render() {
+            console.log("render results");
             const div = document.createElement("div");
             div.innerHTML = `                
                 <div class="window__text">
-                <div class="window__result">${resultsTexts}</div>                
-                <div class="points__rival">Máquina:${rivalPoints}</div>                
-                <div class="points__player">Vos:${playerPoints}</div>                
+                <div class="window__result"></div>                
+                <div class="points__rival"></div>                
+                <div class="points__player"></div>                
                 </div>
                 <button class="window__button">Reintentar</button>                      
                 `
@@ -127,10 +130,23 @@ function result() {
             this.appendChild(style);
             const button = this.querySelector(".window__button")
             button?.addEventListener("click", () => {
-                history.pushState({}, "", "/instructions")
-                location.reload()
-            })
-        }
+                const st = state.data; const status = st.ownerName;
+                if (status) {
+                    st.results = true;
+                    st.gameStatus.playerOnline = false;
+                    st.gameStatus.playerStatus = false;
+                    st.gameStatus.hands.player = "",
+                        state.pushGame(st.gameStatus);
+                }
+                if (status == false) {
+                    st.results = true;
+                    st.gameStatus.rivalOnline = false;
+                    st.gameStatus.rivalStatus = false;
+                    st.gameStatus.hands.rival = "",
+                        state.pushGame(st.gameStatus);
+                };
+            });
+        };
     });
 }
 export { result }
