@@ -3,10 +3,11 @@ import { onValue, ref } from "firebase/database"
 import { collection, query, where, getDocs } from "firebase/firestore";
 const roomsRef = collection(fsdb, "rooms")
 import * as map from "lodash/map"
-const API_BASE_URL = "http://localhost:3000"
 import { funcRoomId } from "../comps/room-id";
 import { Router } from "@vaadin/router";
 import { error } from "console";
+
+console.log("port:", process.env.API_BASE_URL)
 
 const state = {
     data: {
@@ -77,7 +78,7 @@ const state = {
         } else {
             currentPlayer = cs.playerName
         }
-        fetch(API_BASE_URL + "/signup", {
+        fetch(process.env.API_BASE_URL + "/signup", {
             method: "post",
             headers: {
                 "content-type": "application/json"
@@ -108,7 +109,7 @@ const state = {
             currentPlayer = cs.playerName
         }
         if (currentPlayer) {
-            fetch(API_BASE_URL + "/signin", {
+            fetch(process.env.API_BASE_URL + "/signin", {
                 method: "post",
                 headers: {
                     "content-type": "application/json"
@@ -131,7 +132,7 @@ const state = {
         console.log("askNewRoom");
         const cs = this.getState();
         if (cs.playerName) {
-            fetch(API_BASE_URL + "/rooms", {
+            fetch(process.env.API_BASE_URL + "/rooms", {
                 method: "post",
                 headers: {
                     "content-type": "application/json"
@@ -154,7 +155,7 @@ const state = {
         const cs = this.getState();
         const roomIdState = cs.roomId;
         const userIdState = cs.userId;
-        fetch(API_BASE_URL + "/rooms/" + roomIdState + "?userId=" + userIdState)
+        fetch(process.env.API_BASE_URL + "/rooms/" + roomIdState + "?userId=" + userIdState)
             .then((res) => {
                 return res.json();
             }).then(async data => {
@@ -194,7 +195,7 @@ const state = {
                 rivalPoints: state.data.rivalNumber,
                 rtdbRoom: rtdbRoom,
             };
-            fetch(API_BASE_URL + "/games", {
+            fetch(process.env.API_BASE_URL + "/games", {
                 method: "post",
                 headers: {
                     "content-type": "application/json",
@@ -293,7 +294,7 @@ const state = {
             rtdbRoom: rtdbRoom,
         };
         state.data.gameStatus.used = true
-        fetch(API_BASE_URL + "/games", {
+        fetch(process.env.API_BASE_URL + "/games", {
             method: "post",
             headers: {
                 "content-type": "application/json",
@@ -314,7 +315,7 @@ const state = {
 
     // playerOne() {
     //     const ownerName = state.data.ownerName;
-    //     fetch(API_BASE_URL + "/games", {
+    //     fetch(process.env.API_BASE_URL + "/games", {
     //         method: "post",
     //         headers: {
     //             "content-type": "application/json",
@@ -358,7 +359,7 @@ const state = {
             rtdbRoom: rtdbRoom,
         };
         state.data.gameStatus.used = true
-        fetch(API_BASE_URL + "/games", {
+        fetch(process.env.API_BASE_URL + "/games", {
             method: "post",
             headers: {
                 "content-type": "application/json",

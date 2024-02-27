@@ -592,7 +592,7 @@ var _roomId = require("../comps/room-id");
 var _router = require("@vaadin/router");
 var _console = require("console");
 const roomsRef = (0, _firestore.collection)((0, _db.fsdb), "rooms");
-const API_BASE_URL = "http://localhost:3000";
+console.log("port:", "https://prochats.onrender.com");
 const state = {
     data: {
         ownerName: false,
@@ -650,7 +650,7 @@ const state = {
         var currentPlayer;
         if (state.data.playerName == "") currentPlayer = cs.rivalName;
         else currentPlayer = cs.playerName;
-        fetch(API_BASE_URL + "/signup", {
+        fetch("https://prochats.onrender.com/signup", {
             method: "post",
             headers: {
                 "content-type": "application/json"
@@ -676,7 +676,7 @@ const state = {
         var currentPlayer;
         if (state.data.playerName == "") currentPlayer = cs.rivalName;
         else currentPlayer = cs.playerName;
-        if (currentPlayer) fetch(API_BASE_URL + "/signin", {
+        if (currentPlayer) fetch("https://prochats.onrender.com/signin", {
             method: "post",
             headers: {
                 "content-type": "application/json"
@@ -698,7 +698,7 @@ const state = {
     askNewRoom () {
         console.log("askNewRoom");
         const cs = this.getState();
-        if (cs.playerName) fetch(API_BASE_URL + "/rooms", {
+        if (cs.playerName) fetch("https://prochats.onrender.com/rooms", {
             method: "post",
             headers: {
                 "content-type": "application/json"
@@ -721,7 +721,7 @@ const state = {
         const cs = this.getState();
         const roomIdState = cs.roomId;
         const userIdState = cs.userId;
-        fetch(API_BASE_URL + "/rooms/" + roomIdState + "?userId=" + userIdState).then((res)=>{
+        fetch("https://prochats.onrender.com/rooms/" + roomIdState + "?userId=" + userIdState).then((res)=>{
             return res.json();
         }).then(async (data)=>{
             cs.rtdbRoomId = data.rtdbRoomId;
@@ -761,7 +761,7 @@ const state = {
                 rivalPoints: state.data.rivalNumber,
                 rtdbRoom: rtdbRoom
             };
-            fetch(API_BASE_URL + "/games", {
+            fetch("https://prochats.onrender.com/games", {
                 method: "post",
                 headers: {
                     "content-type": "application/json"
@@ -860,7 +860,7 @@ const state = {
             rtdbRoom: rtdbRoom
         };
         state.data.gameStatus.used = true;
-        fetch(API_BASE_URL + "/games", {
+        fetch("https://prochats.onrender.com/games", {
             method: "post",
             headers: {
                 "content-type": "application/json"
@@ -878,7 +878,7 @@ const state = {
     },
     // playerOne() {
     //     const ownerName = state.data.ownerName;
-    //     fetch(API_BASE_URL + "/games", {
+    //     fetch(process.env.API_BASE_URL + "/games", {
     //         method: "post",
     //         headers: {
     //             "content-type": "application/json",
@@ -923,7 +923,7 @@ const state = {
             rtdbRoom: rtdbRoom
         };
         state.data.gameStatus.used = true;
-        fetch(API_BASE_URL + "/games", {
+        fetch("https://prochats.onrender.com/games", {
             method: "post",
             headers: {
                 "content-type": "application/json"
@@ -44599,6 +44599,10 @@ router.setRoutes([
 var _router = require("@vaadin/router");
 customElements.define("welc-el", class Welcome extends HTMLElement {
     connectedCallback() {
+        console.log("port.env", "3000");
+        console.log("nodeEnv.env:", "development");
+        console.log("appSecret.env:", "ac3d5af152ac26a2d644b5fcfeb7e190");
+        console.log("apibaseurl.env:", "https://prochats.onrender.com");
         this.render();
         this.listeners();
     }

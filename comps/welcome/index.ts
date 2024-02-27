@@ -4,6 +4,10 @@ customElements.define(
   "welc-el",
   class Welcome extends HTMLElement {
     connectedCallback() {
+      console.log("port.env", process.env.PORT)
+      console.log("nodeEnv.env:", process.env.NODE_ENV)
+      console.log("appSecret.env:", process.env.APP_SECRET)
+      console.log("apibaseurl.env:", process.env.API_BASE_URL)
       this.render();
       this.listeners();
     }
