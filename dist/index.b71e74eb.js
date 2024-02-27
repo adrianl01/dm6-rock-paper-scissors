@@ -142,10 +142,10 @@
       this[globalName] = mainExports;
     }
   }
-})({"gmPuC":[function(require,module,exports) {
+})({"a0pd7":[function(require,module,exports) {
 var global = arguments[3];
 var HMR_HOST = null;
-var HMR_PORT = null;
+var HMR_PORT = 1234;
 var HMR_SECURE = false;
 var HMR_ENV_HASH = "d6ea1d42532a7575";
 module.bundle.HMR_BUNDLE_ID = "5c1b77e3b71e74eb";
@@ -870,23 +870,22 @@ const state = {
             console.log(res.statusText);
         });
         state.data.playerOnValue = "enabled";
-    // if (location.pathname == "/game") { Router.go("/instructions") }
     },
     async pushGameAsync (gameStatus) {
         console.log("PUSHGAME EN EL ASYNC PUSHGAME");
         let res = await state.pushGame(gameStatus);
         console.log(res);
     },
-    playerOne () {
-        const ownerName = state.data.ownerName;
-        fetch(API_BASE_URL + "/games", {
-            method: "post",
-            headers: {
-                "content-type": "application/json"
-            },
-            body: JSON.stringify(ownerName)
-        });
-    },
+    // playerOne() {
+    //     const ownerName = state.data.ownerName;
+    //     fetch(API_BASE_URL + "/games", {
+    //         method: "post",
+    //         headers: {
+    //             "content-type": "application/json",
+    //         },
+    //         body: JSON.stringify(ownerName),
+    //     })
+    // },
     roomId () {
         console.log("roomId");
         const userId = state.data.userId;
@@ -936,7 +935,7 @@ const state = {
     }
 };
 
-},{"./db":"98qAp","firebase/database":"SJ4UY","firebase/firestore":"8A4BC","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@vaadin/router":"kVZrF","console":"8kdFB","../comps/room-id":"3Gh8t"}],"98qAp":[function(require,module,exports) {
+},{"./db":"98qAp","firebase/database":"SJ4UY","firebase/firestore":"8A4BC","../comps/room-id":"3Gh8t","@vaadin/router":"kVZrF","console":"8kdFB","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"98qAp":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "rtdb", ()=>rtdb);
@@ -38127,7 +38126,105 @@ var XhrIo = esm.XhrIo = P;
 var Md5 = esm.Md5 = S;
 var Integer = esm.Integer = T;
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"kVZrF":[function(require,module,exports) {
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"3Gh8t":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "funcRoomId", ()=>funcRoomId);
+var _state = require("../../src/state");
+function funcRoomId() {
+    customElements.define("rooms-el", class Results extends HTMLElement {
+        connectedCallback() {
+            this.render();
+            this.rooms();
+            this.listeners();
+        }
+        render() {
+            this.roomIds = (0, _state.state).data.rooms;
+            const div = document.createElement("div");
+            div.innerHTML = `                
+            <div class="window__text">
+            <div class="window-title">Salas Creadas con Este Nombre</div>                
+            <div class="rooms-list"></div>  
+            <button class="new-room-button">nueva sala</button>                            
+            </div>                     
+            `;
+            const style = document.createElement("style");
+            style.textContent = `
+            .window {
+                backdrop-filter: blur(10px);
+                display: flex;
+                position: absolute;
+                color: red;
+                /* background-color: rgb(0, 0, 0); */
+                /* opacity: .4; */
+                    top: 5%;
+                    left: 5%;
+                    right: 5%;
+                    bottom: 5%;
+                    text-align: center;
+                    align-items: center;
+                    justify-content: center;
+                    flex-direction: column;
+                    font-family: 'Odibee Sans';
+                    font-weight:400;
+                    gap: 30px;
+                    border: solid black
+                }
+                .window-title {
+                    font-size:30px;
+                }
+                .room-button, .new-room-button {
+                    width: 322px;height: 67px;
+                    border-radius: 10px;
+                    border: 10px solid #001997;
+                    background: #006CFC;         
+                    color: #D8FCFC;
+                    text-align: center;
+                    font-family: 'Odibee Sans';
+                    font-size: 25px;
+                    font-weight: 400;
+                    line-height: normal;
+                    letter-spacing: 2.25px;
+                }                 
+                .rooms-list {
+                    display:flex;
+                    flex-direction: column;
+                    height: 100;
+                }                
+                `;
+            div.classList.add("window");
+            this.appendChild(div);
+            this.appendChild(style);
+        }
+        rooms() {
+            this.roomIds.map((r)=>{
+                const div = document.createElement("button");
+                div.innerHTML = `${r.toString()}`;
+                div.classList.add("room-button");
+                return this.querySelector(".rooms-list").appendChild(div);
+            });
+        }
+        listeners() {
+            const butEl = this.querySelector(".rooms-list");
+            butEl.addEventListener("click", (e)=>{
+                e.preventDefault();
+                const tar = e.target;
+                (0, _state.state).data.roomId = tar.textContent;
+                (0, _state.state).accessToRoom();
+            });
+            const newButEl = this.querySelector(".new-room-button");
+            newButEl.addEventListener("click", ()=>{
+                (0, _state.state).askNewRoom();
+            });
+        }
+        constructor(...args){
+            super(...args);
+            this.roomIds = [];
+        }
+    });
+}
+
+},{"../../src/state":"1Yeju","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"kVZrF":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "Resolver", ()=>Resolver);
@@ -44466,105 +44563,7 @@ var getPolyfill = require("f2ce5ac0488eb372");
     return polyfill;
 };
 
-},{"6e613ddb8bace1c6":"6eq5U","f2ce5ac0488eb372":"h00Nr"}],"3Gh8t":[function(require,module,exports) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "funcRoomId", ()=>funcRoomId);
-var _state = require("../../src/state");
-function funcRoomId() {
-    customElements.define("rooms-el", class Results extends HTMLElement {
-        connectedCallback() {
-            this.render();
-            this.rooms();
-            this.listeners();
-        }
-        render() {
-            this.roomIds = (0, _state.state).data.rooms;
-            const div = document.createElement("div");
-            div.innerHTML = `                
-            <div class="window__text">
-            <div class="window-title">Salas Creadas con Este Nombre</div>                
-            <div class="rooms-list"></div>  
-            <button class="new-room-button">nueva sala</button>                            
-            </div>                     
-            `;
-            const style = document.createElement("style");
-            style.textContent = `
-            .window {
-                backdrop-filter: blur(10px);
-                display: flex;
-                position: absolute;
-                color: red;
-                /* background-color: rgb(0, 0, 0); */
-                /* opacity: .4; */
-                    top: 5%;
-                    left: 5%;
-                    right: 5%;
-                    bottom: 5%;
-                    text-align: center;
-                    align-items: center;
-                    justify-content: center;
-                    flex-direction: column;
-                    font-family: 'Odibee Sans';
-                    font-weight:400;
-                    gap: 30px;
-                    border: solid black
-                }
-                .window-title {
-                    font-size:30px;
-                }
-                .room-button, .new-room-button {
-                    width: 322px;height: 67px;
-                    border-radius: 10px;
-                    border: 10px solid #001997;
-                    background: #006CFC;         
-                    color: #D8FCFC;
-                    text-align: center;
-                    font-family: 'Odibee Sans';
-                    font-size: 25px;
-                    font-weight: 400;
-                    line-height: normal;
-                    letter-spacing: 2.25px;
-                }                 
-                .rooms-list {
-                    display:flex;
-                    flex-direction: column;
-                    height: 100;
-                }                
-                `;
-            div.classList.add("window");
-            this.appendChild(div);
-            this.appendChild(style);
-        }
-        rooms() {
-            this.roomIds.map((r)=>{
-                const div = document.createElement("button");
-                div.innerHTML = `${r.toString()}`;
-                div.classList.add("room-button");
-                return this.querySelector(".rooms-list").appendChild(div);
-            });
-        }
-        listeners() {
-            const butEl = this.querySelector(".rooms-list");
-            butEl.addEventListener("click", (e)=>{
-                e.preventDefault();
-                const tar = e.target;
-                (0, _state.state).data.roomId = tar.textContent;
-                (0, _state.state).accessToRoom();
-            });
-            const newButEl = this.querySelector(".new-room-button");
-            newButEl.addEventListener("click", ()=>{
-                (0, _state.state).askNewRoom();
-            });
-        }
-        constructor(...args){
-            super(...args);
-            this.roomIds = [];
-        }
-    });
-}
-
-},{"../../src/state":"1Yeju","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"eBUGN":[function(require,module,exports) {
+},{"6e613ddb8bace1c6":"6eq5U","f2ce5ac0488eb372":"h00Nr"}],"eBUGN":[function(require,module,exports) {
 var _index = require("./comps/welcome/index");
 var _index1 = require("./comps/game-room/index");
 var _index2 = require("./comps/new-game/index");
@@ -45174,7 +45173,7 @@ customElements.define("inst-el", class Instructions extends HTMLElement {
     }
 });
 
-},{"../../src/state":"1Yeju","bc3027b16a50e5fd":"2zoGe","3df831f5e754144f":"dZ6rN","99486f88cb0ea89e":"2NxtY","bd2726b461f130e4":"7RiZ9","@vaadin/router":"kVZrF"}],"gW4Uh":[function(require,module,exports) {
+},{"@vaadin/router":"kVZrF","../../src/state":"1Yeju","bd2726b461f130e4":"7RiZ9","bc3027b16a50e5fd":"2zoGe","3df831f5e754144f":"dZ6rN","99486f88cb0ea89e":"2NxtY"}],"gW4Uh":[function(require,module,exports) {
 var _results = require("../../results");
 var _state = require("../../src/state");
 customElements.define("game-el", class Game extends HTMLElement {
@@ -45445,7 +45444,7 @@ customElements.define("game-el", class Game extends HTMLElement {
     }
 });
 
-},{"../../results":"dN0bM","70d1433477695b87":"2zoGe","57b99d1a0d7772bf":"dZ6rN","6e35cbe0285a9b06":"2NxtY","6b1a1dab8c611463":"7RiZ9","../../src/state":"1Yeju"}],"dN0bM":[function(require,module,exports) {
+},{"../../results":"dN0bM","../../src/state":"1Yeju","70d1433477695b87":"2zoGe","57b99d1a0d7772bf":"dZ6rN","6e35cbe0285a9b06":"2NxtY","6b1a1dab8c611463":"7RiZ9"}],"dN0bM":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "result", ()=>result);
@@ -45650,6 +45649,6 @@ function result() {
     });
 }
 
-},{"../src/state":"1Yeju","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}]},["gmPuC","h7u1C"], "h7u1C", "parcelRequire94c2")
+},{"../src/state":"1Yeju","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}]},["a0pd7","h7u1C"], "h7u1C", "parcelRequire94c2")
 
 //# sourceMappingURL=index.b71e74eb.js.map

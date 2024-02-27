@@ -1,4 +1,3 @@
-import { Router } from "@vaadin/router";
 import { result } from "../../results";
 import { state } from "../../src/state";
 type Hand = {

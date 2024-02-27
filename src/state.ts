@@ -304,7 +304,6 @@ const state = {
                 console.log(res.statusText)
             })
         state.data.playerOnValue = "enabled";
-        // if (location.pathname == "/game") { Router.go("/instructions") }
     },
 
     async pushGameAsync(gameStatus) {
@@ -313,16 +312,17 @@ const state = {
         console.log(res)
     },
 
-    playerOne() {
-        const ownerName = state.data.ownerName;
-        fetch(API_BASE_URL + "/games", {
-            method: "post",
-            headers: {
-                "content-type": "application/json",
-            },
-            body: JSON.stringify(ownerName),
-        })
-    },
+    // playerOne() {
+    //     const ownerName = state.data.ownerName;
+    //     fetch(API_BASE_URL + "/games", {
+    //         method: "post",
+    //         headers: {
+    //             "content-type": "application/json",
+    //         },
+    //         body: JSON.stringify(ownerName),
+    //     })
+    // },
+
     roomId() {
         console.log("roomId");
         const userId = state.data.userId;
@@ -339,6 +339,7 @@ const state = {
             else { console.log("New room is created due to lack of it"); state.askNewRoom(); };
         });
     },
+
     hands(hands) {
         console.log("pushGame Hands")
         const rtdbRoom = this.data.rtdbRoomId;
