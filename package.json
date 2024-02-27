@@ -11,7 +11,7 @@
   "scripts": {
     "build": "tsc endpoints.ts",
     "dev:parcel": "parcel",
-    "dev": "nodemon --watch ./endpoints.ts --exec \"ts-node\" endpoints.ts"
+    "start": "nodemon --watch ./endpoints.ts --exec \"ts-node\" endpoints.ts"
   },
   "devDependencies": {
     "@types/node": "^20.10.6",
