@@ -8,6 +8,7 @@ customElements.define(
       console.log("nodeEnv.env:", process.env.NODE_ENV)
       console.log("appSecret.env:", process.env.APP_SECRET)
       console.log("apibaseurl.env:", process.env.API_BASE_URL)
+      console.log("railwayServId.env:", process.env.RAILWAY_SERVICE_ID)
       this.render();
       this.listeners();
     }

@@ -44603,6 +44603,7 @@ customElements.define("welc-el", class Welcome extends HTMLElement {
         console.log("nodeEnv.env:", "development");
         console.log("appSecret.env:", "ac3d5af152ac26a2d644b5fcfeb7e190");
         console.log("apibaseurl.env:", "https://prochats.onrender.com");
+        console.log("railwayServId.env:", "84aa5a50-13d1-4dd4-af11-36da00dbb55b");
         this.render();
         this.listeners();
     }
