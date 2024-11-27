@@ -1,5 +1,5 @@
 import express from "express";
-import { rtdb, fsdb } from "./src/db";
+import { rtdb, fsdb } from "./src/pages/db";
 import { ref, set } from "firebase/database"
 import { doc, collection, addDoc, getDoc, getDocs, where, query, setDoc } from "firebase/firestore"
 import cors from "cors"

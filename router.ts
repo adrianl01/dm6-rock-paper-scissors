@@ -1,8 +1,8 @@
-import "./comps/welcome/index"
-import "./comps/game-room/index"
-import "./comps/new-game/index"
-import "./comps/instructions/index"
-import "./comps/game/index"
+import "./src/components/welcome/index"
+import "./src/components/game-room/index"
+import "./src/components/new-game/index"
+import "./src/components/instructions/index"
+import "./src/components/game/index"
 import { Router } from "@vaadin/router";
 
 
