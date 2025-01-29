@@ -1,4 +1,4 @@
-#rock-paper-scissors game!!😃
+## rock-paper-scissors game!!😃
 
 This is a multiplayer game were you sign up with a player name and then create a room to play. 
 You get a room id that you'll have to tell to your opponent.
